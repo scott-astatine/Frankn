@@ -1,0 +1,24 @@
+[Unit]
+Description=Frankn Signaling Server
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+
+# Where the binary lives
+WorkingDirectory=/home/ubuntu
+
+# The command to start it
+ExecStart=/home/ubuntu/frankn-signaling-server
+
+# Restart policy: If it crashes, bring it back to life automatically
+Restart=always
+RestartSec=3
+
+# Environment variables (if you need them later)
+# Environment=RUST_LOG=info
+
+[Install]
+# Start this service when the system boots up
+WantedBy=multi-user.target

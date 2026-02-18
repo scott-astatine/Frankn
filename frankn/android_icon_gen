@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Franken Icon Generator (Arch Edition)
+# Usage: ./scripts/generate_icons.sh
+
+# CHANGED: Pointing to a PNG now, assuming you saved the generated logo there
+INPUT_IMG="/home/scott/Projects/Frankn/frankn/android/app/src/main/res/fic.png"
+BASE_RES_DIR="android/app/src/main/res"
+
+# Define the Android density buckets and their sizes (in pixels)
+declare -A sizes=( 
+    ["mipmap-mdpi"]=48 
+    ["mipmap-hdpi"]=72 
+    ["mipmap-xhdpi"]=96 
+    ["mipmap-xxhdpi"]=144 
+    ["mipmap-xxxhdpi"]=192 
+)
+
+echo "⚡ Franken Icon Factory Initialized..."
+
+# CHANGED: Checking for ImageMagick instead of librsvg
+if ! command -v magick &> /dev/null; then
+    echo "❌ Error: ImageMagick (magick) could not be found."
+    echo "    Install it with: sudo pacman -S imagemagick"
+    exit 1
+fi
+
+if [ ! -f "$INPUT_IMG" ]; then
+    echo "❌ Error: Could not find $INPUT_IMG"
+    echo "    Make sure you saved the logo as logo.png in the res folder!"
+    exit 1
+fi
+
+# Loop through the sizes and generate PNGs
+for folder in "${!sizes[@]}"; do
+    size=${sizes[$folder]}
+    output_dir="$BASE_RES_DIR/$folder"
+    output_file="$output_dir/ic_launcher.png"
+
+    # Ensure the directory exists
+    mkdir -p "$output_dir"
+
+    echo "    -> Forging $folder ($size x $size)..."
+    
+    # CHANGED: Using ImageMagick to resize
+    magick "$INPUT_IMG" -resize "${size}x${size}" "$output_file"
+done
+
+# Generate Play Store Image (512x512)
+echo "    -> Forging Play Store Asset (512 x 512)..."
+magick "$INPUT_IMG" -resize 512x512 "android/app/src/main/ic_launcher-playstore.png"
+
+echo "✅ All assets generated successfully. Franken is ready to mobile."

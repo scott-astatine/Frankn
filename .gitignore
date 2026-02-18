@@ -1,0 +1,31 @@
+# System & IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+
+# Node (if applicable)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# General
+tmp/
+temp/
+*.log
+
+# Project Specific
+.opencode/
+notes.md
+GEMINI.md

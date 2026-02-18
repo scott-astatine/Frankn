@@ -1,0 +1,28 @@
+[Unit]
+Description=Frankn Host Service
+Documentation=https://github.com/scott-astatine/Frankn
+# Wait for the network to be fully up and an IP to be assigned
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# The path where you'll install the binary
+ExecStart=/bin/frankn
+
+# Standard directory for global service state (where .host_id will live)
+WorkingDirectory=/var/lib/frankn
+# Automatically creates /var/lib/frankn with correct permissions if it doesn't exist
+StateDirectory=frankn
+
+Environment=RUST_LOG=info
+Environment=RUST_BACKTRACE=1
+
+# Reliable recovery
+Restart=always
+RestartSec=5
+
+[Install]
+# Enable system-wide at boot
+WantedBy=multi-user.target

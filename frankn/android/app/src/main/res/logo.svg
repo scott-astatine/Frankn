@@ -1,0 +1,66 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- DEFINE FILTERS FOR NEON GLOW -->
+  <defs>
+    <filter id="neon-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <linearGradient id="cyber-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00F3FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00FF41;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- BACKGROUND: Void Black -->
+  <rect x="0" y="0" width="512" height="512" rx="60" fill="#050505" />
+
+  <!-- GRID PATTERN (Subtle) -->
+  <path d="M0 128 H512 M0 256 H512 M0 384 H512 M128 0 V512 M256 0 V512 M384 0 V512"
+    stroke="#1A1A2E" stroke-width="2" fill="none" />
+
+  <!-- THE HEAD: Blocky, Glitchy Silhouette -->
+  <g transform="translate(106, 86)" filter="url(#neon-glow)">
+    <!-- Main Skull Shape -->
+    <path d="M50 0 H250 L270 50 V200 L250 280 H180 V320 H120 V280 H50 L30 200 V50 Z"
+      fill="none" stroke="url(#cyber-grad)" stroke-width="12" stroke-linejoin="bevel" />
+
+    <!-- Forehead Circuit Lines -->
+    <path d="M70 60 H230 M70 60 L90 90 M230 60 L210 90"
+      stroke="#00F3FF" stroke-width="4" opacity="0.6" />
+
+    <!-- THE EYE: Power Button -->
+    <circle cx="100" cy="160" r="30" stroke="#FF00FF" stroke-width="6" fill="none" />
+    <path d="M100 140 V160" stroke="#FF00FF" stroke-width="6" stroke-linecap="round" />
+
+    <!-- THE SCAR: Data Stitching -->
+    <path d="M200 40 L220 60 M210 30 L230 50 M190 50 L210 70"
+      stroke="#00FF41" stroke-width="4" stroke-linecap="square" />
+
+    <!-- JAW/TEETH: Digital Bars -->
+    <rect x="70" y="220" width="20" height="40" fill="#00F3FF" />
+    <rect x="110" y="220" width="20" height="40" fill="#00F3FF" opacity="0.8" />
+    <rect x="150" y="220" width="20" height="40" fill="#00F3FF" opacity="0.6" />
+    <rect x="190" y="220" width="20" height="40" fill="#00F3FF" opacity="0.4" />
+  </g>
+
+  <!-- THE BOLTS: Wi-Fi Signals -->
+  <!-- Left Bolt -->
+  <g transform="translate(60, 250)" filter="url(#neon-glow)">
+    <path d="M0 20 Q-30 20 -30 50" stroke="#00F3FF" stroke-width="8" fill="none"
+      stroke-linecap="round" />
+    <path d="M10 10 Q-40 10 -40 60" stroke="#00F3FF" stroke-width="8" fill="none"
+      stroke-linecap="round" opacity="0.5" />
+  </g>
+
+  <!-- Right Bolt -->
+  <g transform="translate(452, 250) scale(-1, 1)" filter="url(#neon-glow)">
+    <path d="M0 20 Q-30 20 -30 50" stroke="#00F3FF" stroke-width="8" fill="none"
+      stroke-linecap="round" />
+    <path d="M10 10 Q-40 10 -40 60" stroke="#00F3FF" stroke-width="8" fill="none"
+      stroke-linecap="round" opacity="0.5" />
+  </g>
+
+</svg>
