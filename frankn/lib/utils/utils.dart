@@ -42,6 +42,7 @@ class SinalingMessage {
   static const RegisterFailure = "register_failure";
   static const ListHosts = "list_hosts";
   static const HostList = "host_list";
+  static const PeerStatusUpdate = "peer_status_update";
   static const Offer = "offer";
   static const Answer = "answer";
   static const IceCandidate = "ice_candidate";

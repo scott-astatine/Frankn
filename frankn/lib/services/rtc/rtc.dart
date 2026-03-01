@@ -320,6 +320,16 @@ class RtcClient extends RtcClientBase
   @override
   Timer? reconnectTimer;
 
+  // ========== ACTIVE OPERATIONS ==========
+
+  /// Set of Host IDs that are currently online according to the signaling server.
+  final Set<String> onlineHostIds = {};
+
+  /// Broadcast controller for peer status updates (online/offline).
+  final StreamController<Map<String, dynamic>> _peerStatusController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get peerStatusStream => _peerStatusController.stream;
+
   // ========== STREAM CONTROLLERS ==========
 
   /// Broadcast controller for available hosts list from signaling server.

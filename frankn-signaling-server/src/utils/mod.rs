@@ -54,6 +54,13 @@ pub enum SignalingMessage {
         timestamp: u64,
     },
 
+    #[serde(rename = "peer_status_update")]
+    PeerStatusUpdate {
+        peer_id: String,
+        online: bool,
+        timestamp: u64,
+    },
+
     #[serde(rename = "offer")]
     Offer {
         from: String,
@@ -83,7 +90,7 @@ pub enum SignalingMessage {
     #[serde(rename = "error")]
     Error { message: String, timestamp: u64 },
 }
-
+/// Log the output with timestamp
 #[macro_export]
 macro_rules! log {
     ($($arg:tt)*) => {

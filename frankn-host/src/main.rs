@@ -169,6 +169,7 @@ async fn handle_new_connection(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rtc_conn = Arc::new(Mutex::new(RTCConn::new().await?));
 
+    // Manage sessions
     {
         let mut map = peer_map.lock().await;
         if let Some(existing) = map.remove(&client_id) {
@@ -180,6 +181,7 @@ async fn handle_new_connection(
         crate::log!("UPLINK: Session established for {}.", client_id);
     }
 
+    // Send ICE to Client
     {
         let r_conn = rtc_conn.lock().await;
         let sig = Arc::clone(&signaling_client);

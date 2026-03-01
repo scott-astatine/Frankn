@@ -14,80 +14,101 @@ class HostListPanel extends StatefulWidget {
 
 class _HostListPanelState extends State<HostListPanel> {
   @override
+  void initState() {
+    super.initState();
+    // Refresh list on open to sync statuses
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.client.requestHostList();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final savedHosts = SettingsService().savedHosts;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildHeader(
-          "NEURAL LINKS",
-          Icons.link,
-          onAction: _showPairingDialog,
-          actionIcon: Icons.add_link,
-        ),
-        if (savedHosts.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              "NO PERSISTENT LINKS FOUND",
-              style: TextStyle(color: AppColors.textGrey, fontSize: 9, letterSpacing: 1),
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: widget.client.peerStatusStream,
+      initialData: const {}, // Initial empty event to trigger first build
+      builder: (context, _) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(
+              "NEURAL LINKS",
+              Icons.link,
+              onAction: _showPairingDialog,
+              actionIcon: Icons.add_link,
             ),
-          )
-        else
-          ...savedHosts.map((h) => _buildHostCard(
-                context,
-                h['id']!,
-                h['name']!,
-                isSaved: true,
-              )),
-        const SizedBox(height: 16),
-        _buildHeader(
-          "PUBLIC DISCOVERY",
-          Icons.radar,
-          onAction: () => widget.client.requestHostList(),
-          actionIcon: Icons.refresh,
-        ),
-        Expanded(
-          child: StreamBuilder<List<dynamic>>(
-            stream: widget.client.hostListStream,
-            initialData: widget.client.currentHosts,
-            builder: (context, snapshot) {
-              final hosts = snapshot.data!;
-              // Filter out hosts that are already in our saved list to avoid redundancy
-              final filteredHosts = hosts.where((h) => !savedHosts.any((s) => s['id'] == h['host_id'])).toList();
+            if (savedHosts.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  "NO PERSISTENT LINKS FOUND",
+                  style: TextStyle(color: AppColors.textGrey, fontSize: 9, letterSpacing: 1),
+                ),
+              )
+            else
+              ...savedHosts.map((h) => _buildHostCard(
+                    context,
+                    h['id']!,
+                    h['name']!,
+                    isSaved: true,
+                    isOnline: widget.client.onlineHostIds.contains(h['id']),
+                  )),
+            const SizedBox(height: 16),
+            _buildHeader(
+              "PUBLIC DISCOVERY",
+              Icons.radar,
+              onAction: () => widget.client.requestHostList(),
+              actionIcon: Icons.refresh,
+            ),
+            Expanded(
+              child: StreamBuilder<List<dynamic>>(
+                stream: widget.client.hostListStream,
+                initialData: widget.client.currentHosts,
+                builder: (context, snapshot) {
+                  final hosts = snapshot.data!;
+                  // Filter out hosts that are already in our saved list to avoid redundancy
+                  final filteredHosts = hosts.where((h) => !savedHosts.any((s) => s['id'] == h['host_id'])).toList();
 
-              return RefreshIndicator(
-                color: AppColors.neonCyan,
-                backgroundColor: AppColors.panelGrey,
-                onRefresh: () async {
-                  widget.client.requestHostList();
-                  await Future.delayed(const Duration(milliseconds: 500));
+                  return RefreshIndicator(
+                    color: AppColors.neonCyan,
+                    backgroundColor: AppColors.panelGrey,
+                    onRefresh: () async {
+                      widget.client.requestHostList();
+                      await Future.delayed(const Duration(milliseconds: 500));
+                    },
+                    child: filteredHosts.isEmpty && savedHosts.isNotEmpty
+                        ? const Center(
+                            child: Text(
+                              "NO ADDITIONAL TARGETS",
+                              style: TextStyle(color: AppColors.textGrey, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          )
+                        : (filteredHosts.isEmpty && savedHosts.isEmpty)
+                            ? _buildEmptyState()
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                itemCount: filteredHosts.length,
+                                itemBuilder: (context, index) {
+                                  final host = Map.castFrom(filteredHosts[index]);
+                                  final id = host['host_id'] ?? "Unknown ID";
+                                  final name = host['display_name'] ?? "Unknown Host";
+                                  return _buildHostCard(
+                                    context, 
+                                    id, 
+                                    name,
+                                    isOnline: widget.client.onlineHostIds.contains(id),
+                                  );
+                                },
+                              ),
+                  );
                 },
-                child: filteredHosts.isEmpty && savedHosts.isNotEmpty
-                    ? const Center(
-                        child: Text(
-                          "NO ADDITIONAL TARGETS",
-                          style: TextStyle(color: AppColors.textGrey, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      )
-                    : (filteredHosts.isEmpty && savedHosts.isEmpty)
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            itemCount: filteredHosts.length,
-                            itemBuilder: (context, index) {
-                              final host = Map.castFrom(filteredHosts[index]);
-                              final id = host['host_id'] ?? "Unknown ID";
-                              final name = host['display_name'] ?? "Unknown Host";
-                              return _buildHostCard(context, id, name);
-                            },
-                          ),
-              );
-            },
-          ),
-        ),
-      ],
+              ),
+            ),
+          ],
+        );
+      }
     );
   }
 
@@ -164,28 +185,58 @@ class _HostListPanelState extends State<HostListPanel> {
     );
   }
 
-  Widget _buildHostCard(BuildContext context, String id, String name, {bool isSaved = false}) {
+  Widget _buildHostCard(BuildContext context, String id, String name, {bool isSaved = false, bool isOnline = false}) {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       decoration: BoxDecoration(
         color: AppColors.panelGrey.withValues(alpha: 0.4),
         border: Border.all(
-          color: isSaved ? AppColors.neonPink.withValues(alpha: 0.3) : AppColors.neonCyan.withValues(alpha: 0.2),
+          color: isOnline 
+            ? (isSaved ? AppColors.neonPink : AppColors.neonCyan).withValues(alpha: 0.6)
+            : AppColors.textGrey.withValues(alpha: 0.2),
+          width: isOnline ? 1.5 : 1,
         ),
         borderRadius: BorderRadius.circular(4),
+        boxShadow: isOnline ? [
+          BoxShadow(
+            color: (isSaved ? AppColors.neonPink : AppColors.neonCyan).withValues(alpha: 0.15),
+            blurRadius: 10,
+            spreadRadius: 1,
+          )
+        ] : [],
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         dense: true,
-        leading: Icon(
-          Icons.computer,
-          color: isSaved ? AppColors.neonPink : AppColors.neonCyan,
-          size: 20,
+        leading: Stack(
+          children: [
+            Icon(
+              Icons.computer,
+              color: isOnline 
+                ? (isSaved ? AppColors.neonPink : AppColors.neonCyan)
+                : AppColors.textGrey,
+              size: 20,
+            ),
+            if (isOnline)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: AppColors.matrixGreen,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.panelGrey, width: 1.5),
+                  ),
+                ),
+              ),
+          ],
         ),
         title: Text(
           name.toUpperCase(),
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: isOnline ? Colors.white : AppColors.textGrey,
             fontWeight: FontWeight.bold,
             fontSize: 13,
             letterSpacing: 1,
@@ -193,10 +244,10 @@ class _HostListPanelState extends State<HostListPanel> {
         ),
         subtitle: Text(
           "ID: $id",
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Courier',
             fontSize: 9,
-            color: AppColors.textGrey,
+            color: isOnline ? AppColors.textGrey : AppColors.textGrey.withValues(alpha: 0.5),
           ),
         ),
         trailing: Row(
@@ -210,27 +261,32 @@ class _HostListPanelState extends State<HostListPanel> {
                   setState(() {});
                 },
               ),
-            _buildConnectButton(context, id, name),
+            _buildConnectButton(context, id, name, isOnline: isOnline),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildConnectButton(BuildContext context, String hostId, String hostName) {
+  Widget _buildConnectButton(BuildContext context, String hostId, String hostName, {bool isOnline = false}) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.neonCyan.withValues(alpha: 0.1),
-        foregroundColor: AppColors.neonCyan,
-        side: const BorderSide(color: AppColors.neonCyan, width: 1),
+        backgroundColor: isOnline 
+          ? (AppColors.neonCyan.withValues(alpha: 0.1))
+          : Colors.transparent,
+        foregroundColor: isOnline ? AppColors.neonCyan : AppColors.textGrey,
+        side: BorderSide(
+          color: isOnline ? AppColors.neonCyan : AppColors.textGrey.withValues(alpha: 0.3), 
+          width: 1
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
         minimumSize: const Size(60, 28),
         shape: const BeveledRectangleBorder(),
       ),
-      onPressed: () => _showPasswordDialog(context, hostId, hostName),
-      child: const Text(
-        "LINK",
-        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+      onPressed: isOnline ? () => _showPasswordDialog(context, hostId, hostName) : null,
+      child: Text(
+        isOnline ? "LINK" : "OFFLINE",
+        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
       ),
     );
   }

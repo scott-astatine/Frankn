@@ -40,9 +40,6 @@ mixin RtcSignaling on RtcClientBase {
       // Set up WebSocket message handling
       signalingChannel!.stream.listen(
         (message) {
-          if (client.sigState != SignalConnectionState.connected) {
-            _updateSigState(SignalConnectionState.connected);
-          }
           _handleSignalingMessage(jsonDecode(message));
         },
         onError: (e) {
@@ -83,6 +80,9 @@ mixin RtcSignaling on RtcClientBase {
         'display_name': displayName,
         'is_public': false
       });
+      
+      // Optimistically set to connected after registration is sent
+      _updateSigState(SignalConnectionState.connected);
     } catch (e) {
       log("Fatal Connection Error: $e");
       _handleDisconnection();
@@ -154,10 +154,33 @@ mixin RtcSignaling on RtcClientBase {
         requestHostList();
         break;
 
+      case SinalingMessage.PeerStatusUpdate:
+        final id = data['peer_id'];
+        final isOnline = data['online'] as bool;
+        final client = this as RtcClient;
+        
+        if (isOnline) {
+          client.onlineHostIds.add(id);
+        } else {
+          client.onlineHostIds.remove(id);
+        }
+        client._peerStatusController.add(data);
+        break;
+
       case SinalingMessage.HostList:
         final client = this as RtcClient;
         client.currentHosts = data['hosts'];
+        
+        // Add public hosts from the list to onlineHostIds
+        for (var host in client.currentHosts) {
+          if (host['host_id'] != null) {
+            client.onlineHostIds.add(host['host_id']);
+          }
+        }
+
         client._hostListController.add(client.currentHosts);
+        // Trigger a status update to refresh the UI indicators
+        client._peerStatusController.add({}); 
 
         // Auto-reconnect to previous host if signaling reconnected
         // if (currentHostId != null &&

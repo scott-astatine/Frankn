@@ -59,37 +59,73 @@ async fn handle_signaling_message(
                 .map_err(|e| e.to_string());
             }
 
-            let mut peers_map = peers.write().await;
+            // Perform registration and store info needed for broadcast
+            let (registration_id, registration_type) = {
+                let mut peers_map = peers.write().await;
+                
+                log!(
+                    "Registering peer: ID '{:?}', Name: '{}', Type: {:?}, Public: {}",
+                    peer_id, display_name, peer_type, is_public
+                );
 
-            log!(
-                "Registering peer: ID '{:?}', Name: '{}', Type: {:?}, Public: {}",
-                peer_id,
-                display_name,
-                peer_type,
-                is_public
-            );
+                peers_map.insert(
+                    peer_id.clone(),
+                    PeerConnection {
+                        sender: tx.clone(),
+                        peer_type: peer_type.clone(),
+                        display_name,
+                        is_public,
+                    },
+                );
 
-            peers_map.insert(
-                peer_id.clone(),
-                PeerConnection {
-                    sender: tx.clone(),
-                    peer_type: peer_type,
-                    display_name,
-                    is_public,
-                },
-            );
-
-            *current_peer_id = Some(peer_id.clone());
+                *current_peer_id = Some(peer_id.clone());
+                (peer_id.clone(), peer_type.clone())
+            };
 
             send_signaling_msg(
                 tx,
                 SignalingMessage::RegisterSuccess {
-                    peer_id: peer_id,
+                    peer_id: registration_id.clone(),
                     timestamp,
                 },
             )
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+
+            // Broadcasts (Safe because the write lock above is dropped)
+            
+            // 1. Notify existing clients if a new HOST just joined
+            if registration_type == PeerType::Host {
+                let status_msg = SignalingMessage::PeerStatusUpdate {
+                    peer_id: registration_id.clone(),
+                    online: true,
+                    timestamp: get_timestamp(),
+                };
+                
+                let peers_read = peers.read().await;
+                for (id, conn) in peers_read.iter() {
+                    if conn.peer_type == PeerType::Client && id != &registration_id {
+                        let _ = send_signaling_msg(&conn.sender, status_msg.clone()).await;
+                    }
+                }
+            }
+
+            // 2. Notify the new CLIENT about all currently online hosts
+            if registration_type == PeerType::Client {
+                let peers_read = peers.read().await;
+                for (id, conn) in peers_read.iter() {
+                    if conn.peer_type == PeerType::Host {
+                        let status_msg = SignalingMessage::PeerStatusUpdate {
+                            peer_id: id.clone(),
+                            online: true,
+                            timestamp: get_timestamp(),
+                        };
+                        let _ = send_signaling_msg(tx, status_msg).await;
+                    }
+                }
+            }
+            
+            Ok(())
         }
 
         SignalingMessage::ListHosts { timestamp } => {
@@ -170,6 +206,7 @@ async fn handle_signaling_message(
         SignalingMessage::RegisterSuccess { .. }
         | SignalingMessage::RegisterFailure { .. }
         | SignalingMessage::Error { .. }
+        | SignalingMessage::PeerStatusUpdate { .. }
         | SignalingMessage::HostList { .. } => {
             log!("Received server-only message from client: {:?}", msg);
             Err(format!("Client sent server-only message: {:?}", msg))
@@ -194,9 +231,6 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap) {
 
     let mut peer_id: Option<String> = None;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
-
-    // Clone tx for the heartbeat loop (conceptually, though we use it in select)
-    // Actually, we can use tx.send inside the loop.
 
     loop {
         tokio::select! {
@@ -223,7 +257,7 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap) {
                                     message: format!("Invalid message format: {}", e),
                                     timestamp: get_timestamp(),
                                 };
-                                let _ = send_signaling_msg(&tx, error_msg).await;
+                                    let _ = send_signaling_msg(&tx, error_msg).await;
                             }
                         }
                     }
@@ -231,12 +265,14 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap) {
                         let _ = tx.send(Message::Pong(data));
                     }
                     Some(Ok(Message::Pong(_))) => {
+                        // Received pong, connection is alive
                     }
                     Some(Ok(Message::Close(_))) => {
                         log!("Client initiated close.");
                         break;
                     }
                     Some(Ok(_)) => {
+                        // Ignore other binary/frame types
                     }
                     Some(Err(e)) => {
                         elog!("WebSocket read error: {}", e);
@@ -257,6 +293,7 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap) {
                 }
             }
 
+            // 3. Heartbeat
             _ = interval.tick() => {
                 // Send a ping to check connection health
                 if let Err(_) = tx.send(Message::Ping(vec![].into())) {
@@ -269,7 +306,27 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap) {
     // --- Cleanup on disconnect ---
     if let Some(id) = peer_id {
         log!("Peer {} disconnected. Removing from map.", id);
+        
+        let was_host = {
+            let peers_read = peers.read().await;
+            peers_read.get(&id).map(|c| c.peer_type == PeerType::Host).unwrap_or(false)
+        };
+
         peers.write().await.remove(&id);
+
+        if was_host {
+            let status_msg = SignalingMessage::PeerStatusUpdate {
+                peer_id: id,
+                online: false,
+                timestamp: get_timestamp(),
+            };
+            let peers_read = peers.read().await;
+            for conn in peers_read.values() {
+                if conn.peer_type == PeerType::Client {
+                    let _ = send_signaling_msg(&conn.sender, status_msg.clone()).await;
+                }
+            }
+        }
     }
     log!("Connection handling closed.");
 }

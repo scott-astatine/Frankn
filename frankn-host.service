@@ -11,11 +11,11 @@ Type=simple
 # The path where you'll install the binary
 ExecStart=/bin/frankn
 
-# Standard directory for global service state (where .host_id will live)
-WorkingDirectory=/var/lib/frankn
-# Automatically creates /var/lib/frankn with correct permissions if it doesn't exist
-StateDirectory=frankn
-
+# # Standard directory for global service state (where .host_id will live)
+# WorkingDirectory=/var/lib/frankn
+# # Automatically creates /var/lib/frankn with correct permissions if it doesn't exist
+# StateDirectory=frankn
+#
 Environment=RUST_LOG=info
 Environment=RUST_BACKTRACE=1
 

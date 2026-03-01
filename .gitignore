@@ -29,3 +29,4 @@ temp/
 .opencode/
 notes.md
 GEMINI.md
+scp.go
