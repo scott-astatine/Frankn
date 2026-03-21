@@ -1,142 +1,153 @@
 part of 'rtc.dart';
 
 mixin RtcMessageHandler on RtcClientBase {
-  final Map<String, BytesBuilder> _transferBuilders = {};
+  // Transfer ID -> IOSink for direct-to-disk writing
+  final Map<String, IOSink> _activeSinks = {};
+  final Map<String, String> _tempPaths = {};
   final Map<String, String> _expectedHashes = {};
 
   @override
   void handleHostMessage(dynamic rawData) {
     try {
-      String? jsonText;
-      bool isProbablyBinaryChunk = false;
-
-      // Handle bytes
       if (rawData is Uint8List) {
-        try {
-          final decoded = utf8.decode(rawData);
-          final trimmed = decoded.trim();
-          if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-            jsonText = decoded;
-          } else {
-            isProbablyBinaryChunk = true;
+        // 1. Check for high-speed binary framing (Magic Byte 0x01 + 36-byte UUID)
+        if (rawData.length >= 37 && rawData[0] == 0x01) {
+          final idBytes = rawData.sublist(1, 37);
+          final id = utf8.decode(
+            idBytes.where((b) => b != 0).toList(),
+            allowMalformed: true,
+          );
+
+          if (_activeSinks.containsKey(id)) {
+            _handleBinaryChunk(id, rawData.sublist(37));
+            return;
           }
-        } catch (_) {
-          isProbablyBinaryChunk = true;
         }
+
+        // 2. If not a binary chunk, attempt JSON decode
+        try {
+          final text = utf8.decode(rawData);
+          if (text.startsWith('{')) {
+            _handleJsonMessage(jsonDecode(text));
+            return;
+          }
+        } catch (_) {}
       } else if (rawData is String) {
-        jsonText = rawData;
-      }
-
-      /// Handles data channel messages
-      if (jsonText != null) {
-        final data = jsonDecode(jsonText) as Map<String, dynamic>;
-        final type = data['type'];
-
-        switch (type) {
-          case DcMsg.FileTransferStart:
-            final String transferId = data['id'];
-            _transferBuilders[transferId] = BytesBuilder(copy: false);
-            activeFileNames[transferId] = data['file_name'];
-            if (data.containsKey('hash') && data['hash'] != null) {
-              _expectedHashes[transferId] = data['hash'];
-            }
-            commandResponseController.add(data);
-            break;
-
-          case DcMsg.FileTransferEnd:
-            final String transferId = data['id'];
-            final builder = _transferBuilders.remove(transferId);
-            if (builder != null) {
-              final bytes = builder.takeBytes();
-              final fileName = activeFileNames.remove(transferId)!;
-              
-              // Check hash from Start OR End message
-              String? expectedHash = _expectedHashes.remove(transferId);
-              if (data.containsKey('hash') && data['hash'] != null) {
-                expectedHash = data['hash'];
-              }
-
-              if (expectedHash != null) {
-                final actualHash = HEX
-                    .encode(sha256.convert(bytes).bytes)
-                    .toLowerCase();
-                if (actualHash != expectedHash.toLowerCase()) {
-                  log("CRITICAL: Integrity failure for $fileName!");
-                } else {
-                  log("Integrity verified for $fileName.");
-                }
-              }
-
-              commandResponseController.add({
-                'type': DcMsg.FileTransferEnd,
-                'file_name': fileName,
-                'bytes': bytes,
-                'id': transferId,
-                'completed': true,
-              });
-            }
-            break;
-
-          case DcMsg.Challenge:
-            _handleChallenge(data);
-            break;
-
-          case DcMsg.AuthSuccess:
-            _handleAuthSuccess(data);
-            break;
-
-          case DcMsg.AuthFailed:
-            _handleAuthFailed(data);
-            break;
-
-          case MediaDCMessage.MediaUpdate:
-            _handleMediaUpdate(data);
-            break;
-
-          case MediaDCMessage.MediaPositionUpdate:
-            commandResponseController.add(data);
-            break;
-
-          case DcMsg.Notification:
-            notificationController.add(data);
-            break;
-
-          case DcMsg.HostResponse:
-            _handleHostResponse(data);
-            break;
-
-          default:
-            log("Unknown host message type: $type");
-        }
-      } else if (isProbablyBinaryChunk && rawData is Uint8List) {
-        _handleBinaryMessage(rawData);
+        _handleJsonMessage(jsonDecode(rawData));
       }
     } catch (e) {
-      log("Error parsing host message: $e");
+      log("Neural Link Error: Failed to parse incoming frame: $e");
     }
   }
 
-  void _handleBinaryMessage(Uint8List frame) {
-    if (frame.length < 36) return;
+  void _handleJsonMessage(Map<String, dynamic> data) async {
+    final type = data['type'];
 
-    final idBytes = frame.sublist(0, 36);
-    final transferId = utf8.decode(idBytes.where((b) => b != 0).toList());
-    final rawData = frame.sublist(36);
+    switch (type) {
+      case DcMsg.StreamStart:
+        final String transferId = data['id'];
+        final fileName = data['file_name'];
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File('${tempDir.path}/$transferId.part');
 
-    final builder = _transferBuilders[transferId];
-    if (builder != null) {
-      // ASSEMBLY: Add data to the builder
-      builder.add(rawData);
+        if (await tempFile.exists()) await tempFile.delete();
 
-      // Progress notification
-      if (builder.length % (1024 * 512) == 0 || builder.length == rawData.length) {
-        commandResponseController.add({
-          'type': DcMsg.FileChunk,
-          'id': transferId,
-          'chunk_size': rawData.length,
-          'current_total': builder.length,
-        });
-      }
+        _activeSinks[transferId] = tempFile.openWrite();
+        _tempPaths[transferId] = tempFile.path;
+        activeFileNames[transferId] = fileName;
+
+        if (data.containsKey('hash') && data['hash'] != null) {
+          _expectedHashes[transferId] = data['hash'];
+        }
+        commandResponseController.add(data);
+        break;
+
+      case DcMsg.StreamEnd:
+        final String transferId = data['id'];
+        final sink = _activeSinks.remove(transferId);
+        final tempPath = _tempPaths.remove(transferId);
+
+        if (sink != null && tempPath != null) {
+          await sink.flush();
+          await sink.close();
+
+          final fileName = activeFileNames.remove(transferId)!;
+          final file = File(tempPath);
+
+          String? expectedHash = _expectedHashes.remove(transferId);
+          if (data.containsKey('hash') && data['hash'] != null) {
+            expectedHash = data['hash'];
+          }
+
+          if (expectedHash != null) {
+            // Verify hash without loading full file into RAM
+            final stream = file.openRead();
+            final actualHash = (await sha256.bind(stream).single).toString().toLowerCase();
+
+            if (actualHash != expectedHash.toLowerCase()) {
+              log("CRITICAL: Integrity failure for $fileName! Expected: $expectedHash, Got: $actualHash");
+            } else {
+              log("Integrity verified for $fileName.");
+            }
+          }
+
+          commandResponseController.add({
+            'type': DcMsg.StreamEnd,
+            'file_name': fileName,
+            'temp_path': tempPath,
+            'id': transferId,
+            'completed': true,
+          });
+        }
+        break;
+
+      case DcMsg.Challenge:
+        _handleChallenge(data);
+        break;
+
+      case DcMsg.AuthSuccess:
+        _handleAuthSuccess(data);
+        break;
+
+      case DcMsg.AuthFailed:
+        _handleAuthFailed(data);
+        break;
+
+      case MediaDCMessage.MediaUpdate:
+        _handleMediaUpdate(data);
+        break;
+
+      case MediaDCMessage.MediaPositionUpdate:
+        commandResponseController.add(data);
+        break;
+
+      case DcMsg.Notification:
+        notificationController.add(data);
+        break;
+
+      case DcMsg.HostResponse:
+        _handleHostResponse(data);
+        break;
+
+      case DcMsg.Telemetry:
+        commandResponseController.add(data);
+        break;
+
+      default:
+        log("Unknown host message type: $type");
+    }
+  }
+
+  void _handleBinaryChunk(String id, Uint8List chunk) {
+    final sink = _activeSinks[id];
+    if (sink != null) {
+      sink.add(chunk);
+      // Notifications handled by FileTransferMixin via current_total tracking
+      commandResponseController.add({
+        'type': DcMsg.FileChunk,
+        'id': id,
+        'chunk_size': chunk.length,
+      });
     }
   }
 
@@ -174,10 +185,12 @@ mixin RtcMessageHandler on RtcClientBase {
   }
 
   void _handleHostResponse(Map<String, dynamic> data) {
-    log("CMD RESPONSE: ${data['status']} for ID: ${data['id']}");
     commandResponseController.add(data);
 
     if (data['data'] != null) {
+      if (data['data']['response'] != DcMsg.Pong) {
+        log("CMD RESPONSE: $data");
+      }
       final d = data['data'];
       if (d['media_status'] != null || d['metadata'] != null) {
         _handleMediaUpdate(d);
@@ -196,16 +209,23 @@ mixin RtcMessageHandler on RtcClientBase {
     Duration? length;
     Uri? artUri;
 
-    if (status != null) {
-      mediaStatusController.add(status);
-    }
+        if (status != null) {
 
-    if (data['position'] != null) {
-      position = Duration(microseconds: (data['position'] as num).toInt());
-    }
-    if (data['length'] != null) {
-      length = Duration(microseconds: (data['length'] as num).toInt());
-    }
+          mediaStatusController.add(status);
+
+        }
+
+        if (data['position'] != null) {
+
+          position = Duration(microseconds: (data['position'] as num).toInt());
+
+        }
+
+        if (data['length'] != null) {
+
+          length = Duration(microseconds: (data['length'] as num).toInt());
+
+        }
 
     if (data['art_data'] != null) {
       final artStr = data['art_data'] as String;

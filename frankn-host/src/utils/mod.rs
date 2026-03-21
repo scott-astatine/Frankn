@@ -1,6 +1,6 @@
+pub mod stream;
 pub use crate::sys::dc_message_parser::DcMsg;
 use serde::{Deserialize, Serialize};
-use std::fs;
 
 pub fn get_timestamp() -> u64 {
     std::time::SystemTime::now()
@@ -13,22 +13,6 @@ pub fn get_timestamp() -> u64 {
 pub enum Status {
     Success,
     Error(String),
-}
-
-pub fn generate_host_id() -> String {
-    let id_file = "/home/scott/.config/frankn/.host_id";
-    if let Ok(id) = fs::read_to_string(id_file) {
-        return id.trim().to_string();
-    }
-    use rand::Rng;
-    let mut id: String = rand::rng()
-        .sample_iter(&rand::distr::Alphanumeric)
-        .take(16)
-        .map(char::from)
-        .collect();
-    id = format!("frank-host-{}", id);
-    let _ = fs::write(id_file, &id);
-    id
 }
 
 #[derive(Debug, Deserialize)]
@@ -62,7 +46,7 @@ pub enum ClientMessage {
     UploadChunk { id: String, data: String },
 
     #[serde(rename = "upload_end")]
-    UploadEnd { id: String, timestamp: u64 },
+    UploadEnd { id: String, hash: Option<String>, timestamp: u64 },
 }
 
 #[derive(Debug, Serialize)]
@@ -116,20 +100,28 @@ pub enum HostMessage {
         timestamp: u64,
     },
 
-    #[serde(rename = "file_transfer_start")]
-    FileTransferStart {
+    #[serde(rename = "stream_start")]
+    StreamStart {
         id: String,
         file_name: String,
         total_size: u64,
         timestamp: u64,
     },
 
-    #[serde(rename = "file_transfer_end")]
-    FileTransferEnd {
+    #[serde(rename = "stream_end")]
+    StreamEnd {
         id: String,
         timestamp: u64,
 
         hash: Option<String>,
+    },
+
+    #[serde(rename = "telemetry")]
+    Telemetry {
+        cpu_load: f32,
+        used_mem: u64,
+        total_mem: u64,
+        timestamp: u64,
     },
 }
 

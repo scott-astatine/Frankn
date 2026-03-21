@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc/rtc.dart' as rtc;
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/cyber_card.dart';
+import 'package:frankn/utils/cyber_button.dart';
 import 'package:frankn/widgets/pairing_dialog.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class HostListPanel extends StatefulWidget {
   final rtc.RtcClient client;
@@ -13,172 +17,110 @@ class HostListPanel extends StatefulWidget {
 }
 
 class _HostListPanelState extends State<HostListPanel> {
+  StreamSubscription? _peerSub;
+  StreamSubscription? _hostSub;
+
   @override
   void initState() {
     super.initState();
-    // Refresh list on open to sync statuses
+    _peerSub = widget.client.peerStatusStream.listen((_) {
+      if (mounted) setState(() {});
+    });
+    _hostSub = widget.client.hostListStream.listen((_) {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.client.requestHostList();
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    final savedHosts = SettingsService().savedHosts;
-
-    return StreamBuilder<Map<String, dynamic>>(
-      stream: widget.client.peerStatusStream,
-      initialData: const {}, // Initial empty event to trigger first build
-      builder: (context, _) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(
-              "NEURAL LINKS",
-              Icons.link,
-              onAction: _showPairingDialog,
-              actionIcon: Icons.add_link,
-            ),
-            if (savedHosts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(
-                  "NO PERSISTENT LINKS FOUND",
-                  style: TextStyle(color: AppColors.textGrey, fontSize: 9, letterSpacing: 1),
-                ),
-              )
-            else
-              ...savedHosts.map((h) => _buildHostCard(
-                    context,
-                    h['id']!,
-                    h['name']!,
-                    isSaved: true,
-                    isOnline: widget.client.onlineHostIds.contains(h['id']),
-                  )),
-            const SizedBox(height: 16),
-            _buildHeader(
-              "PUBLIC DISCOVERY",
-              Icons.radar,
-              onAction: () => widget.client.requestHostList(),
-              actionIcon: Icons.refresh,
-            ),
-            Expanded(
-              child: StreamBuilder<List<dynamic>>(
-                stream: widget.client.hostListStream,
-                initialData: widget.client.currentHosts,
-                builder: (context, snapshot) {
-                  final hosts = snapshot.data!;
-                  // Filter out hosts that are already in our saved list to avoid redundancy
-                  final filteredHosts = hosts.where((h) => !savedHosts.any((s) => s['id'] == h['host_id'])).toList();
-
-                  return RefreshIndicator(
-                    color: AppColors.neonCyan,
-                    backgroundColor: AppColors.panelGrey,
-                    onRefresh: () async {
-                      widget.client.requestHostList();
-                      await Future.delayed(const Duration(milliseconds: 500));
-                    },
-                    child: filteredHosts.isEmpty && savedHosts.isNotEmpty
-                        ? const Center(
-                            child: Text(
-                              "NO ADDITIONAL TARGETS",
-                              style: TextStyle(color: AppColors.textGrey, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          )
-                        : (filteredHosts.isEmpty && savedHosts.isEmpty)
-                            ? _buildEmptyState()
-                            : ListView.builder(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                itemCount: filteredHosts.length,
-                                itemBuilder: (context, index) {
-                                  final host = Map.castFrom(filteredHosts[index]);
-                                  final id = host['host_id'] ?? "Unknown ID";
-                                  final name = host['display_name'] ?? "Unknown Host";
-                                  return _buildHostCard(
-                                    context, 
-                                    id, 
-                                    name,
-                                    isOnline: widget.client.onlineHostIds.contains(id),
-                                  );
-                                },
-                              ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      }
-    );
+  void dispose() {
+    _peerSub?.cancel();
+    _hostSub?.cancel();
+    super.dispose();
   }
 
-  Widget _buildHeader(String title, IconData icon, {VoidCallback? onAction, IconData? actionIcon}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
+  @override
+  Widget build(BuildContext context) {
+    final savedHosts = SettingsService().savedHosts;
+    final l10n = AppLocalizations.of(context)!;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.neonCyan, size: 16),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              color: AppColors.neonCyan.withValues(alpha: 0.7),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-            ),
-          ),
-          const Spacer(),
-          if (onAction != null)
-            IconButton(
-              icon: Icon(actionIcon ?? Icons.add, color: AppColors.neonCyan, size: 18),
-              onPressed: onAction,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
+          _buildSectionHeader(l10n.neuralLinks.toUpperCase(), Icons.link),
+          const SizedBox(height: 16),
+          if (savedHosts.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text(l10n.noPersistentLinks.toUpperCase(), 
+                  style: const TextStyle(color: Colors.white10, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+              ),
+            )
+          else
+            ...savedHosts.map((h) => _buildHostCard(
+                  context,
+                  h['id']!,
+                  h['name']!,
+                  isSaved: true,
+                  isOnline: widget.client.onlineHostIds.contains(h['id']),
+                )),
+          const SizedBox(height: 32),
+          _buildSectionHeader(l10n.publicDiscovery.toUpperCase(), Icons.radar),
+          const SizedBox(height: 16),
+          _buildDiscoveryContent(savedHosts, l10n),
         ],
       ),
     );
   }
 
-  void _showPairingDialog() async {
-    final result = await showDialog(
-      context: context,
-      builder: (context) => const PairingDialog(),
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white24, size: 14),
+        const SizedBox(width: 8),
+        Text(title, style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+      ],
     );
-    if (result == true) {
-      setState(() {});
-    }
   }
 
-  Widget _buildEmptyState() {
-    return ListView(
+  Widget _buildDiscoveryContent(List<Map<String, String>> savedHosts, AppLocalizations l10n) {
+    final hosts = widget.client.currentHosts;
+    final filteredHosts = hosts.where((h) => !savedHosts.any((s) => s['id'] == h['host_id'])).toList();
+
+    return Column(
       children: [
-        const SizedBox(height: 100),
+        if (filteredHosts.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Text(l10n.noAdditionalTargets.toUpperCase(), 
+                style: const TextStyle(color: Colors.white10, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
+            ),
+          )
+        else
+          ...filteredHosts.map((h) => _buildHostCard(
+            context, 
+            h['host_id'], 
+            h['display_name'],
+            isOnline: true,
+          )),
+        const SizedBox(height: 24),
         Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.language, color: AppColors.textGrey, size: 48),
-              const SizedBox(height: 16),
-              Text(
-                "NO TARGETS DETECTED",
-                style: TextStyle(
-                  color: AppColors.textGrey.withValues(alpha: 0.5),
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                "PULL DOWN TO RE-SCAN",
-                style: TextStyle(
-                  color: AppColors.neonCyan,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+          child: CyberButton(
+            text: "+ ${l10n.addManualTarget.toUpperCase()}",
+            isSmall: true,
+            onPressed: () async {
+              final result = await showDialog(
+                context: context,
+                builder: (context) => const PairingDialog(),
+              );
+              if (result == true) setState(() {});
+            },
           ),
         ),
       ],
@@ -186,129 +128,74 @@ class _HostListPanelState extends State<HostListPanel> {
   }
 
   Widget _buildHostCard(BuildContext context, String id, String name, {bool isSaved = false, bool isOnline = false}) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      decoration: BoxDecoration(
-        color: AppColors.panelGrey.withValues(alpha: 0.4),
-        border: Border.all(
-          color: isOnline 
-            ? (isSaved ? AppColors.neonPink : AppColors.neonCyan).withValues(alpha: 0.6)
-            : AppColors.textGrey.withValues(alpha: 0.2),
-          width: isOnline ? 1.5 : 1,
-        ),
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: isOnline ? [
-          BoxShadow(
-            color: (isSaved ? AppColors.neonPink : AppColors.neonCyan).withValues(alpha: 0.15),
-            blurRadius: 10,
-            spreadRadius: 1,
-          )
-        ] : [],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        dense: true,
-        leading: Stack(
-          children: [
-            Icon(
-              Icons.computer,
-              color: isOnline 
-                ? (isSaved ? AppColors.neonPink : AppColors.neonCyan)
-                : AppColors.textGrey,
-              size: 20,
-            ),
-            if (isOnline)
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: AppColors.matrixGreen,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.panelGrey, width: 1.5),
-                  ),
+    final Color accentColor = isSaved ? AppColors.neonPink : AppColors.neonCyan;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: CyberCard(
+        borderColor: isOnline ? accentColor.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: isOnline ? accentColor : Colors.white10,
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
                 ),
               ),
-          ],
-        ),
-        title: Text(
-          name.toUpperCase(),
-          style: TextStyle(
-            color: isOnline ? Colors.white : AppColors.textGrey,
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-            letterSpacing: 1,
-          ),
-        ),
-        subtitle: Text(
-          "ID: $id",
-          style: TextStyle(
-            fontFamily: 'Courier',
-            fontSize: 9,
-            color: isOnline ? AppColors.textGrey : AppColors.textGrey.withValues(alpha: 0.5),
-          ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isSaved)
-              IconButton(
-                icon: const Icon(Icons.link_off, color: AppColors.textGrey, size: 18),
-                onPressed: () async {
-                  await SettingsService().forgetHost(id);
-                  setState(() {});
-                },
+              const SizedBox(width: 16),
+              Icon(Icons.monitor_outlined, color: isOnline ? accentColor : Colors.white10, size: 28),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name.toUpperCase(), 
+                      style: TextStyle(color: isOnline ? Colors.white : Colors.white24, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 1)),
+                    Text("ID: $id", 
+                      style: const TextStyle(color: Colors.white10, fontSize: 9, fontFamily: 'JetBrainsMonoNerdFont', fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
-            _buildConnectButton(context, id, name, isOnline: isOnline),
-          ],
+              if (isOnline)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: CyberButton(
+                    text: "LINK",
+                    isSmall: true,
+                    onPressed: () => _showPasswordDialog(context, id, name),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: IconButton(
+                    icon: const Icon(Icons.link_off, color: Colors.white10, size: 20),
+                    onPressed: isSaved ? () async {
+                      await SettingsService().forgetHost(id);
+                      setState(() {});
+                    } : null,
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildConnectButton(BuildContext context, String hostId, String hostName, {bool isOnline = false}) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isOnline 
-          ? (AppColors.neonCyan.withValues(alpha: 0.1))
-          : Colors.transparent,
-        foregroundColor: isOnline ? AppColors.neonCyan : AppColors.textGrey,
-        side: BorderSide(
-          color: isOnline ? AppColors.neonCyan : AppColors.textGrey.withValues(alpha: 0.3), 
-          width: 1
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-        minimumSize: const Size(60, 28),
-        shape: const BeveledRectangleBorder(),
-      ),
-      onPressed: isOnline ? () => _showPasswordDialog(context, hostId, hostName) : null,
-      child: Text(
-        isOnline ? "LINK" : "OFFLINE",
-        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
       ),
     );
   }
 
   void _showPasswordDialog(BuildContext context, String hostId, String hostName) {
+    final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.panelGrey,
-        shape: const BeveledRectangleBorder(
-          side: BorderSide(color: AppColors.neonCyan),
-        ),
-        title: const Text(
-          "UPLINK SECURITY",
-          style: TextStyle(
-            color: AppColors.neonCyan,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          ),
-        ),
+        backgroundColor: const Color(0xFF0F0F0F),
+        shape: const BeveledRectangleBorder(side: BorderSide(color: AppColors.neonCyan)),
+        title: Text(l10n.uplinkSecurity.toUpperCase(), style: const TextStyle(color: AppColors.neonCyan, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 2)),
         content: TextField(
           controller: controller,
           obscureText: true,
@@ -317,29 +204,21 @@ class _HostListPanelState extends State<HostListPanel> {
             Navigator.pop(context);
             widget.client.connectToHost(hostId, password: controller.text, hostName: hostName);
           },
-          decoration: const InputDecoration(
-            hintText: "ENTER PASSCODE",
-            hintStyle: TextStyle(color: AppColors.textGrey, fontSize: 12),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.neonCyan),
-            ),
+          decoration: InputDecoration(
+            hintText: l10n.enterPasscode.toUpperCase(),
+            hintStyle: const TextStyle(color: AppColors.textGrey, fontSize: 12),
+            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.neonCyan)),
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("CANCEL", style: TextStyle(color: AppColors.textGrey)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.cancel.toUpperCase(), style: const TextStyle(color: AppColors.textGrey))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.neonCyan,
-              foregroundColor: Colors.black,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonCyan, foregroundColor: Colors.black),
             onPressed: () {
               Navigator.pop(context);
               widget.client.connectToHost(hostId, password: controller.text, hostName: hostName);
             },
-            child: const Text("ESTABLISH", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(l10n.establish.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

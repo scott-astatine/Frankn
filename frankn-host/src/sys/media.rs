@@ -459,8 +459,17 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                 }
 
                 match fetch_mpris_data_with_conn(&conn).await {
-                    Ok(d) => {
+                    Ok(mut d) => {
                         // Include art data length in signature to detect changes
+                        if d.player_name
+                            .clone()
+                            .as_str()
+                            .to_lowercase()
+                            .contains("firef")
+                        {
+                            d.player_name = "Zen".to_string();
+                        }
+
                         let art_len = d.art_data.as_ref().map(|s| s.len()).unwrap_or(0);
                         let sig = format!(
                             "{} {} {} {} {} art_len: {}",

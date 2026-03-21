@@ -1,36 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc/rtc.dart';
 import 'package:frankn/utils/utils.dart';
-import 'package:frankn/widgets/log_terminal.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class LogTerminalScreen extends StatefulWidget {
   final RtcClient client;
-  final List<String> initialLogs;
-
-  const LogTerminalScreen({
-    super.key,
-    required this.client,
-    required this.initialLogs,
-  });
+  const LogTerminalScreen({super.key, required this.client});
 
   @override
   State<LogTerminalScreen> createState() => _LogTerminalScreenState();
 }
 
 class _LogTerminalScreenState extends State<LogTerminalScreen> {
-  late List<String> _logs;
+  late final List<String> _logs;
 
   @override
   void initState() {
     super.initState();
-    _logs = List.from(widget.initialLogs);
+    // Initialize with full history
+    _logs = List.from(widget.client.logHistory);
+    
     widget.client.logStream.listen((log) {
       if (mounted) {
         setState(() {
-          _logs.insert(0, "> $log");
-          if (_logs.length > 500) {
-            _logs.removeLast();
-          }
+          _logs.insert(0, log);
+          if (_logs.length > 1000) _logs.removeLast();
         });
       }
     });
@@ -38,19 +32,75 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: AppColors.voidBlack,
-      appBar: AppBar(
-        title: const Text("LOGS"),
-        backgroundColor: AppColors.voidBlack,
-        iconTheme: const IconThemeData(color: AppColors.neonCyan),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(l10n),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: ListView.builder(
+                  itemCount: _logs.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("> ", style: TextStyle(color: AppColors.neonCyan, fontFamily: 'JetBrainsMonoNerdFont', fontSize: 12, fontWeight: FontWeight.bold)),
+                          Expanded(
+                            child: Text(
+                              _logs[index],
+                              style: const TextStyle(
+                                fontFamily: 'JetBrainsMonoNerdFont',
+                                color: AppColors.matrixGreen,
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      body: LogTerminal(
-        logs: _logs,
-        onToggleExpand: () => Navigator.pop(context), // Close fullscreen
-        onMinimize: () => Navigator.pop(context),
-        onFullscreen: () {}, // Already fullscreen
-        isExpanded: true,
+    );
+  }
+
+  Widget _buildHeader(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.neonCyan),
+            onPressed: () => Navigator.pop(context),
+          ),
+          Text(
+            l10n.liveLog.toUpperCase(),
+            style: const TextStyle(
+              color: AppColors.neonCyan,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              letterSpacing: 2,
+            ),
+          ),
+          const Spacer(),
+          const Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Icon(Icons.terminal, color: Colors.white10, size: 20),
+          ),
+        ],
       ),
     );
   }

@@ -18,10 +18,12 @@ class SettingsService {
   static const String _keyTerminalFontSize = 'terminal_font_size';
   static const String _keyColorScheme = 'color_scheme';
   static const String _keySavedHosts = 'saved_hosts';
+  static const String _keyLocale = 'selected_locale';
 
   // Default Values
   static const String _defaultSignalingUrl = 'ws://152.67.19.202:8037';
   static const String _defaultColorScheme = 'Cyberpunk';
+  static const String _defaultLocale = 'en';
 
   /// Initializes the underlying SharedPreferences instance.
   /// Should be called during app startup.
@@ -30,6 +32,12 @@ class SettingsService {
   }
 
   // ========== ACCESSORS ==========
+
+  /// Returns the manually selected locale code (e.g., 'en', 'ko').
+  String get localeCode => _prefs.getString(_keyLocale) ?? _defaultLocale;
+
+  /// Persists a new locale preference.
+  Future<bool> setLocaleCode(String value) async => await _prefs.setString(_keyLocale, value);
 
   /// Returns the configured signaling server URL.
   String get signalingUrl => _prefs.getString(_keySignalingUrl) ?? _defaultSignalingUrl;
@@ -69,6 +77,17 @@ class SettingsService {
     hosts.add({'id': id, 'name': name});
     final list = hosts.map((e) => jsonEncode(e)).toList();
     await _prefs.setStringList(_keySavedHosts, list);
+  }
+
+  /// Updates the display name (alias) for a saved host.
+  Future<void> updateHostName(String id, String newName) async {
+    final hosts = savedHosts;
+    final index = hosts.indexWhere((h) => h['id'] == id);
+    if (index != -1) {
+      hosts[index]['name'] = newName;
+      final list = hosts.map((e) => jsonEncode(e)).toList();
+      await _prefs.setStringList(_keySavedHosts, list);
+    }
   }
 
   /// Removes a host from the saved list.

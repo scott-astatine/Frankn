@@ -78,17 +78,35 @@ mixin RtcCommands on RtcClientBase {
     sendToChannel(fsDC, jsonEncode(msg), "FS");
   }
 
+  /// Sends a raw binary chunk of file data with a 36-byte UUID header.
+  void sendUploadChunkRaw({required String id, required Uint8List data}) {
+    if (fsDC?.state != RTCDataChannelState.RTCDataChannelOpen) return;
+
+    final header = Uint8List(36);
+    final idBytes = utf8.encode(id);
+    header.setRange(0, idBytes.length, idBytes);
+
+    final frame = Uint8List(1 + 36 + data.length);
+    frame[0] = 0x01; // Magic byte
+    frame.setRange(1, 37, header);
+    frame.setRange(37, 37 + data.length, data);
+
+    fsDC!.send(RTCDataChannelMessage.fromBinary(frame));
+  }
+
   /// Completes an active file upload session.
   ///
   /// Parameters:
   /// - id: Upload session identifier
+  /// - hash: Optional SHA256 hash for verification
   ///
   /// The host will finalize the file, validate integrity if hash provided,
   /// and clean up the upload session resources.
-  void sendUploadEnd({required String id}) {
+  void sendUploadEnd({required String id, String? hash}) {
     final msg = {
       'type': DcMsg.UploadEnd,
       'id': id,
+      'hash': hash,
       'timestamp': getTimestamp(),
     };
     sendToChannel(fsDC, jsonEncode(msg), "FS");
@@ -126,7 +144,10 @@ mixin RtcCommands on RtcClientBase {
 
     final type = msg[DcMsg.Key];
     final jsonMsg = jsonEncode(finalMsg);
-    // log("DEBUG: dc_msg type=$type id=$msgId");
+    
+    if (type != DcMsg.Ping && type != DcMsg.Telemetry) {
+       // log("DEBUG: dc_msg type=$type id=$msgId");
+    }
 
     switch (type) {
       // File system operations routed to dedicated FS channel

@@ -16,27 +16,10 @@ class SshStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 24,
+      height: 32, // Slightly taller for the solid button look
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: onExit,
-            child: const Row(
-              children: [
-                Icon(Icons.chevron_left, color: AppColors.neonCyan, size: 14),
-                Text(
-                  "EXIT",
-                  style: TextStyle(
-                    color: AppColors.neonCyan,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
           Icon(
             Icons.circle,
             color: isConnected ? AppColors.matrixGreen : AppColors.errorRed,
@@ -51,7 +34,7 @@ class SshStatusBar extends StatelessWidget {
               fontFamily: 'Courier',
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 16),
           if (isConnecting)
             const SizedBox(
               width: 10,
@@ -68,6 +51,33 @@ class SshStatusBar extends StatelessWidget {
               fontSize: 8,
               color: AppColors.textGrey,
               fontWeight: FontWeight.bold,
+            ),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: onExit,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: const BoxDecoration(
+                color: AppColors.errorRed,
+                borderRadius: BorderRadius.all(Radius.circular(2)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "EXIT",
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.close, color: Colors.black, size: 14),
+                ],
+              ),
             ),
           ),
         ],

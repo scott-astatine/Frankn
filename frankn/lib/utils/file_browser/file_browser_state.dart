@@ -10,6 +10,7 @@
 /// updates from the host and notifies listeners (the UI) when changes occur.
 library;
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc/rtc.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
@@ -18,6 +19,7 @@ import 'package:frankn/utils/utils.dart';
 /// State manager for file browser operations.
 class FileBrowserState with ChangeNotifier {
   final RtcClient client;
+  StreamSubscription? _responseSub;
 
   FileBrowserState(this.client) {
     _listenForResponses();
@@ -82,12 +84,12 @@ class FileBrowserState with ChangeNotifier {
 
   void setSortBy(SortOption sort) {
     _sortBy = sort;
-    notifyListeners();
+    _fetchDirectory();
   }
 
   void setShowHidden(bool show) {
     _showHidden = show;
-    notifyListeners();
+    _fetchDirectory();
   }
 
   void setIsSearching(bool searching) {
@@ -174,10 +176,7 @@ class FileBrowserState with ChangeNotifier {
   /// This initiates the async flow: UI -> Client -> Host -> Client -> UI.
   void _fetchDirectory() {
     setIsLoading(true);
-    clearSelection();
-    setIsSearching(false);
-    setSearchQuery("");
-    _searchController.clear();
+    _selectedPaths.clear();
 
     client.sendDcMsg({
       DcMsg.Key: DcMsg.Ls,
@@ -190,7 +189,7 @@ class FileBrowserState with ChangeNotifier {
   /// Listens to the global [RtcClient] response stream.
   /// This connects the UI state to the networking layer.
   void _listenForResponses() {
-    client.commandResponseStream.listen((resp) {
+    _responseSub = client.commandResponseStream.listen((resp) {
       final data = _extractResponseData(resp);
       final type = resp['type'];
 
@@ -199,12 +198,12 @@ class FileBrowserState with ChangeNotifier {
         setEntries(data['entries']);
       } 
       // Handle file transfer completion (from FileTransferMixin)
-      else if (type == DcMsg.FileTransferEnd) {
+      else if (type == DcMsg.StreamEnd) {
         setTransferMessage("");
         setTransferProgress(0.0);
         setIsLoading(false);
       }
-      else if (type == DcMsg.FileTransferStart) {
+      else if (type == DcMsg.StreamStart) {
         setTransferMessage("DOWNLOADING: ${resp['file_name']}");
         setTransferProgress(0.0);
         setIsLoading(true);
@@ -218,7 +217,8 @@ class FileBrowserState with ChangeNotifier {
   /// Helper to unwrap nested response data structures.
   Map<String, dynamic> _extractResponseData(Map<String, dynamic> resp) {
     if (resp['type'] == 'response' && resp.containsKey('data')) {
-      return resp['data'] as Map<String, dynamic>;
+      final data = resp['data'];
+      if (data is Map<String, dynamic>) return data;
     }
     return resp;
   }
@@ -238,6 +238,7 @@ class FileBrowserState with ChangeNotifier {
 
   @override
   void dispose() {
+    _responseSub?.cancel();
     _searchController.dispose();
     super.dispose();
   }

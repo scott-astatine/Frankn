@@ -1,256 +1,106 @@
 import 'package:flutter/material.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/cyber_card.dart';
+import 'package:frankn/utils/cyber_button.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class FileBrowserItem extends StatelessWidget {
   final Map<String, dynamic> entry;
+  final bool isGrid;
   final String fullPath;
   final bool isSelected;
-  final bool selectionMode;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
-  final VoidCallback? onDoubleTap;
   final Function(String) onDelete;
   final Function(String) onDownload;
   final Function(String, String) onEdit;
   final Function(String, String) onViewImage;
 
   const FileBrowserItem({
-    super.key,
-    required this.entry,
-    required this.fullPath,
-    this.isSelected = false,
-    this.selectionMode = false,
-    required this.onTap,
-    required this.onLongPress,
-    this.onDoubleTap,
-    required this.onDelete,
-    required this.onDownload,
-    required this.onEdit,
-    required this.onViewImage,
+    super.key, required this.entry, required this.isGrid, required this.fullPath,
+    this.isSelected = false, required this.onTap, required this.onLongPress,
+    required this.onDelete, required this.onDownload, required this.onEdit, required this.onViewImage,
   });
+
+  void _showContextMenu(BuildContext context) {
+    final bool isDir = entry['is_dir'] ?? false;
+    final String name = entry['name'] ?? 'UNKNOWN';
+    final l10n = AppLocalizations.of(context)!;
+
+    showModalBottomSheet(
+      context: context, backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(color: Color(0xFF0F0F0F), borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)), border: Border(top: BorderSide(color: Colors.white10, width: 2))),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("${l10n.intentHandler.toUpperCase()} // ${name.toUpperCase()}", style: const TextStyle(color: AppColors.neonCyan, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 2)),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                if (!isDir) ...[
+                  Expanded(child: Padding(padding: const EdgeInsets.only(right: 4), child: CyberButton(text: l10n.download.toUpperCase(), isSmall: true, onPressed: () { Navigator.pop(context); onDownload(fullPath); }))),
+                  Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: CyberButton(text: l10n.edit.toUpperCase(), isSmall: true, onPressed: () { Navigator.pop(context); onEdit(fullPath, name); }))),
+                ],
+                Expanded(child: Padding(padding: EdgeInsets.only(left: isDir ? 0 : 4), child: CyberButton(text: l10n.delete.toUpperCase(), variant: CyberButtonVariant.destructive, isSmall: true, onPressed: () { Navigator.pop(context); onDelete(fullPath); }))),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final bool isDir = entry['is_dir'] ?? false;
-    final bool isSymlink = entry['is_symlink'] ?? false;
-    final String name = entry['name'] ?? 'Unknown';
+    final String name = entry['name'] ?? 'UNKNOWN';
+    final l10n = AppLocalizations.of(context)!;
+    final String sizeStr = isDir ? l10n.directory.toUpperCase() : FileUtils.formatSize(entry['size'] as int);
+    final String modified = entry['modified'] ?? "00:00:00";
+    final Color color = isDir ? AppColors.cyberYellow : AppColors.neonCyan;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? AppColors.neonCyan.withValues(alpha: 0.1)
-            : AppColors.panelGrey.withValues(alpha: 0.4),
-        border: Border.all(
-          color: isSelected
-              ? AppColors.neonCyan
-              : AppColors.neonCyan.withValues(alpha: 0.1),
-          width: isSelected ? 1 : 1,
-        ),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: GestureDetector(
-        onDoubleTap: onDoubleTap,
-        onLongPress: onLongPress,
-        child: ListTile(
-          dense: true,
-          onTap: onTap,
-          leading: selectionMode && !isDir
-              ? Checkbox(
-                  value: isSelected,
-                  onChanged: (_) => onTap(),
-                  activeColor: AppColors.neonCyan,
-                  checkColor: Colors.black,
-                  side: const BorderSide(color: AppColors.neonCyan),
-                )
-              : _buildIcon(isDir, isSymlink, name),
-          title: Text(
-            name,
-            style: TextStyle(
-              color: isSelected ? AppColors.neonCyan : Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          subtitle: isDir
-              ? null
-              : Text(
-                  FileUtils.formatSize(entry['size'] as int),
-                  style: const TextStyle(
-                    color: AppColors.textGrey,
-                    fontSize: 10,
-                    fontFamily: 'Courier',
-                    fontWeight: FontWeight.bold,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap, onLongPress: onLongPress, borderRadius: BorderRadius.circular(16),
+          child: CyberCard(
+            borderColor: isSelected ? AppColors.neonCyan : (color.withValues(alpha: 0.1)),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(color: isSelected ? AppColors.neonCyan.withValues(alpha: 0.2) : color.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8)),
+                    child: Icon(isSelected ? Icons.check : (isDir ? Icons.folder_outlined : Icons.insert_drive_file_outlined), color: isSelected ? AppColors.neonCyan : color, size: 24),
                   ),
-                ),
-          trailing: selectionMode ? null : _buildActions(isDir, context),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIcon(bool isDir, bool isSymlink, String name) {
-    return Stack(
-      children: [
-        Icon(
-          isDir ? Icons.folder : FileUtils.getFileIcon(name),
-          color: isDir ? AppColors.cyberYellow : AppColors.neonCyan,
-          size: 24,
-        ),
-        if (isSymlink)
-          const Positioned(
-            bottom: 0,
-            right: 0,
-            child: Icon(Icons.shortcut, color: Colors.white, size: 12),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildActions(bool isDir, BuildContext context) {
-    final String name = entry['name'] ?? '';
-    final bool isImg = _isImage(name);
-    final bool isText = _canViewAsText(name);
-
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_horiz, color: AppColors.textGrey, size: 20),
-      color: AppColors.panelGrey,
-      shape: const BeveledRectangleBorder(
-        side: BorderSide(color: AppColors.neonCyan, width: 0.5),
-      ),
-      onSelected: (value) {
-        if (value == 'delete') onDelete(fullPath);
-        if (value == 'download') onDownload(fullPath);
-        if (value == 'edit' || value == 'view_text') onEdit(fullPath, name);
-        if (value == 'view_image') onViewImage(fullPath, name);
-      },
-      itemBuilder: (context) => [
-        if (!isDir && isText)
-          const PopupMenuItem(
-            value: 'edit',
-            child: Row(
-              children: [
-                Icon(Icons.edit, color: AppColors.cyberYellow, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'EDIT',
-                  style: TextStyle(
-                    color: AppColors.cyberYellow,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5)),
+                        const SizedBox(height: 4),
+                        Row(children: [
+                          Text(sizeStr, style: const TextStyle(fontFamily: 'JetBrainsMonoNerdFont', fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white24)),
+                          const SizedBox(width: 8), const Text("::", style: TextStyle(color: Colors.white10, fontSize: 8)), const SizedBox(width: 8),
+                          Text(modified, style: const TextStyle(fontFamily: 'JetBrainsMonoNerdFont', fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white24)),
+                        ]),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        if (!isDir && isImg)
-          const PopupMenuItem(
-            value: 'view_image',
-            child: Row(
-              children: [
-                Icon(Icons.image, color: AppColors.neonCyan, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'OPEN',
-                  style: TextStyle(
-                    color: AppColors.neonCyan,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        if (!isDir && !isImg && !isText)
-          const PopupMenuItem(
-            value: 'view_text',
-            child: Row(
-              children: [
-                Icon(Icons.article, color: AppColors.textGrey, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'OPEN AS TEXT',
-                  style: TextStyle(
-                    color: AppColors.textGrey,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        if (!isDir)
-          const PopupMenuItem(
-            value: 'download',
-            child: Row(
-              children: [
-                Icon(Icons.download, color: AppColors.neonCyan, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'DOWNLOAD',
-                  style: TextStyle(
-                    color: AppColors.neonCyan,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const PopupMenuItem(
-          value: 'delete',
-          child: Row(
-            children: [
-              Icon(Icons.delete_forever, color: AppColors.errorRed, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'DELETE',
-                style: TextStyle(
-                  color: AppColors.errorRed,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+                  IconButton(icon: const Icon(Icons.more_vert, color: Colors.white10, size: 20), onPressed: () => _showContextMenu(context)),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      ],
+      ),
     );
-  }
-
-  bool _isImage(String name) {
-    final ext = name.split('.').last.toLowerCase();
-    return {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}.contains(ext);
-  }
-
-  bool _canViewAsText(String name) {
-    final ext = name.split('.').last.toLowerCase();
-    const textExtensions = {
-      'txt',
-      'rs',
-      'dart',
-      'py',
-      'js',
-      'sh',
-      'json',
-      'yaml',
-      'yml',
-      'md',
-      'cpp',
-      'hpp',
-      'h',
-      'c',
-      'java',
-      'xml',
-      'html',
-      'css',
-      'toml',
-      'conf',
-      'service',
-      'log',
-      'lock',
-      'gitignore',
-    };
-    return textExtensions.contains(ext) || !name.contains('.');
   }
 }

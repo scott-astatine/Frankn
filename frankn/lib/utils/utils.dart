@@ -57,9 +57,10 @@ class DcMsg {
   static const AuthFailed = "auth_failed";
   static const Notification = "notification";
   static const HostResponse = "response";
-  static const FileTransferStart = "file_transfer_start";
+  static const StreamStart = "stream_start";
   static const FileChunk = "file_chunk";
-  static const FileTransferEnd = "file_transfer_end";
+  static const StreamEnd = "stream_end";
+  static const Telemetry = "telemetry";
 
 
   static const Key = "dc_msg_type";
@@ -74,6 +75,7 @@ class DcMsg {
   static const Update = "update";
   static const RestartHostServer = "restart_host_server";
   static const Ping = "ping";
+  static const Pong = "Pong";
   static const Kill = "kill";
   static const ListProcesses = "list_processes";
   static const SystemLog = "system_log";

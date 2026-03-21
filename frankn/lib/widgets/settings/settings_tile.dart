@@ -66,7 +66,7 @@ class SettingsTile extends StatelessWidget {
                   ],
                 ),
               ),
-              if (trailing case final trailing?) trailing,
+              trailing ?? const SizedBox.shrink(),
             ],
           ),
         ),

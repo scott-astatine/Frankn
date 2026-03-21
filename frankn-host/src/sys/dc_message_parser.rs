@@ -29,7 +29,10 @@ pub enum DcMsg {
     #[serde(rename = "kill")]
     KillProcess { proc: String },
     #[serde(rename = "list_processes")]
-    ListProcesses,
+    ListProcesses {
+        sort_by: Option<String>,
+        filter: Option<String>,
+    },
 
     // --- File System ---
     #[serde(rename = "ls")]
@@ -127,6 +130,7 @@ impl DcMsg {
             Shutdown { args } => sys::system::shutdown,
             Reboot => sys::system::reboot,
             LockScreen => sys::system::lock_screen,
+            RestartHostServer => sys::system::restart_host,
 
             // Media
             StartMediaSync => sys::media::handle_start_media_sync,
@@ -145,7 +149,7 @@ impl DcMsg {
             SetDefaultAudioDevice { target_id } => sys::media::set_default_audio_device,
 
             // Processes
-            ListProcesses => sys::proc_manager::list_processes,
+            ListProcesses { sort_by, filter } => sys::proc_manager::list_processes,
             KillProcess { proc } => sys::proc_manager::kill_process,
 
             // File System
@@ -192,10 +196,10 @@ async fn _handle_system_log(
     {
         use tokio::process::Command;
         let mut cmd = Command::new("journalctl");
-        cmd.args(["-n", "50", "--no-pager"]);
+        cmd.args(["--no-pager", "--since", "-5m"]);
         if let Some(service) = args {
             if !service.trim().is_empty() {
-                cmd.arg("-u").arg(service);
+                cmd.arg(service);
             }
         }
         let result = cmd.output().await;

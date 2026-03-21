@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc/rtc.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
+import 'package:frankn/utils/cyber_card.dart';
 
 class VolumeMixerDialog extends StatefulWidget {
   final RtcClient client;
@@ -60,7 +62,6 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
       DcMsg.Key: DcMsg.SetDefaultAudioDevice,
       "target_id": deviceId,
     });
-    // Optimistic update
     setState(() {
       for (var dev in _devices) {
         dev['is_active'] = (dev['id'] == deviceId);
@@ -76,156 +77,157 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.voidBlack,
-      shape: const BeveledRectangleBorder(
-        side: BorderSide(color: AppColors.neonCyan),
-      ),
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            "AUDIO_MATRIX",
-            style: TextStyle(
-              color: AppColors.neonCyan,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(
-              Icons.refresh,
-              color: AppColors.neonCyan,
-              size: 18,
-            ),
-            onPressed: _refresh,
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: _isLoading
-            ? const SizedBox(
-                height: 100,
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.neonCyan),
-                ),
-              )
-            : ListView.builder(
-                shrinkWrap: true,
-                itemCount: _devices.length,
-                itemBuilder: (context, index) {
-                  final dev = _devices[index];
-                  final bool isActive = dev['is_active'] ?? false;
-                  final double currentVol = (dev['volume'] as num).toDouble();
-                  final bool isOverdrive = currentVol > 1.0;
+    final l10n = AppLocalizations.of(context)!;
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () => _setActiveDevice(dev['id']),
-                              child: Container(
-                                width: 18,
-                                height: 18,
-                                margin: const EdgeInsets.only(right: 8),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isActive
-                                        ? AppColors.neonCyan
-                                        : AppColors.textGrey,
-                                    width: 1.5,
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A0A0A),
+          border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.3), width: 1.5),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.tune, color: AppColors.neonCyan, size: 20),
+                    const SizedBox(width: 12),
+                    Text(
+                      l10n.audioMatrix.toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.neonCyan,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.white38, size: 20),
+                  onPressed: _refresh,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Flexible(
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 200,
+                      child: Center(
+                        child: CircularProgressIndicator(color: AppColors.neonCyan),
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _devices.length,
+                      itemBuilder: (context, index) {
+                        final dev = _devices[index];
+                        final bool isActive = dev['is_active'] ?? false;
+                        final double currentVol = (dev['volume'] as num).toDouble();
+                        final bool isOverdrive = currentVol > 1.0;
+                        final Color accentColor = isOverdrive ? AppColors.neonPink : AppColors.neonCyan;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: CyberCard(
+                            borderColor: isActive ? accentColor.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => _setActiveDevice(dev['id']),
+                                        child: Container(
+                                          width: 20, height: 20,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: isActive ? accentColor : Colors.white24, width: 2),
+                                          ),
+                                          child: isActive ? Center(child: Container(width: 10, height: 10, decoration: BoxDecoration(color: accentColor, shape: BoxShape.circle))) : null,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          dev['name'].toString().toUpperCase(),
+                                          style: TextStyle(
+                                            color: isActive ? Colors.white : Colors.white38,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.5,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Text(
+                                        "${(currentVol * 100).round()}%",
+                                        style: TextStyle(
+                                          color: accentColor,
+                                          fontSize: 11,
+                                          fontFamily: 'JetBrainsMonoNerdFont',
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                child: Center(
-                                  child: Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: isActive
-                                          ? AppColors.neonCyan
-                                          : Colors.transparent,
+                                  const SizedBox(height: 12),
+                                  SliderTheme(
+                                    data: SliderThemeData(
+                                      activeTrackColor: accentColor,
+                                      inactiveTrackColor: Colors.white.withValues(alpha: 0.05),
+                                      thumbColor: Colors.white,
+                                      overlayColor: accentColor.withValues(alpha: 0.1),
+                                      trackHeight: 2,
+                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                    ),
+                                    child: Slider(
+                                      value: currentVol.clamp(0.0, 1.5),
+                                      max: 1.5,
+                                      onChanged: (v) {
+                                        setState(() => dev['volume'] = v);
+                                        _updateVolume(dev['id'], v);
+                                      },
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                dev['name'].toString().toUpperCase(),
-                                style: TextStyle(
-                                  color: isActive
-                                      ? AppColors.neonCyan
-                                      : Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Text(
-                              "VOL: ${(currentVol * 100).round()}%",
-                              style: TextStyle(
-                                color: isOverdrive
-                                    ? AppColors.neonPink
-                                    : AppColors.neonCyan.withAlpha(178),
-                                fontSize: 10,
-                                fontFamily: 'Courier',
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SliderTheme(
-                          data: SliderThemeData(
-                            activeTrackColor: isOverdrive
-                                ? AppColors.neonPink
-                                : (isActive
-                                      ? AppColors.neonCyan
-                                      : AppColors.textGrey),
-                            thumbColor: isOverdrive
-                                ? AppColors.neonPink
-                                : (isActive
-                                      ? AppColors.neonCyan
-                                      : AppColors.textGrey),
-                            trackHeight: 1,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 4,
                             ),
                           ),
-                          child: Slider(
-                            value: currentVol.clamp(0.0, 1.5),
-                            max: 1.5, // Allow up to 150%
-                            onChanged: (v) {
-                              setState(() => dev['volume'] = v);
-                              _updateVolume(dev['id'], v);
-                            },
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: Colors.white.withValues(alpha: 0.05),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  l10n.close.toUpperCase(),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 2),
+                ),
               ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text(
-            "CLOSE",
-            style: TextStyle(color: AppColors.neonCyan),
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

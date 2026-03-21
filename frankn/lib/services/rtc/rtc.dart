@@ -22,14 +22,12 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:hex/hex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -358,6 +356,9 @@ class RtcClient extends RtcClientBase
       StreamController<String>.broadcast();
   Stream<String> get logStream => _logController.stream;
 
+  final List<String> _logHistory = [];
+  List<String> get logHistory => List.unmodifiable(_logHistory);
+
   /// Broadcast controller for media player status updates.
   /// Streams play/pause/stop states from the host's media player.
   @override
@@ -409,6 +410,10 @@ class RtcClient extends RtcClientBase
     final time = DateTime.now().toIso8601String().substring(11, 19);
     final logMsg = "[$time] $msg";
     print(logMsg);
+    
+    _logHistory.insert(0, logMsg);
+    if (_logHistory.length > 1000) _logHistory.removeLast();
+    
     _logController.add(logMsg);
   }
 
@@ -416,7 +421,9 @@ class RtcClient extends RtcClientBase
   /// Includes debug logging and checks channel readiness before sending.
   @override
   void sendToChannel(RTCDataChannel? channel, String msg, String label) {
-    log("DEBUG: $msg, on channel: $label");
+    if (!msg.contains('"dc_msg_type":"ping"')) {
+      log("DEBUG: $msg, on channel: $label");
+    }
     if (channel?.state == RTCDataChannelState.RTCDataChannelOpen) {
       channel!.send(RTCDataChannelMessage(msg));
     } else {

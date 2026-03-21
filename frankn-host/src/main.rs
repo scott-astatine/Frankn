@@ -63,7 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("\nKeep this ID secure.\n");
             Ok(())
         }
-        Some(_) => Ok(()),
         None => run_service(config).await,
     }
 }
@@ -90,6 +89,49 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
     let pm_media = Arc::clone(&peer_map);
     tokio::spawn(async move {
         sys::media::start_media_sync(pm_media).await;
+    });
+
+    // =============================================================================
+    // TELEMETRY BROADCAST
+    // =============================================================================
+    let pm_telemetry = Arc::clone(&peer_map);
+    tokio::spawn(async move {
+        use sysinfo::{System, RefreshKind, CpuRefreshKind, MemoryRefreshKind};
+        let mut sys = System::new_with_specifics(
+            RefreshKind::nothing()
+                .with_cpu(CpuRefreshKind::everything())
+                .with_memory(MemoryRefreshKind::everything()),
+        );
+
+        loop {
+            let has_clients = {
+                let map = pm_telemetry.lock().await;
+                !map.is_empty()
+            };
+
+            if has_clients {
+                sys.refresh_cpu_all();
+                sys.refresh_memory();
+
+                let msg = HostMessage::Telemetry {
+                    cpu_load: sys.global_cpu_usage(),
+                    used_mem: sys.used_memory(),
+                    total_mem: sys.total_memory(),
+                    timestamp: get_timestamp(),
+                };
+
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    let map = pm_telemetry.lock().await;
+                    for conn in map.values() {
+                        let r_conn = conn.lock().await;
+                        let _ = r_conn
+                            .send_message("frankn_cmd", &tokio_tungstenite::tungstenite::Bytes::from(json.clone()))
+                            .await;
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
     });
 
     // =============================================================================
@@ -311,6 +353,8 @@ async fn parse_dc_msg(
             return;
         }
     };
+    
+    // log!("{text}"); 
 
     match serde_json::from_str::<ClientMessage>(&text) {
         Ok(msg) => match msg {
@@ -383,11 +427,11 @@ async fn parse_dc_msg(
                 }
             }
             ClientMessage::UploadChunk { id, data, .. } => {
-                crate::fs_sync::handle_upload_chunk(&id, &data).await;
+                crate::fs_sync::handle_upload_chunk_raw(&id, &base64::prelude::BASE64_STANDARD.decode(&data).unwrap_or_default()).await;
             }
-            ClientMessage::UploadEnd { id, .. } => {
+            ClientMessage::UploadEnd { id, hash, .. } => {
                 crate::log!("FS: Upload session {} finalized.", id);
-                let response = crate::fs_sync::handle_upload_end(&id).await;
+                let response = crate::fs_sync::handle_upload_end(&id, hash).await;
                 if let Ok(json) = serde_json::to_string(&response) {
                     let conn = rtc_conn.lock().await;
                     let _ = conn.send_message(label, &Bytes::from(json)).await;
@@ -442,12 +486,12 @@ async fn parse_dc_msg(
 }
 
 async fn parse_binary_msg(data: &Vec<u8>, _rtc_conn: Arc<Mutex<RTCConn>>, label: &str) {
-    if label == "frankn_fs" && data.len() >= 36 {
-        let id_bytes = &data[0..36];
+    if label == "frankn_fs" && data.len() >= 37 && data[0] == 0x01 {
+        let id_bytes = &data[1..37];
         let transfer_id = String::from_utf8_lossy(id_bytes)
             .trim_matches(char::from(0))
             .to_string();
-        let b64_data = base64::prelude::BASE64_STANDARD.encode(&data[36..]);
-        crate::fs_sync::handle_upload_chunk(&transfer_id, &b64_data).await;
+        
+        crate::fs_sync::handle_upload_chunk_raw(&transfer_id, &data[37..]).await;
     }
 }

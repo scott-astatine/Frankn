@@ -1,6 +1,10 @@
-use tokio::process::Command;
-use crate::{HostMessage, utils::{Status, get_timestamp}, sys::rtc::RTCConn};
+use crate::{
+    HostMessage,
+    sys::rtc::RTCConn,
+    utils::{Status, get_timestamp},
+};
 use std::sync::Arc;
+use tokio::process::Command;
 use tokio::sync::Mutex;
 
 pub async fn ping(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
@@ -18,7 +22,9 @@ pub async fn shutdown(id: &str, _args: &String, _rtc: Arc<Mutex<RTCConn>>) -> Ho
     #[cfg(target_os = "windows")]
     let result = Command::new("shutdown").args(["/s", "/t", "0"]).output();
     #[cfg(target_os = "macos")]
-    let result = Command::new("sudo").args(["shutdown", "-h", "now"]).output();
+    let result = Command::new("sudo")
+        .args(["shutdown", "-h", "now"])
+        .output();
 
     handle_res(id, result)
 }
@@ -29,7 +35,9 @@ pub async fn reboot(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     #[cfg(target_os = "windows")]
     let result = Command::new("shutdown").args(["/r", "/t", "0"]).output();
     #[cfg(target_os = "macos")]
-    let result = Command::new("sudo").args(["shutdown", "-r", "now"]).output();
+    let result = Command::new("sudo")
+        .args(["shutdown", "-r", "now"])
+        .output();
 
     handle_res(id, result)
 }
@@ -43,7 +51,9 @@ pub async fn lock_screen(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     }
     #[cfg(target_os = "windows")]
     {
-        let result = Command::new("rundll32.exe").args(["user32.dll,LockWorkStation"]).output();
+        let result = Command::new("rundll32.exe")
+            .args(["user32.dll,LockWorkStation"])
+            .output();
         handle_res(id, result)
     }
     #[cfg(target_os = "macos")]
@@ -53,19 +63,33 @@ pub async fn lock_screen(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     }
 }
 
+pub async fn restart_host(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+    #[cfg(target_os = "linux")]
+    let out = Command::new("systemctl")
+        .args(["--user", "restart", "frankn-host"])
+        .output()
+        .await;
+    handle_res(id, out)
+}
+
 fn handle_res(id: &str, result: std::io::Result<std::process::Output>) -> HostMessage {
     match result {
-        Ok(output) => {
-            HostMessage::Response {
-                id: id.to_string(),
-                status: if output.status.success() { Status::Success } else { Status::Error(format!("Action failed: {}", String::from_utf8_lossy(&output.stderr))) },
-                data: Some(serde_json::json!({
-                    "stdout": String::from_utf8_lossy(&output.stdout),
-                    "stderr": String::from_utf8_lossy(&output.stderr)
-                })),
-                timestamp: get_timestamp(),
-            }
-        }
+        Ok(output) => HostMessage::Response {
+            id: id.to_string(),
+            status: if output.status.success() {
+                Status::Success
+            } else {
+                Status::Error(format!(
+                    "Action failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ))
+            },
+            data: Some(serde_json::json!({
+                "stdout": String::from_utf8_lossy(&output.stdout),
+                "stderr": String::from_utf8_lossy(&output.stderr)
+            })),
+            timestamp: get_timestamp(),
+        },
         Err(e) => HostMessage::Response {
             id: id.to_string(),
             status: Status::Error(format!("Failed to execute process: {}", e)),

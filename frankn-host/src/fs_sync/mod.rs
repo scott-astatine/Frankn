@@ -1,52 +1,74 @@
 use crate::{HostMessage, sys::rtc::RTCConn, utils::Status};
-use base64::Engine;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
+use tokio::io::BufWriter;
 use tokio::sync::Mutex;
-use tokio_tungstenite::tungstenite::Bytes;
 
-static UPLOAD_BUFFERS: LazyLock<Mutex<HashMap<String, (String, Vec<u8>, Option<String>, u64)>>> =
+// Session ID -> (Writer, Hasher, TotalSize, CurrentSize, Path)
+type UploadSession = (BufWriter<tokio::fs::File>, Sha256, u64, u64, String);
+static UPLOAD_SESSIONS: LazyLock<Mutex<HashMap<String, UploadSession>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub async fn handle_upload_start(
     id: &str,
     path: &str,
-    hash: Option<String>,
+    _hash: Option<String>, // We hash on-the-fly now
     total_size: u64,
 ) -> HostMessage {
-    let mut buffers = UPLOAD_BUFFERS.lock().await;
-    buffers.insert(
-        id.to_string(),
-        (path.to_string(), Vec::new(), hash, total_size),
-    );
-
-    HostMessage::Response {
-        id: id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({ "message": "Upload session initialized" })),
-        timestamp: crate::utils::get_timestamp(),
+    crate::log!("FS: Starting upload for {} ({} bytes) to {}", id, total_size, path);
+    let mut sessions = UPLOAD_SESSIONS.lock().await;
+    
+    // Ensure parent directories exist
+    if let Some(parent) = Path::new(path).parent() {
+        let _ = tokio::fs::create_dir_all(parent).await;
     }
-}
 
-pub async fn handle_upload_chunk(id: &str, b64_data: &str) {
-    let mut buffers = UPLOAD_BUFFERS.lock().await;
-    if let Some((_, buffer, _, _)) = buffers.get_mut(id) {
-        if let Ok(bytes) = base64::prelude::BASE64_STANDARD.decode(b64_data) {
-            buffer.extend(bytes);
+    match tokio::fs::File::create(path).await {
+        Ok(file) => {
+            sessions.insert(
+                id.to_string(),
+                (BufWriter::new(file), Sha256::new(), total_size, 0, path.to_string()),
+            );
+
+            HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Success,
+                data: Some(serde_json::json!({ "message": "Neural stream initialized" })),
+                timestamp: crate::utils::get_timestamp(),
+            }
         }
+        Err(e) => HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Error(format!("Failed to create file: {}", e)),
+            data: None,
+            timestamp: crate::utils::get_timestamp(),
+        },
     }
 }
 
-pub async fn handle_upload_end(id: &str) -> HostMessage {
-    let mut buffers = UPLOAD_BUFFERS.lock().await;
-    if let Some((path, buffer, expected_hash, total_size)) = buffers.remove(id) {
-        if buffer.len() as u64 != total_size {
+pub async fn handle_upload_chunk_raw(id: &str, data: &[u8]) {
+    let mut sessions = UPLOAD_SESSIONS.lock().await;
+    if let Some((writer, hasher, _, current, _)) = sessions.get_mut(id) {
+        hasher.update(data);
+        if let Err(e) = writer.write_all(data).await {
+            eprintln!("FS ERROR: Failed to write chunk for session {}: {}", id, e);
+        }
+        *current += data.len() as u64;
+    }
+}
+
+pub async fn handle_upload_end(id: &str, expected_hash: Option<String>) -> HostMessage {
+    let mut sessions = UPLOAD_SESSIONS.lock().await;
+    if let Some((mut writer, hasher, total, current, path)) = sessions.remove(id) {
+        let _ = writer.flush().await;
+
+        if current != total {
+            let _ = tokio::fs::remove_file(&path).await;
             return HostMessage::Response {
                 id: id.to_string(),
                 status: Status::Error("SIZE_MISMATCH".into()),
@@ -56,10 +78,9 @@ pub async fn handle_upload_end(id: &str) -> HostMessage {
         }
 
         if let Some(expected) = expected_hash {
-            let mut hasher = Sha256::new();
-            hasher.update(&buffer);
             let actual = hex::encode(hasher.finalize());
-            if actual != expected {
+            if actual != expected.to_lowercase() {
+                let _ = tokio::fs::remove_file(&path).await;
                 return HostMessage::Response {
                     id: id.to_string(),
                     status: Status::Error("INTEGRITY_FAILURE".into()),
@@ -69,28 +90,14 @@ pub async fn handle_upload_end(id: &str) -> HostMessage {
             }
         }
 
-        let res = async {
-            let mut f = tokio::fs::File::create(&path).await?;
-            f.write_all(&buffer).await?;
-            Ok::<(), std::io::Error>(())
-        }
-        .await;
-
-        match res {
-            Ok(_) => HostMessage::Response {
-                id: id.to_string(),
-                status: Status::Success,
-                data: Some(serde_json::json!({ "message": "Success" })),
-                timestamp: crate::utils::get_timestamp(),
-            },
-            Err(e) => HostMessage::Response {
-                id: id.to_string(),
-                status: Status::Error(e.to_string()),
-                data: None,
-                timestamp: crate::utils::get_timestamp(),
-            },
+        HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Success,
+            data: Some(serde_json::json!({ "message": "Neural stream finalized" })),
+            timestamp: crate::utils::get_timestamp(),
         }
     } else {
+        crate::elog!("FS: ERROR - Upload session {} not found at finalization", id);
         HostMessage::Response {
             id: id.to_string(),
             status: Status::Error("Session lost".into()),
@@ -142,9 +149,8 @@ pub async fn get_file(id: &str, path: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> Ho
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
-    let transfer_id = id.to_string();
 
-    let mut file = match tokio::fs::File::open(&path_buf).await {
+    let file = match tokio::fs::File::open(&path_buf).await {
         Ok(f) => f,
         Err(e) => {
             return HostMessage::Response {
@@ -167,73 +173,16 @@ pub async fn get_file(id: &str, path: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> Ho
             };
         }
     };
-    let total_size = metadata.len();
 
-    tokio::spawn(async move {
-        let mut hasher = Sha256::new();
-
-        let start_msg = serde_json::to_string(&HostMessage::FileTransferStart {
-            id: transfer_id.clone(),
-            file_name,
-            total_size,
-            timestamp: crate::utils::get_timestamp(),
-        });
-
-        {
-            let conn = rtc_conn.lock().await;
-            if let Ok(json) = start_msg {
-                let _ = conn.send_message("frankn_fs", &Bytes::from(json)).await;
-            }
-        }
-
-        loop {
-            let mut buffer = [0u8; 16384];
-            let n = match file.read(&mut buffer).await {
-                Ok(0) => break,
-                Ok(n) => n,
-                Err(e) => {
-                    eprintln!("Error reading file: {}", e);
-                    break;
-                }
-            };
-
-            let chunk = &buffer[0..n];
-            hasher.update(chunk);
-
-            let mut frame = Vec::with_capacity(36 + n);
-            let mut id_bytes = transfer_id.as_bytes().to_vec();
-            id_bytes.resize(36, 0);
-            frame.extend_from_slice(&id_bytes);
-            frame.extend_from_slice(chunk);
-
-            let conn = rtc_conn.lock().await;
-            let buffered = conn.get_buffered_amount("frankn_fs").await;
-
-            if buffered > 1024 * 1024 {
-                drop(conn);
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                continue;
-            }
-
-            if let Err(e) = conn.send_message("frankn_fs", &Bytes::from(frame)).await {
-                eprintln!("Failed to send chunk: {}", e);
-                return;
-            }
-            drop(conn);
-        }
-
-        let hash = hex::encode(hasher.finalize());
-        let end_msg = HostMessage::FileTransferEnd {
-            id: transfer_id,
-            timestamp: crate::utils::get_timestamp(),
-            hash: Some(hash),
-        };
-
-        if let Ok(json) = serde_json::to_string(&end_msg) {
-            let conn = rtc_conn.lock().await;
-            let _ = conn.send_message("frankn_fs", &Bytes::from(json)).await;
-        }
-    });
+    crate::utils::stream::send_managed_transfer(
+        file,
+        id.to_string(),
+        file_name,
+        metadata.len(),
+        rtc_conn,
+        crate::utils::stream::StreamOptions::default(),
+    )
+    .await;
 
     HostMessage::Response {
         id: id.into(),

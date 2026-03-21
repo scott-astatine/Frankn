@@ -160,8 +160,10 @@ mixin RtcSignaling on RtcClientBase {
         final client = this as RtcClient;
         
         if (isOnline) {
+          log("Neural Link Active: $id");
           client.onlineHostIds.add(id);
         } else {
+          log("Neural Link Severed: $id");
           client.onlineHostIds.remove(id);
         }
         client._peerStatusController.add(data);
@@ -180,15 +182,10 @@ mixin RtcSignaling on RtcClientBase {
 
         client._hostListController.add(client.currentHosts);
         // Trigger a status update to refresh the UI indicators
-        client._peerStatusController.add({}); 
-
-        // Auto-reconnect to previous host if signaling reconnected
-        // if (currentHostId != null &&
-        //     !isIntentionalDisconnect &&
-        //     !isAuthFailed) {
-        //   log("Re-establishing P2P connection after signaling reconnect...");
-        //   connectToHost(currentHostId!, hostName: currentHostName);
-        // }
+        // Use a short delay to ensure UI listeners are registered
+        Future.delayed(const Duration(milliseconds: 100), () {
+          client._peerStatusController.add({'type': 'refresh'}); 
+        });
         break;
 
       case SinalingMessage.Answer:

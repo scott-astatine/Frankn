@@ -1,224 +1,169 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:frankn/screens/log_terminal_screen.dart';
-import 'package:frankn/screens/settings_screen.dart';
 import 'package:frankn/services/rtc/rtc.dart';
 import 'package:frankn/utils/utils.dart';
-import 'package:frankn/widgets/desktop_layout.dart';
-import 'package:frankn/widgets/log_terminal.dart';
-import 'package:frankn/widgets/mobile_layout.dart';
-import 'package:frankn/widgets/status_badge.dart';
+import 'package:frankn/utils/cyber_card.dart';
+import 'package:frankn/widgets/quick_functions.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
+import 'package:frankn/screens/log_terminal_screen.dart';
 
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+class FranknDashboard extends StatefulWidget {
+  final RtcClient client;
+  const FranknDashboard({super.key, required this.client});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<FranknDashboard> createState() => _FranknDashboardState();
 }
 
-class _MainScreenState extends State<MainScreen> {
-  final _client = RtcClient();
+class _FranknDashboardState extends State<FranknDashboard> {
   final List<String> _logs = [];
-
-  // Terminal States
-  double _terminalHeight = 200.0;
-  bool _isTerminalMinimized = false;
-  final double _minHeight = 36.0;
-  final double _maxHeight = 600.0;
+  double _cpu = 0.0;
+  double _ram = 0.0;
+  int _ping = 0;
+  bool _hasTelemetry = false;
+  
+  Timer? _pingTimer;
+  int? _lastPingTime;
 
   @override
   void initState() {
     super.initState();
-    _client.connectToSignaling();
-    _client.logStream.listen((log) {
+    
+    // 1. Listen for connection logs
+    widget.client.logStream.listen((log) {
       if (mounted) {
         setState(() {
-          _logs.insert(0, "> $log");
-          if (_logs.length > 100) _logs.removeLast();
+          _logs.insert(0, log);
+          if (_logs.length > 50) _logs.removeLast();
         });
       }
     });
-  }
 
-  void _toggleTerminal() {
-    setState(() {
-      if (_isTerminalMinimized) {
-        _isTerminalMinimized = false;
-        _terminalHeight = 200.0;
-      } else if (_terminalHeight < 400) {
-        _terminalHeight = 500.0;
-      } else {
-        _terminalHeight = 200.0;
+    // 2. Listen for host responses (Telemetry + Pongs)
+    widget.client.commandResponseStream.listen((resp) {
+      if (!mounted) return;
+
+      // Handle Telemetry Broadcast
+      if (resp['type'] == 'telemetry') {
+        setState(() {
+          _cpu = (resp['cpu_load'] as num).toDouble();
+          _ram = (resp['used_mem'] as num).toDouble() / (1024 * 1024 * 1024);
+          _hasTelemetry = true;
+        });
+      } 
+      
+      // Handle Ping Response (RTT calculation)
+      else if (resp['type'] == 'response') {
+        final data = resp['data'];
+        if (data is Map && data['response'] == 'Pong') {
+          if (_lastPingTime != null) {
+            setState(() {
+              _ping = DateTime.now().millisecondsSinceEpoch - _lastPingTime!;
+              _lastPingTime = null;
+            });
+          }
+        }
       }
     });
+
+    // 3. Start periodic Ping heartbeat (every 5s)
+    _pingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _sendPing());
+    _sendPing(); 
   }
 
-  void _minimizeTerminal() {
-    setState(() {
-      _isTerminalMinimized = !_isTerminalMinimized;
-      if (_isTerminalMinimized) {
-        _terminalHeight = _minHeight;
-      } else {
-        _terminalHeight = 200.0;
-      }
-    });
+  void _sendPing() {
+    if (widget.client.currentHostState == HostConnectionState.authenticated) {
+      _lastPingTime = DateTime.now().millisecondsSinceEpoch;
+      widget.client.sendDcMsg({DcMsg.Key: DcMsg.Ping});
+    }
   }
 
-  void _navigateToFullscreenTerminal() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            LogTerminalScreen(client: _client, initialLogs: _logs),
-      ),
-    );
+  @override
+  void dispose() {
+    _pingTimer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isMobile =
-        MediaQuery.of(context).size.width < AppConstants.mobileBreakpoint;
-
-    return Scaffold(
-      backgroundColor: AppColors.voidBlack,
-      body: Stack(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
         children: [
-          // Fixed Background
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                image: DecorationImage(
-                  image: NetworkImage(
-                    "https://www.transparenttextures.com/patterns/dark-matter.png",
-                  ),
-                  repeat: ImageRepeat.repeat,
-                  opacity: 0.7,
-                ),
-              ),
+          const SizedBox(height: 8),
+          _buildTelemetryHUD(),
+          const SizedBox(height: 16),
+          Expanded(
+            child: SingleChildScrollView(
+              child: QuickFunction(client: widget.client),
             ),
           ),
-
-          // Layout
-          Column(
-            children: [
-              Expanded(
-                child: CustomScrollView(
-                  slivers: [
-                    SliverAppBar(
-                      floating: true,
-                      snap: true,
-                      backgroundColor: AppColors.voidBlack,
-                      surfaceTintColor: Colors.transparent,
-                      scrolledUnderElevation: 0,
-                      title: Text("FRANKN:${_client.currentHostName ?? ''}"),
-                      actions: [
-                        IconButton(
-                          icon: const Icon(Icons.settings, color: AppColors.neonCyan),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SettingsScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                        StreamBuilder<HostConnectionState>(
-                          stream: _client.hostStateStream,
-                          initialData: _client.currentHostState,
-                          builder: (context, snapshot) {
-                            if (snapshot.data ==
-                                HostConnectionState.authenticated) {
-                              return TextButton(
-                                onPressed: () => _client.disconnectFromHost(),
-                                child: const Text(
-                                  "DISCONNECT",
-                                  style: TextStyle(
-                                    color: AppColors.errorRed,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                        StreamBuilder<SignalConnectionState>(
-                          stream: _client.connectionStateStream,
-                          initialData: _client.sigState,
-                          builder: (context, snapshot) => GestureDetector(
-                            onTap: () {
-                              _client.requestHostList();
-                              _client.log("Manually refreshing host list...");
-                            },
-                            child: StatusBadge(state: snapshot.data!),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                      ],
-                    ),
-                    SliverFillRemaining(
-                      hasScrollBody: true,
-                      child: isMobile
-                          ? MobileLayout(client: _client)
-                          : DesktopLayout(client: _client)
-                    ),
-                  ],
-                ),
-              ),
-              _buildResizableTerminal(),
-            ],
-          ),
+          _buildLiveLog(),
         ],
       ),
     );
   }
 
-  Widget _buildResizableTerminal() {
+  Widget _buildTelemetryHUD() {
+    final l10n = AppLocalizations.of(context)!;
+    return CyberCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildStatItem(l10n.cpu, _hasTelemetry ? "${_cpu.toStringAsFixed(1)}%" : l10n.syncing.toUpperCase(), AppColors.neonCyan),
+            _buildHUDDivider(),
+            _buildStatItem(l10n.ram, _hasTelemetry ? "${_ram.toStringAsFixed(1)} GB" : l10n.syncing.toUpperCase(), Colors.white),
+            _buildHUDDivider(),
+            _buildStatItem(l10n.ping, _ping > 0 ? "${_ping}ms" : l10n.syncing.toUpperCase(), AppColors.matrixGreen),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHUDDivider() => Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.05));
+
+  Widget _buildStatItem(String label, String value, Color color) {
     return Column(
       children: [
-        // Drag Handle
-        GestureDetector(
-          onVerticalDragUpdate: (details) {
-            setState(() {
-              _terminalHeight -= details.delta.dy;
-              if (_terminalHeight < _minHeight) {
-                _terminalHeight = _minHeight;
-                _isTerminalMinimized = true;
-              } else {
-                _isTerminalMinimized = false;
-              }
-              if (_terminalHeight > _maxHeight) _terminalHeight = _maxHeight;
-            });
-          },
-          child: Container(
-            height: 6,
-            width: double.infinity,
-            color: AppColors.voidBlack,
-            child: Center(
-              child: Container(
-                width: 40,
-                height: 2,
-                decoration: BoxDecoration(
-                  color: AppColors.neonCyan.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              ),
-            ),
-          ),
-        ),
-        SizedBox(
-          height: _terminalHeight,
-          child: LogTerminal(
-            logs: _logs,
-            isMinimized: _isTerminalMinimized,
-            onToggleExpand: _toggleTerminal,
-            onMinimize: _minimizeTerminal,
-            onFullscreen: _navigateToFullscreenTerminal,
-          ),
-        ),
+        Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, color: AppColors.textGrey, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        const SizedBox(height: 8),
+        Text(value, style: TextStyle(fontSize: 16, color: color, fontFamily: 'JetBrainsMonoNerdFont', fontWeight: FontWeight.w900)),
       ],
+    );
+  }
+
+  Widget _buildLiveLog() {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      padding: const EdgeInsets.only(bottom: 16, top: 16),
+      decoration: const BoxDecoration(border: Border(top: BorderSide(color: Colors.white10))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(l10n.liveLog.toUpperCase(), style: const TextStyle(color: AppColors.neonCyan, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.fullscreen_exit, size: 16, color: Colors.white24),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LogTerminalScreen(client: widget.client))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _logs.isEmpty ? "> [IDLE] Listening for neural signals..." : "> ${_logs.first}",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontFamily: 'JetBrainsMonoNerdFont', fontSize: 10, color: Colors.white38),
+          ),
+        ],
+      ),
     );
   }
 }

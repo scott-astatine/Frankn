@@ -1,259 +1,83 @@
-/// File browser UI components and builders.
-///
-/// Contains reusable UI components for the file browser including
-/// app bars, dialogs, and navigation elements.
-library;
-
 import 'package:flutter/material.dart';
-import 'package:frankn/utils/file_browser/file_browser_utils.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
 
-/// UI builders for file browser app bars.
 class FileBrowserAppBar {
-  /// Builds the default app bar with navigation and controls.
   static AppBar buildDefault({
+    required BuildContext context,
     required String currentPath,
-    required SortOption sortBy,
-    required bool showHidden,
+    required bool isGridView,
+    required VoidCallback onToggleView,
     required VoidCallback onSearch,
-    required Function(SortOption) onSortChanged,
-    required VoidCallback onToggleHidden,
     required VoidCallback onNavigateUp,
+    required Function(String) onSort,
+    int selectedCount = 0,
+    VoidCallback? onDeleteSelected,
+    VoidCallback? onDownloadSelected,
+    VoidCallback? onClearSelection,
   }) {
-    return AppBar(
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "FILE BROWSER",
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-          Text(
-            currentPath,
-            style: const TextStyle(
-              fontSize: 10,
-              color: AppColors.textGrey,
-              fontFamily: 'Courier',
-            ),
-          ),
-        ],
-      ),
-      backgroundColor: AppColors.deepSpace,
-      actions: [
-        _buildSearchButton(onSearch),
-        _buildSortMenu(sortBy, onSortChanged),
-        _buildVisibilityToggle(showHidden, onToggleHidden),
-        _buildBackButton(onNavigateUp),
-      ],
-    );
-  }
+    final l10n = AppLocalizations.of(context)!;
 
-  /// Builds the selection mode app bar.
-  static AppBar buildSelection({
-    required int selectedCount,
-    required VoidCallback onClearSelection,
-    required VoidCallback onBulkDownload,
-    required VoidCallback onBulkDelete,
-  }) {
-    return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.close),
-        onPressed: onClearSelection,
-      ),
-      title: Text(
-        "$selectedCount SELECTED",
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: AppColors.neonCyan,
-        ),
-      ),
-      backgroundColor: AppColors.deepSpace,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.download, color: AppColors.neonCyan),
-          onPressed: onBulkDownload,
-        ),
-        IconButton(
-          icon: const Icon(Icons.delete_forever, color: AppColors.errorRed),
-          onPressed: onBulkDelete,
-        ),
-      ],
-    );
-  }
-
-  /// Builds the search mode app bar.
-  static AppBar buildSearch({
-    required TextEditingController controller,
-    required String searchQuery,
-    required VoidCallback onExitSearch,
-    required Function(String) onQueryChanged,
-  }) {
-    return AppBar(
-      backgroundColor: AppColors.deepSpace,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: AppColors.neonCyan),
-        onPressed: onExitSearch,
-      ),
-      title: TextField(
-        controller: controller,
-        autofocus: true,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 14,
-          fontFamily: 'Courier',
-        ),
-        decoration: const InputDecoration(
-          hintText: "SEARCH IN DIRECTORY...",
-          hintStyle: TextStyle(color: AppColors.textGrey, fontSize: 12),
-          border: InputBorder.none,
-        ),
-        onChanged: onQueryChanged,
-      ),
-      actions: [
-        if (searchQuery.isNotEmpty)
-          IconButton(
-            icon: const Icon(Icons.clear, color: AppColors.textGrey),
-            onPressed: () {
-              controller.clear();
-              onQueryChanged("");
-            },
-          ),
-      ],
-    );
-  }
-
-  static Widget _buildSearchButton(VoidCallback onPressed) {
-    return IconButton(
-      icon: const Icon(Icons.search, size: 20, color: AppColors.neonCyan),
-      onPressed: onPressed,
-    );
-  }
-
-  static Widget _buildVisibilityToggle(
-    bool showHidden,
-    VoidCallback onPressed,
-  ) {
-    return IconButton(
-      icon: Icon(
-        showHidden ? Icons.visibility : Icons.visibility_off,
-        size: 20,
-      ),
-      onPressed: onPressed,
-    );
-  }
-
-  static Widget _buildBackButton(VoidCallback onPressed) {
-    return IconButton(
-      icon: const Icon(Icons.drive_file_move_rtl),
-      onPressed: onPressed,
-    );
-  }
-
-  static PopupMenuButton<SortOption> _buildSortMenu(
-    SortOption currentSort,
-    Function(SortOption) onSelected,
-  ) {
-    return PopupMenuButton<SortOption>(
-      icon: const Icon(Icons.sort, size: 20),
-      onSelected: onSelected,
-      itemBuilder: (context) => SortOption.values.map((option) {
-        return PopupMenuItem(value: option, child: Text(option.label));
-      }).toList(),
-    );
-  }
-}
-
-/// Dialog builders for file browser operations.
-class FileBrowserDialogs {
-  /// Shows bulk delete confirmation dialog.
-  static Future<bool?> showBulkDelete(
-    BuildContext context,
-    int itemCount,
-  ) async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.panelGrey,
-        shape: const BeveledRectangleBorder(
-          side: BorderSide(color: AppColors.errorRed, width: 1),
-        ),
-        title: const Text(
-          "CONFIRM DELETION",
-          style: TextStyle(
-            color: AppColors.errorRed,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
-          "Permanently delete $itemCount items from host?",
-          style: const TextStyle(color: Colors.white, fontSize: 12),
-        ),
+    if (selectedCount > 0) {
+      return AppBar(
+        title: Text("$selectedCount ${l10n.selected.toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+        backgroundColor: AppColors.voidBlack,
+        leading: IconButton(icon: const Icon(Icons.close), onPressed: onClearSelection),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              "CANCEL",
-              style: TextStyle(color: AppColors.textGrey),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.errorRed,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("DELETE ALL"),
-          ),
+          IconButton(icon: const Icon(Icons.download, color: AppColors.neonCyan), onPressed: onDownloadSelected),
+          IconButton(icon: const Icon(Icons.delete, color: AppColors.errorRed), onPressed: onDeleteSelected),
         ],
-      ),
+      );
+    }
+
+    return AppBar(
+      title: Text(l10n.fileBrowser.toUpperCase().replaceAll(" ", "_"), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+      backgroundColor: AppColors.voidBlack,
+      actions: [
+        IconButton(icon: Icon(isGridView ? Icons.view_list : Icons.grid_view, size: 20, color: AppColors.neonCyan), onPressed: onToggleView),
+        IconButton(icon: const Icon(Icons.search, size: 20, color: AppColors.neonCyan), onPressed: onSearch),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.sort, color: AppColors.neonCyan, size: 20),
+          onSelected: onSort,
+          color: const Color(0xFF0F0F0F),
+          itemBuilder: (context) => [
+            PopupMenuItem(value: "name", child: Text(l10n.sortByName.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+            PopupMenuItem(value: "size", child: Text(l10n.sortBySize.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+            PopupMenuItem(value: "modified", child: Text(l10n.sortByDate.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        IconButton(icon: const Icon(Icons.drive_file_move_rtl, size: 20), onPressed: onNavigateUp),
+      ],
     );
   }
 
-  /// Shows single file delete confirmation dialog.
-  static Future<bool> showSingleDelete(
-    BuildContext context,
-    String filename,
-  ) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: AppColors.panelGrey,
-            shape: const BeveledRectangleBorder(
-              side: BorderSide(color: AppColors.errorRed, width: 1),
-            ),
-            title: const Text(
-              "DELETE FILE?",
-              style: TextStyle(
-                color: AppColors.errorRed,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            content: Text(
-              "Are you sure you want to delete '$filename'?",
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text(
-                  "CANCEL",
-                  style: TextStyle(color: AppColors.textGrey),
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.errorRed,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text("DELETE"),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+  static Widget buildBreadcrumbs({required String path, required Function(String) onBreadcrumbTap}) {
+    final parts = path.split('/').where((s) => s.isNotEmpty).toList();
+    List<String> breadcrumbs = ["/"];
+    String currentAccumulated = "/";
+    for (var part in parts) {
+      currentAccumulated += "$part/";
+      breadcrumbs.add(currentAccumulated);
+    }
+
+    return Container(
+      height: 32, padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(color: Colors.black, border: Border(bottom: BorderSide(color: Colors.white10))),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: breadcrumbs.length,
+        separatorBuilder: (_, index) => const Icon(Icons.chevron_right, size: 14, color: Colors.white24),
+        itemBuilder: (context, index) {
+          final isLast = index == breadcrumbs.length - 1;
+          final l10n = AppLocalizations.of(context)!;
+          final label = index == 0 ? l10n.root : parts[index - 1]; 
+          return TextButton(
+            onPressed: isLast ? null : () => onBreadcrumbTap(breadcrumbs[index]),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: Text(label, style: TextStyle(fontFamily: 'JetBrainsMonoNerdFont', fontSize: 10, fontWeight: isLast ? FontWeight.w900 : FontWeight.bold, color: isLast ? AppColors.neonCyan : AppColors.textGrey)),
+          );
+        },
+      ),
+    );
   }
 }

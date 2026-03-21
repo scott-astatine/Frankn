@@ -127,8 +127,6 @@ mixin RtcConnection on RtcClientBase {
             log("DC [frankn_cmd] Severed. Triggering UI Reset.");
             updateHostState(HostConnectionState.disconnected);
             break;
-          default:
-            break;
         }
       };
 

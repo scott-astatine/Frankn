@@ -252,14 +252,18 @@ class SshController extends ChangeNotifier {
         _handleInput(data);
       };
 
+      // Use stateful decoders to handle multi-byte characters split across chunks
+      const stdoutDecoder = Utf8Decoder(allowMalformed: true);
+      const stderrDecoder = Utf8Decoder(allowMalformed: true);
+
       _sshSession!.stdout.listen((data) {
         if (_isDisposed) return;
-        terminal.write(utf8.decode(data));
+        terminal.write(stdoutDecoder.convert(data));
       }, onDone: () => stopSession());
 
       _sshSession!.stderr.listen((data) {
         if (_isDisposed) return;
-        terminal.write(utf8.decode(data));
+        terminal.write(stderrDecoder.convert(data));
       });
 
       notifyListeners();

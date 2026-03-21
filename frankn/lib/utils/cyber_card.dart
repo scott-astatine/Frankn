@@ -1,25 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:frankn/utils/utils.dart';
 
 class CyberCard extends StatelessWidget {
   final Widget child;
-  const CyberCard({super.key, required this.child});
+  final Color? borderColor;
+  final String? label;
+
+  const CyberCard({
+    super.key, 
+    required this.child, 
+    this.borderColor,
+    this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.panelGrey.withValues(alpha: .9),
-        border: Border.all(color: AppColors.neonCyan.withValues(alpha: .5)),
-        borderRadius: BorderRadiusGeometry.all(Radius.circular(8)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.neonCyan.withValues(alpha: .1),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
-        ],
+        color: const Color(0xFF121212), // Deep deck grey
+        border: Border.all(color: borderColor ?? Colors.white.withValues(alpha: 0.05), width: 1),
+        borderRadius: BorderRadius.circular(16), // Rounded as per design
       ),
       child: child,
     );

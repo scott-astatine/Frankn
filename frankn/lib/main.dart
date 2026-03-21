@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:frankn/screens/frankn_dashboard.dart';
+import 'package:frankn/screens/home_screen.dart';
 import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/rtc/rtc.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/theme.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
+
+final appLocale = ValueNotifier<Locale>(Locale(SettingsService().localeCode));
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.initCommunicationPort();
 
   await SettingsService().initialize();
+  appLocale.value = Locale(SettingsService().localeCode);
   await NotificationService().initialize();
   await initAudioService();
 
@@ -19,6 +24,9 @@ void main() async {
   RtcClient().notificationStream.listen((data) {
     NotificationService().showNotificationFromHost(data);
   });
+
+  // Initiate Neural Link to Signaling Server
+  RtcClient().connectToSignaling();
 
   runApp(const FranknApp());
 }
@@ -55,11 +63,24 @@ class FranknApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Frankn',
-      theme: CyberTheme.themeData,
-      home: const MainScreen(),
-      debugShowCheckedModeBanner: false,
+    return ValueListenableBuilder<Locale>(
+      valueListenable: appLocale,
+      builder: (context, locale, _) {
+        return MaterialApp(
+          onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
+          theme: CyberTheme.themeData,
+          locale: locale,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const HomeScreen(),
+          debugShowCheckedModeBanner: false,
+        );
+      }
     );
   }
 }
