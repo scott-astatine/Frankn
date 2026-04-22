@@ -87,6 +87,7 @@ The UI is now highly functional and visually polished:
 
 ### Phase 5: Advanced Features [IN PROGRESS]
 - [x] **Notification Mirroring**: PC notifications buzz on the phone.
+- [ ] **Zero-Trust Private API Gateway (LLM Proxy)**: Create a dedicated WebRTC data channel (`frankn_ollama`) to securely proxy localhost REST API calls (like Ollama) from the mobile client directly to the remote host without exposing ports to the internet.
 - [ ] **Vice Versa**: PC controlling the phone (Mobile as the Host).
 - [ ] **Bidirectional Sync**: Folder-to-folder background synchronization.
 - [ ] **Process Manager Search**: Advanced filtering for the process list.

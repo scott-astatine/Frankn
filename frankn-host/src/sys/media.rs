@@ -673,12 +673,3 @@ pub async fn set_specific_device_volume(
     }
     get_all_audio_devices(req_id, _rtc).await
 }
-
-fn mpris_error(id: &str, e: impl std::fmt::Display) -> HostMessage {
-    HostMessage::Response {
-        id: id.to_string(),
-        status: Status::Error(format!("D-Bus Error: {}", e)),
-        data: None,
-        timestamp: crate::utils::get_timestamp(),
-    }
-}

@@ -1,4 +1,4 @@
-/// Frankn Real-Time Communication (RTC) Client Library
+// Frankn Real-Time Communication (RTC) Client Library
 ///
 /// This library implements the client-side WebRTC infrastructure for Frankn,
 /// providing P2P communication between mobile devices and desktop hosts.
@@ -43,15 +43,6 @@ part 'rtc_signaling.dart';
 part 'rtc_connection.dart';
 part 'rtc_commands.dart';
 
-/// Abstract base class defining the interface for RTC client implementations.
-///
-/// This interface provides a contract for all WebRTC operations including:
-/// - Connection management (signaling server and P2P peers)
-/// - Authentication and security
-/// - Message routing across data channels
-/// - State management and event streaming
-///
-/// All concrete implementations must provide these capabilities through mixins.
 /// Abstract base class defining the interface for RTC client implementations.
 ///
 /// This interface provides a contract for all WebRTC operations including:
@@ -119,6 +110,15 @@ abstract class RtcClientBase {
   /// Processes incoming messages from the host via WebRTC data channels.
   /// Handles JSON and binary messages, routing them to appropriate handlers.
   void handleHostMessage(dynamic rawData);
+
+  /// Starts the Android foreground service with a persistent notification.
+  Future<void> startBackgroundService({String title, String text});
+
+  /// Stops the Android foreground service.
+  Future<void> stopBackgroundService();
+
+  /// Updates the foreground service notification content.
+  Future<void> updateBackgroundService({String? title, String? text});
 
   /// Marks authentication as failed. Used by message handlers.
   set authFailed(bool value);
@@ -199,6 +199,12 @@ abstract class RtcClientBase {
   /// List of currently available hosts from signaling server.
   List<dynamic> get currentHosts;
   set currentHosts(List<dynamic> value);
+
+  /// Set of online host IDs (accessible for signaling updates).
+  Set<String> get onlineHostIds;
+
+  /// Drains the early SSH buffer and marks the handler as active.
+  List<Uint8List> drainSshEarlyBuffer();
 
   /// Current state of the host connection.
   HostConnectionState get currentHostState;
@@ -321,14 +327,15 @@ class RtcClient extends RtcClientBase
   // ========== ACTIVE OPERATIONS ==========
 
   /// Set of Host IDs that are currently online according to the signaling server.
+  @override
   final Set<String> onlineHostIds = {};
+
+  // ========== STREAM CONTROLLERS ==========
 
   /// Broadcast controller for peer status updates (online/offline).
   final StreamController<Map<String, dynamic>> _peerStatusController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get peerStatusStream => _peerStatusController.stream;
-
-  // ========== STREAM CONTROLLERS ==========
 
   /// Broadcast controller for available hosts list from signaling server.
   /// Emitted when host list is received or updated.
@@ -421,8 +428,12 @@ class RtcClient extends RtcClientBase
   /// Includes debug logging and checks channel readiness before sending.
   @override
   void sendToChannel(RTCDataChannel? channel, String msg, String label) {
-    if (!msg.contains('"dc_msg_type":"ping"')) {
-      log("DEBUG: $msg, on channel: $label");
+    // Only log non-noisy messages (skip ping, telemetry, and file chunks)
+    if (!msg.contains('"dc_msg_type":"ping"') &&
+        !msg.contains('"dc_msg_type":"telemetry"') &&
+        !msg.contains('"type":"upload_chunk"') &&
+        !msg.contains('"type":"file_chunk"')) {
+      log("TX [$label]: $msg");
     }
     if (channel?.state == RTCDataChannelState.RTCDataChannelOpen) {
       channel!.send(RTCDataChannelMessage(msg));

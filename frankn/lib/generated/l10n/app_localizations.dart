@@ -254,6 +254,18 @@ abstract class AppLocalizations {
   /// **'Establish'**
   String get establish;
 
+  /// No description provided for @disconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get disconnect;
+
+  /// No description provided for @disconnectLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect Link'**
+  String get disconnectLink;
+
   /// No description provided for @adminOverride.
   ///
   /// In en, this message translates to:

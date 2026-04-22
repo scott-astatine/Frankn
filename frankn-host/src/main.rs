@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::signaling::SignalingClient;
-use crate::utils::ClientMessage;
+use crate::utils::{ClientMessage, get_cpu_temp};
 use crate::utils::{HostMessage, Status, get_timestamp};
 use auth::AuthManager;
 use base64::Engine;
@@ -96,7 +96,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
     // =============================================================================
     let pm_telemetry = Arc::clone(&peer_map);
     tokio::spawn(async move {
-        use sysinfo::{System, RefreshKind, CpuRefreshKind, MemoryRefreshKind};
+        use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
         let mut sys = System::new_with_specifics(
             RefreshKind::nothing()
                 .with_cpu(CpuRefreshKind::everything())
@@ -115,6 +115,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
 
                 let msg = HostMessage::Telemetry {
                     cpu_load: sys.global_cpu_usage(),
+                    cpu_temp: get_cpu_temp().unwrap_or(0.0),
                     used_mem: sys.used_memory(),
                     total_mem: sys.total_memory(),
                     timestamp: get_timestamp(),
@@ -125,7 +126,10 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
                     for conn in map.values() {
                         let r_conn = conn.lock().await;
                         let _ = r_conn
-                            .send_message("frankn_cmd", &tokio_tungstenite::tungstenite::Bytes::from(json.clone()))
+                            .send_message(
+                                "frankn_cmd",
+                                &tokio_tungstenite::tungstenite::Bytes::from(json.clone()),
+                            )
                             .await;
                     }
                 }
@@ -346,15 +350,22 @@ async fn parse_dc_msg(
         }
     };
 
+    // Fast-path: check for binary frame magic byte BEFORE allocating a String copy.
+    // Binary uploads on frankn_fs use [0x01][36-byte ID][data] framing.
+    if data.len() >= 37 && data[0] == 0x01 && label == "frankn_fs" {
+        parse_binary_msg(data, rtc_conn, label).await;
+        return;
+    }
+
     let text = match String::from_utf8(data.clone()) {
         Ok(t) => t,
         Err(_) => {
-            parse_binary_msg(data, rtc_conn, label).await;
+            // Not valid UTF-8 and not a binary frame — drop silently.
             return;
         }
     };
-    
-    // log!("{text}"); 
+
+    // log!("{text}");
 
     match serde_json::from_str::<ClientMessage>(&text) {
         Ok(msg) => match msg {
@@ -427,7 +438,13 @@ async fn parse_dc_msg(
                 }
             }
             ClientMessage::UploadChunk { id, data, .. } => {
-                crate::fs_sync::handle_upload_chunk_raw(&id, &base64::prelude::BASE64_STANDARD.decode(&data).unwrap_or_default()).await;
+                crate::fs_sync::handle_upload_chunk_raw(
+                    &id,
+                    &base64::prelude::BASE64_STANDARD
+                        .decode(&data)
+                        .unwrap_or_default(),
+                )
+                .await;
             }
             ClientMessage::UploadEnd { id, hash, .. } => {
                 crate::log!("FS: Upload session {} finalized.", id);
@@ -436,6 +453,57 @@ async fn parse_dc_msg(
                     let conn = rtc_conn.lock().await;
                     let _ = conn.send_message(label, &Bytes::from(json)).await;
                 }
+            }
+
+            // ── New resume-aware transfer protocol ──
+            ClientMessage::TransferInit {
+                id,
+                path,
+                hash,
+                total_size,
+                resume_offset,
+            } => {
+                crate::log!("FS: Transfer init for {} → {}", id, path);
+                crate::fs_sync::transfer::handle_transfer_init(
+                    &id,
+                    &path,
+                    hash,
+                    total_size,
+                    resume_offset,
+                    Arc::clone(&rtc_conn),
+                    label,
+                )
+                .await;
+            }
+
+            ClientMessage::TransferCancel { id } => {
+                crate::log!("FS: Transfer cancel for {}", id);
+                let resp = crate::fs_sync::transfer::handle_transfer_cancel(&id).await;
+                if let Ok(json) = serde_json::to_string(&resp) {
+                    let conn = rtc_conn.lock().await;
+                    let _ = conn.send_message(label, &Bytes::from(json)).await;
+                }
+            }
+
+            ClientMessage::DownloadInit {
+                id,
+                path,
+                resume_offset,
+            } => {
+                crate::log!(
+                    "FS: Download init for {} ← {} (offset={})",
+                    id,
+                    path,
+                    resume_offset
+                );
+                crate::fs_sync::transfer::handle_download_init(
+                    &id,
+                    &path,
+                    resume_offset,
+                    Arc::clone(&rtc_conn),
+                    label,
+                )
+                .await;
             }
             ClientMessage::XDcMsg {
                 id,
@@ -478,20 +546,17 @@ async fn parse_dc_msg(
             }
         },
         Err(_) => {
-            if !text.trim().starts_with('{') {
-                parse_binary_msg(data, rtc_conn, label).await;
-            }
+            // Received valid UTF-8 that isn't a known JSON message format.
+            // Could be raw terminal output on the SSH channel — ignore.
         }
     }
 }
 
-async fn parse_binary_msg(data: &Vec<u8>, _rtc_conn: Arc<Mutex<RTCConn>>, label: &str) {
-    if label == "frankn_fs" && data.len() >= 37 && data[0] == 0x01 {
-        let id_bytes = &data[1..37];
-        let transfer_id = String::from_utf8_lossy(id_bytes)
-            .trim_matches(char::from(0))
-            .to_string();
-        
-        crate::fs_sync::handle_upload_chunk_raw(&transfer_id, &data[37..]).await;
+async fn parse_binary_msg(data: &Vec<u8>, rtc_conn: Arc<Mutex<RTCConn>>, label: &str) {
+    if label == "frankn_fs"
+        && data.len() >= crate::fs_sync::transfer::FRAME_HEADER_SIZE
+        && data[0] == 0x01
+    {
+        crate::fs_sync::transfer::handle_transfer_chunk_raw(data, rtc_conn, label).await;
     }
 }

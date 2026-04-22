@@ -6,12 +6,40 @@ mixin RtcMessageHandler on RtcClientBase {
   final Map<String, String> _tempPaths = {};
   final Map<String, String> _expectedHashes = {};
 
+  // Pending transfer setup — buffers download_end/download chunks until
+  // download_start completes its async file setup.
+  final Map<String, Completer<void>> _pendingTransferSetups = {};
+
   @override
   void handleHostMessage(dynamic rawData) {
     try {
       if (rawData is Uint8List) {
-        // 1. Check for high-speed binary framing (Magic Byte 0x01 + 36-byte UUID)
-        if (rawData.length >= 37 && rawData[0] == 0x01) {
+        // Check for high-speed binary framing (Magic Byte 0x01)
+        if (rawData.length >= 50 && rawData[0] == 0x01) {
+          // New extended format: [magic][36-byte ID][8-byte offset][4-byte seq][1-byte flags][data]
+          final idBytes = rawData.sublist(1, 37);
+          final id = utf8.decode(
+            idBytes.where((b) => b != 0).toList(),
+            allowMalformed: true,
+          );
+
+          // Parse offset and seq for resume-aware downloads
+          final offsetBytes = rawData.sublist(37, 45);
+          final offset = ByteData.view(offsetBytes.buffer).getUint64(0);
+
+          final seqBytes = rawData.sublist(45, 49);
+          final seq = ByteData.view(seqBytes.buffer).getUint32(0);
+
+          final flags = rawData[49];
+
+          if (_activeSinks.containsKey(id)) {
+            _handleBinaryChunk(id, rawData.sublist(50), offset, seq, flags);
+            return;
+          }
+          // If sink not ready yet, chunk will be dropped (shouldn't happen with ordered DCs)
+          return;
+        } else if (rawData.length >= 37 && rawData[0] == 0x01) {
+          // Legacy format: [magic][36-byte ID][data]
           final idBytes = rawData.sublist(1, 37);
           final id = utf8.decode(
             idBytes.where((b) => b != 0).toList(),
@@ -19,12 +47,13 @@ mixin RtcMessageHandler on RtcClientBase {
           );
 
           if (_activeSinks.containsKey(id)) {
-            _handleBinaryChunk(id, rawData.sublist(37));
+            _handleBinaryChunkLegacy(id, rawData.sublist(37));
             return;
           }
+          return;
         }
 
-        // 2. If not a binary chunk, attempt JSON decode
+        // If not a binary chunk, attempt JSON decode
         try {
           final text = utf8.decode(rawData);
           if (text.startsWith('{')) {
@@ -45,14 +74,24 @@ mixin RtcMessageHandler on RtcClientBase {
 
     switch (type) {
       case DcMsg.StreamStart:
+      case 'download_start':
         final String transferId = data['id'];
         final fileName = data['file_name'];
-        final tempDir = await getTemporaryDirectory();
+        final tempDir = globalTempDir;
         final tempFile = File('${tempDir.path}/$transferId.part');
 
-        if (await tempFile.exists()) await tempFile.delete();
+        // For resume-aware downloads, the host tells us what offset it started from.
+        // We open the file in append mode if resuming, or create fresh.
+        final hostOffset = data['offset'] as int? ?? 0;
+        if (hostOffset > 0 && tempFile.existsSync()) {
+          // Resuming — append to existing partial file
+          _activeSinks[transferId] = tempFile.openWrite(mode: FileMode.append);
+        } else {
+          // Fresh start — create/truncate
+          if (tempFile.existsSync()) tempFile.deleteSync();
+          _activeSinks[transferId] = tempFile.openWrite();
+        }
 
-        _activeSinks[transferId] = tempFile.openWrite();
         _tempPaths[transferId] = tempFile.path;
         activeFileNames[transferId] = fileName;
 
@@ -63,42 +102,60 @@ mixin RtcMessageHandler on RtcClientBase {
         break;
 
       case DcMsg.StreamEnd:
+      case 'download_end':
         final String transferId = data['id'];
         final sink = _activeSinks.remove(transferId);
         final tempPath = _tempPaths.remove(transferId);
 
-        if (sink != null && tempPath != null) {
-          await sink.flush();
-          await sink.close();
-
-          final fileName = activeFileNames.remove(transferId)!;
-          final file = File(tempPath);
-
-          String? expectedHash = _expectedHashes.remove(transferId);
-          if (data.containsKey('hash') && data['hash'] != null) {
-            expectedHash = data['hash'];
-          }
-
-          if (expectedHash != null) {
-            // Verify hash without loading full file into RAM
-            final stream = file.openRead();
-            final actualHash = (await sha256.bind(stream).single).toString().toLowerCase();
-
-            if (actualHash != expectedHash.toLowerCase()) {
-              log("CRITICAL: Integrity failure for $fileName! Expected: $expectedHash, Got: $actualHash");
-            } else {
-              log("Integrity verified for $fileName.");
-            }
-          }
-
-          commandResponseController.add({
-            'type': DcMsg.StreamEnd,
-            'file_name': fileName,
-            'temp_path': tempPath,
-            'id': transferId,
-            'completed': true,
-          });
+        if (sink == null || tempPath == null) {
+          log(
+            "WARN: StreamEnd for unknown transfer ID $transferId — ignoring.",
+          );
+          break;
         }
+
+        await sink.flush();
+        await sink.close();
+
+        final fileName = activeFileNames.remove(transferId);
+        if (fileName == null) {
+          log("WARN: StreamEnd for $transferId has no registered file name.");
+          break;
+        }
+        final file = File(tempPath);
+
+        String? expectedHash = _expectedHashes.remove(transferId);
+        if (data.containsKey('hash') && data['hash'] != null) {
+          expectedHash = data['hash'];
+        }
+
+        if (expectedHash != null) {
+          // Verify hash without loading full file into RAM
+          final stream = file.openRead();
+          final actualHash = (await sha256.bind(stream).single)
+              .toString()
+              .toLowerCase();
+
+          if (actualHash != expectedHash.toLowerCase()) {
+            log(
+              "CRITICAL: Integrity failure for $fileName! Expected: $expectedHash, Got: $actualHash",
+            );
+          } else {
+            log("Integrity verified for $fileName.");
+          }
+        } else {
+          log(
+            "WARN: StreamEnd for $fileName has no hash — skipping integrity check.",
+          );
+        }
+
+        commandResponseController.add({
+          'type': DcMsg.StreamEnd,
+          'file_name': fileName,
+          'temp_path': tempPath,
+          'id': transferId,
+          'completed': expectedHash != null,
+        });
         break;
 
       case DcMsg.Challenge:
@@ -130,6 +187,14 @@ mixin RtcMessageHandler on RtcClientBase {
         break;
 
       case DcMsg.Telemetry:
+        final cpu = data['cpu_load']?.toStringAsFixed(1);
+        final usedMem = ((data['used_mem'] ?? 0) / 1024 / 1024 / 1024)
+            .toStringAsFixed(1);
+        final cpuTemp = data['cpu_temp']?.toStringAsFixed(1) ?? '0.0';
+
+        updateBackgroundService(
+          text: "🌡️$cpuTemp°C   🖥️: $cpu%  |  💾: $usedMem GB",
+        );
         commandResponseController.add(data);
         break;
 
@@ -138,7 +203,35 @@ mixin RtcMessageHandler on RtcClientBase {
     }
   }
 
-  void _handleBinaryChunk(String id, Uint8List chunk) {
+  void _handleBinaryChunk(
+    String id,
+    Uint8List chunk,
+    int offset,
+    int seq,
+    int flags,
+  ) {
+    log(
+      "FS DEBUG: Received chunk for $id. Size: ${chunk.length}, Offset: $offset, Seq: $seq",
+    );
+    final sink = _activeSinks[id];
+    if (sink != null) {
+      sink.add(chunk);
+
+      // Track progress for resume-aware transfers
+      final currentTotal = (offset + chunk.length);
+      commandResponseController.add({
+        'type': DcMsg.FileChunk,
+        'id': id,
+        'chunk_size': chunk.length,
+        'offset': offset,
+        'seq': seq,
+        'total_received': currentTotal,
+        'is_final': (flags & 0x02) != 0,
+      });
+    }
+  }
+
+  void _handleBinaryChunkLegacy(String id, Uint8List chunk) {
     final sink = _activeSinks[id];
     if (sink != null) {
       sink.add(chunk);
@@ -209,23 +302,17 @@ mixin RtcMessageHandler on RtcClientBase {
     Duration? length;
     Uri? artUri;
 
-        if (status != null) {
+    if (status != null) {
+      mediaStatusController.add(status);
+    }
 
-          mediaStatusController.add(status);
+    if (data['position'] != null) {
+      position = Duration(microseconds: (data['position'] as num).toInt());
+    }
 
-        }
-
-        if (data['position'] != null) {
-
-          position = Duration(microseconds: (data['position'] as num).toInt());
-
-        }
-
-        if (data['length'] != null) {
-
-          length = Duration(microseconds: (data['length'] as num).toInt());
-
-        }
+    if (data['length'] != null) {
+      length = Duration(microseconds: (data['length'] as num).toInt());
+    }
 
     if (data['art_data'] != null) {
       final artStr = data['art_data'] as String;
@@ -233,8 +320,10 @@ mixin RtcMessageHandler on RtcClientBase {
         artUri = Uri.parse(artStr);
       } else {
         compute(base64Decode, artStr).then((bytes) async {
-          final tempDir = await getTemporaryDirectory();
+          final tempDir = globalTempDir;
           final file = File('${tempDir.path}/album_art.jpg');
+          // Delete any previous cached album art before writing the new one
+          if (await file.exists()) await file.delete();
           await file.writeAsBytes(bytes);
         });
       }

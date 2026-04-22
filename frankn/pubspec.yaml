@@ -46,6 +46,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 flutter:
   generate: true
   uses-material-design: true
@@ -54,3 +55,27 @@ flutter:
     - family: JetBrainsMonoNerdFont
       fonts:
         - asset: assets/fonts/JetBrainsMonoNerdFont-Regular.ttf
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/logo/frankn_master.png"
+  adaptive_icon_background: "assets/logo/frankn_background.png"
+  adaptive_icon_foreground: "assets/logo/frankn_foreground.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/logo/frankn_master.png"
+    background_color: "#1a1a1a"
+    theme_color: "#1a1a1a"
+  windows:
+    generate: true
+    image_path: "assets/logo/frankn_master.png"
+    icon_size: 48
+  macos:
+    generate: true
+    image_path: "assets/logo/frankn_master.png"
+  linux:
+    generate: true
+    image_path: "assets/logo/frankn_master.png"
+

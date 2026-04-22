@@ -126,6 +126,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _editSignalingUrl() {
+    final controller = TextEditingController(text: _settings.signalingUrl);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0F0F0F),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppColors.neonCyan)),
+        title: const Text("SIGNALING_SERVER", style: TextStyle(color: AppColors.neonCyan, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 2)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+          decoration: const InputDecoration(
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white10)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.neonCyan)),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ABORT", style: TextStyle(color: AppColors.textGrey))),
+          TextButton(
+            onPressed: () async {
+              final newUrl = controller.text.trim();
+              if (newUrl.isNotEmpty && newUrl.startsWith('ws')) {
+                await _settings.setSignalingUrl(newUrl);
+                _client.disconnectFromHost();
+                _client.connectToSignaling();
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                setState(() {});
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Re-initializing Neural Link to new server...', style: TextStyle(fontWeight: FontWeight.bold)),
+                    backgroundColor: AppColors.matrixGreen,
+                  ),
+                );
+              } else {
+                 ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Invalid URL format. Must start with ws:// or wss://', style: TextStyle(fontWeight: FontWeight.bold)),
+                    backgroundColor: AppColors.errorRed,
+                  ),
+                );
+              }
+            },
+            child: const Text("UPDATE", style: TextStyle(color: AppColors.neonCyan, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -158,7 +209,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: l10n.signalingServer.toUpperCase(),
             value: _settings.signalingUrl,
             icon: Icons.hub_outlined,
-            onTap: () {},
+            onTap: _editSignalingUrl,
+            accentColor: AppColors.neonPink,
           ),
           
           const SizedBox(height: 32),

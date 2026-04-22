@@ -6,14 +6,18 @@ import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/rtc/rtc.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/theme.dart';
+import 'package:frankn/utils/utils.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
+import 'package:path_provider/path_provider.dart';
 
 final appLocale = ValueNotifier<Locale>(Locale(SettingsService().localeCode));
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.initCommunicationPort();
+
+  globalTempDir = await getTemporaryDirectory();
 
   await SettingsService().initialize();
   appLocale.value = Locale(SettingsService().localeCode);
@@ -27,6 +31,13 @@ void main() async {
 
   // Initiate Neural Link to Signaling Server
   RtcClient().connectToSignaling();
+
+  FlutterForegroundTask.addTaskDataCallback((data) {
+    if (data == 'disconnect_intent') {
+      RtcClient().sendDcMsg({DcMsg.Key: DcMsg.Disconnect});
+      RtcClient().disconnectFromHost();
+    }
+  });
 
   runApp(const FranknApp());
 }
@@ -50,6 +61,18 @@ class FranknTaskHandler extends TaskHandler {
     //   notificationTitle: 'Frankn Active',
     //   notificationText: 'Link stable at ${timestamp.hour}:${timestamp.minute}:${timestamp.second}',
     // );
+  }
+
+  @override
+  void onNotificationButtonPressed(String id) {
+    if (id == 'disconnect') {
+      FlutterForegroundTask.sendDataToMain('disconnect_intent');
+    }
+  }
+
+  @override
+  void onNotificationPressed() {
+    FlutterForegroundTask.launchApp();
   }
 
   @override

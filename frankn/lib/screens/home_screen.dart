@@ -13,17 +13,42 @@ import 'package:google_fonts/google_fonts.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  void _confirmDestructiveAction(BuildContext context, RtcClient client, String title, String cmd, Map<String, dynamic>? args) {
+  void _confirmDestructiveAction(
+    BuildContext context,
+    RtcClient client,
+    String title,
+    String cmd,
+    Map<String, dynamic>? args,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF0F0F0F),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppColors.errorRed)),
-        title: Text("${l10n.criticalIntent.toUpperCase()} // ${title.toUpperCase()}", style: const TextStyle(color: AppColors.errorRed, fontSize: 14, fontWeight: FontWeight.w900)),
-        content: Text(l10n.executeRemoteCommand(title), style: const TextStyle(color: Colors.white70, fontSize: 13)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.errorRed),
+        ),
+        title: Text(
+          "${l10n.criticalIntent.toUpperCase()} // ${title.toUpperCase()}",
+          style: const TextStyle(
+            color: AppColors.errorRed,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        content: Text(
+          l10n.executeRemoteCommand(title),
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(l10n.abort.toUpperCase(), style: const TextStyle(color: AppColors.textGrey))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              l10n.abort.toUpperCase(),
+              style: const TextStyle(color: AppColors.textGrey),
+            ),
+          ),
           CyberButton(
             text: l10n.confirm.toUpperCase(),
             variant: CyberButtonVariant.destructive,
@@ -49,8 +74,13 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
         decoration: const BoxDecoration(
           color: Color(0xFF0F0F0F),
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(32), topRight: Radius.circular(32)),
-          border: Border(top: BorderSide(color: AppColors.errorRed, width: 1.5)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(32),
+            topRight: Radius.circular(32),
+          ),
+          border: Border(
+            top: BorderSide(color: AppColors.errorRed, width: 1.5),
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -61,12 +91,27 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.gpp_maybe_outlined, color: AppColors.errorRed, size: 20),
+                    const Icon(
+                      Icons.gpp_maybe_outlined,
+                      color: AppColors.errorRed,
+                      size: 20,
+                    ),
                     const SizedBox(width: 12),
-                    Text(l10n.adminOverride.toUpperCase(), style: const TextStyle(color: AppColors.errorRed, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 2)),
+                    Text(
+                      l10n.adminOverride.toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.errorRed,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        letterSpacing: 2,
+                      ),
+                    ),
                   ],
                 ),
-                IconButton(icon: const Icon(Icons.close, color: Colors.white38), onPressed: () => Navigator.pop(context)),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white38),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ],
             ),
             const SizedBox(height: 32),
@@ -74,9 +119,19 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                _buildGridButton(Icons.sync, l10n.restartSvc.toUpperCase(), AppColors.cyberYellow, () => client.sendDcMsg({DcMsg.Key: DcMsg.RestartHostServer})),
+                _buildGridButton(
+                  Icons.sync,
+                  l10n.restartSvc.toUpperCase(),
+                  AppColors.cyberYellow,
+                  () => client.sendDcMsg({DcMsg.Key: DcMsg.RestartHostServer}),
+                ),
                 const SizedBox(width: 16),
-                _buildGridButton(Icons.cloud_download_outlined, l10n.sysUpdate.toUpperCase(), AppColors.cyberYellow, () => client.sendDcMsg({DcMsg.Key: DcMsg.Update})),
+                _buildGridButton(
+                  Icons.cloud_download_outlined,
+                  l10n.sysUpdate.toUpperCase(),
+                  AppColors.cyberYellow,
+                  () => client.sendDcMsg({DcMsg.Key: DcMsg.Update}),
+                ),
               ],
             ),
             const SizedBox(height: 32),
@@ -84,17 +139,66 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                _buildGridButton(Icons.lock_outline, l10n.lockHost.toUpperCase(), AppColors.neonCyan, () => client.sendDcMsg({DcMsg.Key: DcMsg.LockScreen})),
+                _buildGridButton(
+                  Icons.lock_outline,
+                  l10n.lockHost.toUpperCase(),
+                  AppColors.neonCyan,
+                  () => client.sendDcMsg({DcMsg.Key: DcMsg.LockScreen}),
+                ),
                 const SizedBox(width: 16),
-                _buildGridButton(Icons.lock_open, l10n.unlockHost.toUpperCase(), AppColors.neonCyan, () => client.sendDcMsg({DcMsg.Key: DcMsg.UnlockScreen})),
+                _buildGridButton(
+                  Icons.lock_open,
+                  l10n.unlockHost.toUpperCase(),
+                  AppColors.neonCyan,
+                  () => client.sendDcMsg({DcMsg.Key: DcMsg.UnlockScreen}),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             Row(
               children: [
-                _buildGridButton(Icons.restart_alt, l10n.reboot.toUpperCase(), AppColors.textGrey, () => _confirmDestructiveAction(context, client, l10n.reboot, DcMsg.Reboot, null)),
+                _buildGridButton(
+                  Icons.restart_alt,
+                  l10n.reboot.toUpperCase(),
+                  AppColors.textGrey,
+                  () => _confirmDestructiveAction(
+                    context,
+                    client,
+                    l10n.reboot,
+                    DcMsg.Reboot,
+                    null,
+                  ),
+                ),
                 const SizedBox(width: 16),
-                _buildGridButton(Icons.power_settings_new, l10n.shutdown.toUpperCase(), AppColors.errorRed, () => _confirmDestructiveAction(context, client, l10n.shutdown, DcMsg.Shutdown, {"args": "now"})),
+                _buildGridButton(
+                  Icons.power_settings_new,
+                  l10n.shutdown.toUpperCase(),
+                  AppColors.errorRed,
+                  () => _confirmDestructiveAction(
+                    context,
+                    client,
+                    l10n.shutdown,
+                    DcMsg.Shutdown,
+                    {"args": "now"},
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _buildGridButton(
+                  Icons.link_off,
+                  l10n.disconnectLink.toUpperCase(),
+                  AppColors.neonPink,
+                  () {
+                    client.sendDcMsg({DcMsg.Key: DcMsg.Disconnect});
+                    client.disconnectFromHost();
+                    Navigator.pop(context);
+                  },
+                ),
+                const SizedBox(width: 16),
+                Expanded(child: const SizedBox()),
               ],
             ),
           ],
@@ -104,10 +208,23 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildSectionLabel(String text) {
-    return Text(text, style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5));
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white24,
+        fontSize: 10,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.5,
+      ),
+    );
   }
 
-  Widget _buildGridButton(IconData? icon, String label, Color color, VoidCallback onTap) {
+  Widget _buildGridButton(
+    IconData? icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return Expanded(
       child: Material(
         color: Colors.transparent,
@@ -124,7 +241,18 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   if (icon != null) Icon(icon, color: color, size: 24),
                   if (icon != null) const SizedBox(height: 12),
-                  Text(label, textAlign: TextAlign.center, style: TextStyle(color: color == AppColors.textGrey ? Colors.white70 : color, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 0.5)),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: color == AppColors.textGrey
+                          ? Colors.white70
+                          : color,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -142,20 +270,25 @@ class HomeScreen extends StatelessWidget {
       stream: client.hostStateStream,
       initialData: client.currentHostState,
       builder: (context, snapshot) {
-        final isAuthenticated = snapshot.data == HostConnectionState.authenticated;
+        final isAuthenticated =
+            snapshot.data == HostConnectionState.authenticated;
 
         return Scaffold(
           backgroundColor: AppColors.voidBlack,
           appBar: _buildAppBar(context, client, isAuthenticated),
-          body: isAuthenticated 
-              ? FranknDashboard(client: client) 
+          body: isAuthenticated
+              ? FranknDashboard(client: client)
               : HostListPanel(client: client),
         );
       },
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, RtcClient client, bool isAuthenticated) {
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    RtcClient client,
+    bool isAuthenticated,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     return AppBar(
       backgroundColor: Colors.transparent,
@@ -163,31 +296,48 @@ class HomeScreen extends StatelessWidget {
       title: Row(
         children: [
           Text(
-            l10n.appName.toUpperCase(), 
-            style: GoogleFonts.nanumMyeongjo(
-              color: AppColors.neonCyan, 
-              fontWeight: FontWeight.w900, 
+            l10n.appName.toUpperCase(),
+            style: GoogleFonts.songMyung(
+              color: AppColors.neonCyan,
+              fontWeight: FontWeight.bold,
               letterSpacing: 2,
-              fontSize: 24,
-            )
+              fontSize: 22,
+            ),
           ),
-          const Text(" :", style: TextStyle(color: Colors.white24)),
+          const Text(":", style: TextStyle(color: Colors.white24)),
           if (isAuthenticated) ...[
-            const SizedBox(width: 12),
-            Text(client.currentHostName?.toUpperCase() ?? "ALEXO", 
-              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
+            Text(
+              client.currentHostName ?? "",
+              style:  GoogleFonts.songMyung(
+              color: AppColors.textWhite,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
+              fontSize: 12,
+            ),
+            ),
           ],
         ],
       ),
       actions: [
         if (isAuthenticated) ...[
           IconButton(
-            icon: const Icon(Icons.power_settings_new, color: AppColors.errorRed, size: 22),
+            icon: const Icon(
+              Icons.power_settings_new,
+              color: AppColors.errorRed,
+              size: 22,
+            ),
             onPressed: () => _showAdminOverride(context, client),
           ),
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: AppColors.textGrey, size: 20),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            icon: const Icon(
+              Icons.settings_outlined,
+              color: AppColors.textGrey,
+              size: 20,
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
           StreamBuilder<SignalConnectionState>(
             stream: client.connectionStateStream,
@@ -199,8 +349,15 @@ class HomeScreen extends StatelessWidget {
           ),
         ] else
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: AppColors.textGrey, size: 20),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            icon: const Icon(
+              Icons.settings_outlined,
+              color: AppColors.textGrey,
+              size: 20,
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
       ],
     );

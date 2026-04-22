@@ -68,6 +68,12 @@ class SshController extends ChangeNotifier {
       _hostToSocket =
           StreamController<Uint8List>(); // Single subscriber (the socket)
 
+      // Drain any early-buffered messages from RtcConnection and feed them
+      // into the buffer so nothing is lost before we installed this handler.
+      for (var data in client.drainSshEarlyBuffer()) {
+        _buffer.add(data);
+      }
+
       _sshChannel!.onMessage = (msg) {
         if (_isDisposed) return;
         final data = msg.isBinary ? msg.binary : utf8.encode(msg.text);
@@ -75,6 +81,18 @@ class SshController extends ChangeNotifier {
           _hostToSocket!.add(Uint8List.fromList(data));
         } else {
           _buffer.add(Uint8List.fromList(data));
+        }
+      };
+
+      // Set state handler once — outside the socket listen callback — to avoid
+      // reassignment on every new socket connection.
+      _sshChannel!.onDataChannelState = (state) {
+        if (_isDisposed) return;
+        if (state == RTCDataChannelState.RTCDataChannelClosed) {
+          terminal.write(
+            '\r\n\x1b[31m[SYSTEM] P2P Tunnel Terminated by Host.\x1b[0m\r\n',
+          );
+          stopSession();
         }
       };
 
@@ -194,16 +212,6 @@ class SshController extends ChangeNotifier {
           if (_isDisposed) return;
           socket.add(data);
         });
-
-        _sshChannel!.onDataChannelState = (state) {
-          if (_isDisposed) return;
-          if (state == RTCDataChannelState.RTCDataChannelClosed) {
-            terminal.write(
-              '\r\n\x1b[31m[SYSTEM] P2P Tunnel Terminated by Host.\x1b[0m\r\n',
-            );
-            stopSession();
-          }
-        };
       });
 
       terminal.write(

@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+
+late Directory globalTempDir;
 
 enum SignalConnectionState { disconnected, connecting, connected, failed }
 
@@ -37,7 +40,7 @@ class AppConstants {
   static const double borderRadius = 8.0; // Sharp corners for cyberpunk feel
 }
 
-class SinalingMessage {
+class SignalingMessage {
   static const RegisterSuccess = "register_success";
   static const RegisterFailure = "register_failure";
   static const ListHosts = "list_hosts";
@@ -66,6 +69,7 @@ class DcMsg {
   static const Key = "dc_msg_type";
 
   // Power
+  static const Disconnect = "disconnect";
   static const Shutdown = "shutdown";
   static const Reboot = "reboot";
   static const LockScreen = "lock_screen";
@@ -82,13 +86,21 @@ class DcMsg {
   static const StartSsh = "start_ssh";
   static const StopSsh = "stop_ssh";
 
-  // File System
+  // File System (legacy — kept for backward compat)
   static const Ls = "ls";
   static const GetFile = "get_file";
   static const DeleteFile = "delete_file";
   static const UploadStart = "upload_start";
   static const UploadChunk = "upload_chunk";
   static const UploadEnd = "upload_end";
+
+  // File Transfer (new resume-aware protocol)
+  static const TransferInit = "transfer_init";
+  static const TransferAck = "transfer_ack";
+  static const TransferComplete = "transfer_complete";
+  static const TransferCancel = "transfer_cancel";
+  static const DownloadInit = "download_init";
+  static const DownloadComplete = "download_complete";
 
   // Audio Mixer
   static const GetAudioDevices = "get_audio_devices";

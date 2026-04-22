@@ -9,8 +9,18 @@ use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
 use tokio::sync::Mutex;
 
-// Session ID -> (Writer, Hasher, TotalSize, CurrentSize, Path)
-type UploadSession = (BufWriter<tokio::fs::File>, Sha256, u64, u64, String);
+pub mod transfer;
+
+/// Writable state of an upload session, wrapped in Arc<Mutex<>> so the global
+/// session map lock can be released before performing I/O.
+struct UploadSessionInner {
+    writer: BufWriter<tokio::fs::File>,
+    hasher: Sha256,
+    current_size: u64,
+}
+
+/// Session ID -> (inner, total_size, target_path)
+type UploadSession = (Arc<Mutex<UploadSessionInner>>, u64, String);
 static UPLOAD_SESSIONS: LazyLock<Mutex<HashMap<String, UploadSession>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -21,8 +31,7 @@ pub async fn handle_upload_start(
     total_size: u64,
 ) -> HostMessage {
     crate::log!("FS: Starting upload for {} ({} bytes) to {}", id, total_size, path);
-    let mut sessions = UPLOAD_SESSIONS.lock().await;
-    
+
     // Ensure parent directories exist
     if let Some(parent) = Path::new(path).parent() {
         let _ = tokio::fs::create_dir_all(parent).await;
@@ -30,10 +39,15 @@ pub async fn handle_upload_start(
 
     match tokio::fs::File::create(path).await {
         Ok(file) => {
-            sessions.insert(
-                id.to_string(),
-                (BufWriter::new(file), Sha256::new(), total_size, 0, path.to_string()),
-            );
+            let inner = UploadSessionInner {
+                writer: BufWriter::new(file),
+                hasher: Sha256::new(),
+                current_size: 0,
+            };
+            let session = (Arc::new(Mutex::new(inner)), total_size, path.to_string());
+
+            let mut sessions = UPLOAD_SESSIONS.lock().await;
+            sessions.insert(id.to_string(), session);
 
             HostMessage::Response {
                 id: id.to_string(),
@@ -52,22 +66,33 @@ pub async fn handle_upload_start(
 }
 
 pub async fn handle_upload_chunk_raw(id: &str, data: &[u8]) {
-    let mut sessions = UPLOAD_SESSIONS.lock().await;
-    if let Some((writer, hasher, _, current, _)) = sessions.get_mut(id) {
-        hasher.update(data);
-        if let Err(e) = writer.write_all(data).await {
+    // Lock the global map only long enough to clone the Arc.
+    let session = {
+        let sessions = UPLOAD_SESSIONS.lock().await;
+        sessions.get(id).map(|(inner, _, _)| Arc::clone(inner))
+    };
+
+    if let Some(inner) = session {
+        let mut guard = inner.lock().await;
+        guard.hasher.update(data);
+        if let Err(e) = guard.writer.write_all(data).await {
             eprintln!("FS ERROR: Failed to write chunk for session {}: {}", id, e);
         }
-        *current += data.len() as u64;
+        guard.current_size += data.len() as u64;
     }
 }
 
 pub async fn handle_upload_end(id: &str, expected_hash: Option<String>) -> HostMessage {
-    let mut sessions = UPLOAD_SESSIONS.lock().await;
-    if let Some((mut writer, hasher, total, current, path)) = sessions.remove(id) {
-        let _ = writer.flush().await;
+    let session = {
+        let mut sessions = UPLOAD_SESSIONS.lock().await;
+        sessions.remove(id)
+    };
 
-        if current != total {
+    if let Some((inner, total, path)) = session {
+        let mut guard = inner.lock().await;
+        let _ = guard.writer.flush().await;
+
+        if guard.current_size != total {
             let _ = tokio::fs::remove_file(&path).await;
             return HostMessage::Response {
                 id: id.to_string(),
@@ -78,7 +103,7 @@ pub async fn handle_upload_end(id: &str, expected_hash: Option<String>) -> HostM
         }
 
         if let Some(expected) = expected_hash {
-            let actual = hex::encode(hasher.finalize());
+            let actual = hex::encode(guard.hasher.clone().finalize());
             if actual != expected.to_lowercase() {
                 let _ = tokio::fs::remove_file(&path).await;
                 return HostMessage::Response {
@@ -110,7 +135,7 @@ pub async fn handle_upload_end(id: &str, expected_hash: Option<String>) -> HostM
 pub fn ls(
     id: &str,
     path: &str,
-    _sort_by: Option<String>,
+    sort_by: Option<String>,
     show_hidden: Option<bool>,
 ) -> HostMessage {
     let entries = fs::read_dir(path);
@@ -125,8 +150,57 @@ pub fn ls(
                 let metadata = fs::metadata(entry.path()).ok();
                 let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
                 let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
-                list.push(serde_json::json!({ "name": name, "is_dir": is_dir, "size": size }));
+                
+                let modified_time = metadata
+                    .as_ref()
+                    .and_then(|m| m.modified().ok())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                let dt: chrono::DateTime<chrono::Local> = modified_time.into();
+                let modified_str = dt.format("%Y-%m-%d %H:%M:%S").to_string();
+                let timestamp = dt.timestamp();
+
+                list.push(serde_json::json!({ 
+                    "name": name, 
+                    "is_dir": is_dir, 
+                    "size": size,
+                    "modified": modified_str,
+                    "timestamp": timestamp,
+                }));
             }
+            
+            // Sorting logic
+            let sort_by_field = sort_by.as_deref().unwrap_or("name");
+            list.sort_by(|a, b| {
+                let is_dir_a = a["is_dir"].as_bool().unwrap_or(false);
+                let is_dir_b = b["is_dir"].as_bool().unwrap_or(false);
+                
+                // Always put directories first
+                if is_dir_a && !is_dir_b {
+                    return std::cmp::Ordering::Less;
+                } else if !is_dir_a && is_dir_b {
+                    return std::cmp::Ordering::Greater;
+                }
+
+                match sort_by_field {
+                    "size" => {
+                        let size_a = a["size"].as_u64().unwrap_or(0);
+                        let size_b = b["size"].as_u64().unwrap_or(0);
+                        size_b.cmp(&size_a) // Descending size
+                    }
+                    "modified" => {
+                        let time_a = a["timestamp"].as_i64().unwrap_or(0);
+                        let time_b = b["timestamp"].as_i64().unwrap_or(0);
+                        time_b.cmp(&time_a) // Descending modified time
+                    }
+                    _ => {
+                        // Default to name sorting
+                        let name_a = a["name"].as_str().unwrap_or("").to_lowercase();
+                        let name_b = b["name"].as_str().unwrap_or("").to_lowercase();
+                        name_a.cmp(&name_b)
+                    }
+                }
+            });
+
             HostMessage::Response {
                 id: id.to_string(),
                 status: Status::Success,
@@ -174,6 +248,9 @@ pub async fn get_file(id: &str, path: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> Ho
         }
     };
 
+    // The actual transfer is driven by StreamStart/StreamEnd messages spawned
+    // in a background task. We don't send a separate Response here — the
+    // StreamEnd serves as the completion signal for the client.
     crate::utils::stream::send_managed_transfer(
         file,
         id.to_string(),
@@ -184,10 +261,13 @@ pub async fn get_file(id: &str, path: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> Ho
     )
     .await;
 
+    // Send an informational "transfer started" response so the client knows
+    // the request was accepted. The StreamEnd that arrives later signals
+    // actual completion.
     HostMessage::Response {
         id: id.into(),
         status: Status::Success,
-        data: None,
+        data: Some(serde_json::json!({ "message": "Transfer started" })),
         timestamp: 0,
     }
 }

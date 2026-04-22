@@ -12,7 +12,7 @@ Future<void> initAudioService() async {
       androidNotificationChannelId: 'com.astatine.frankn.channel.audio',
       androidNotificationChannelName: 'Frankn Media',
       androidNotificationOngoing: true,
-      androidNotificationIcon: 'mipmap/ic_launcher',
+      androidNotificationIcon: 'drawable/ic_notification',
       androidStopForegroundOnPause: true,
       preloadArtwork: true,
     ),

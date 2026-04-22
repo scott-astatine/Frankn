@@ -25,6 +25,8 @@
   "enterPasscode": "Enter Passcode",
   "cancel": "Cancel",
   "establish": "Establish",
+  "disconnect": "Disconnect",
+  "disconnectLink": "Disconnect Link",
   "adminOverride": "Admin Override",
   "serviceManagement": "Service Management",
   "restartSvc": "Restart Svc",

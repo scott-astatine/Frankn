@@ -1,53 +1,96 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# ============================================================================
+# Franken Icon Factory v2 — SVG → Adaptive Icons + Launcher + Play Store
+# ============================================================================
+# Usage: cd frankn && bash android_icon_gen
+#
+# Requires:
+#   - librsvg  (rsvg-convert)   — SVG → PNG
+#   - ImageMagick 7 (magick)    — resize / crop / composite
+# ============================================================================
+set -euo pipefail
 
-# Franken Icon Generator (Arch Edition)
-# Usage: ./scripts/generate_icons.sh
+SVG_ICON="android/app/src/main/res/logo.svg"
+SVG_FG="android/app/src/main/res/logo-foreground.svg"
+RES_DIR="android/app/src/main/res"
 
-# CHANGED: Pointing to a PNG now, assuming you saved the generated logo there
-INPUT_IMG="/home/scott/Projects/Frankn/frankn/android/app/src/main/res/fic.png"
-BASE_RES_DIR="android/app/src/main/res"
-
-# Define the Android density buckets and their sizes (in pixels)
-declare -A sizes=( 
-    ["mipmap-mdpi"]=48 
-    ["mipmap-hdpi"]=72 
-    ["mipmap-xhdpi"]=96 
-    ["mipmap-xxhdpi"]=144 
-    ["mipmap-xxxhdpi"]=192 
+# Density buckets: name → standard icon size (px)
+declare -A SIZES=(
+    ["mipmap-mdpi"]=48
+    ["mipmap-hdpi"]=72
+    ["mipmap-xhdpi"]=96
+    ["mipmap-xxhdpi"]=144
+    ["mipmap-xxxhdpi"]=192
 )
 
-echo "⚡ Franken Icon Factory Initialized..."
+BG_COLOR="#050505"
 
-# CHANGED: Checking for ImageMagick instead of librsvg
-if ! command -v magick &> /dev/null; then
-    echo "❌ Error: ImageMagick (magick) could not be found."
-    echo "    Install it with: sudo pacman -S imagemagick"
+# ── Dependency check ──
+for cmd in rsvg-convert magick; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "❌ Missing: $cmd"
+    echo "   Install:  sudo pacman -S librsvg imagemagick"
     exit 1
-fi
-
-if [ ! -f "$INPUT_IMG" ]; then
-    echo "❌ Error: Could not find $INPUT_IMG"
-    echo "    Make sure you saved the logo as logo.png in the res folder!"
-    exit 1
-fi
-
-# Loop through the sizes and generate PNGs
-for folder in "${!sizes[@]}"; do
-    size=${sizes[$folder]}
-    output_dir="$BASE_RES_DIR/$folder"
-    output_file="$output_dir/ic_launcher.png"
-
-    # Ensure the directory exists
-    mkdir -p "$output_dir"
-
-    echo "    -> Forging $folder ($size x $size)..."
-    
-    # CHANGED: Using ImageMagick to resize
-    magick "$INPUT_IMG" -resize "${size}x${size}" "$output_file"
+  fi
 done
 
-# Generate Play Store Image (512x512)
-echo "    -> Forging Play Store Asset (512 x 512)..."
-magick "$INPUT_IMG" -resize 512x512 "android/app/src/main/ic_launcher-playstore.png"
+if [ ! -f "$SVG_ICON" ]; then
+  echo "❌ Not found: $SVG_ICON"
+  exit 1
+fi
 
-echo "✅ All assets generated successfully. Franken is ready to mobile."
+echo "⚡ Franken Icon Factory v2"
+echo "   Source : $SVG_ICON"
+echo ""
+
+# ── Convert SVGs to master PNGs ──
+MASTER="$RES_DIR/.icon-master.png"
+FG_MASTER="$RES_DIR/.icon-fg-master.png"
+
+echo "🎨 Rendering SVGs → PNG (1024×1024)..."
+rsvg-convert --width=1024 --height=1024 -o "$MASTER" "$SVG_ICON"
+if [ -f "$SVG_FG" ]; then
+  rsvg-convert --width=1024 --height=1024 -o "$FG_MASTER" "$SVG_FG"
+else
+  echo "   ⚠ No foreground SVG found — adaptive foregrounds will be skipped."
+  FG_MASTER=""
+fi
+
+# ── Generate per-density assets ──
+for folder in "${!SIZES[@]}"; do
+  size=${SIZES[$folder]}
+  dir="$RES_DIR/$folder"
+  mkdir -p "$dir"
+
+  # Standard launcher icon (full icon with background)
+  magick "$MASTER" -resize "${size}x${size}^" -gravity center \
+    -extent "${size}x${size}" "$dir/ic_launcher.png"
+
+  # Round variant
+  cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
+
+  # Adaptive icon layers (108dp = size × 1.5)
+  if [ -n "$FG_MASTER" ]; then
+    fg_size=$(( size * 3 / 2 ))
+
+    # Foreground (transparent, centred)
+    magick "$FG_MASTER" -resize "${fg_size}x${fg_size}^" -gravity center \
+      -extent "${fg_size}x${fg_size}" "$dir/ic_launcher_foreground.png"
+
+    # Background (solid void black)
+    magick -size "${fg_size}x${fg_size}" xc:"$BG_COLOR" \
+      "$dir/ic_launcher_background.png"
+  fi
+
+  echo "   ✓ $folder (${size}px)"
+done
+
+# ── Play Store icon (512×512) ──
+magick "$MASTER" -resize 512x512! "$RES_DIR/ic_launcher-playstore.png"
+echo "   ✓ Play Store (512px)"
+
+# ── Cleanup ──
+rm -f "$MASTER" "$FG_MASTER"
+
+echo ""
+echo "✅ All assets forged. Franken is ready to mobile."

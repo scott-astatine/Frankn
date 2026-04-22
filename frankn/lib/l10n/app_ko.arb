@@ -25,6 +25,8 @@
   "enterPasscode": "비밀번호 입력",
   "cancel": "취소",
   "establish": "연결",
+  "disconnect": "연결 해제",
+  "disconnectLink": "링크 해제",
   "adminOverride": "관리자 오버라이드",
   "serviceManagement": "서비스 관리",
   "restartSvc": "서비스 재시작",

@@ -20,7 +20,7 @@ class NotificationService {
   /// Requests permission if not already granted.
   Future<void> initialize() async {
     await AwesomeNotifications().initialize(
-      'resource://mipmap/ic_launcher',
+      'resource://mipmap/ic_notification',
       [
         NotificationChannel(
           channelGroupKey: 'frankn_channel_group',
@@ -123,8 +123,8 @@ class NotificationService {
       content: NotificationContent(
         id: id,
         channelKey: 'frankn_host_alerts',
-        title: "DOWNLOAD COMPLETE",
-        body: fileName,
+        title: "Download Complete",
+        body: "'$fileName' downloaded successfully.",
         notificationLayout: NotificationLayout.Default,
         category: NotificationCategory.Status,
         payload: {'file_path': filePath},

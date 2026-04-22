@@ -78,20 +78,82 @@ mixin RtcCommands on RtcClientBase {
     sendToChannel(fsDC, jsonEncode(msg), "FS");
   }
 
-  /// Sends a raw binary chunk of file data with a 36-byte UUID header.
-  void sendUploadChunkRaw({required String id, required Uint8List data}) {
+  /// Sends a raw binary chunk of file data with the resume-aware frame format.
+  ///
+  /// Frame: [0x01][36-byte ID][8-byte offset][4-byte seq][1-byte flags][data]
+  void sendUploadChunkRaw({
+    required String id,
+    required Uint8List data,
+    required int offset,
+    required int seq,
+    required int flags,
+  }) {
     if (fsDC?.state != RTCDataChannelState.RTCDataChannelOpen) return;
 
-    final header = Uint8List(36);
     final idBytes = utf8.encode(id);
-    header.setRange(0, idBytes.length, idBytes);
+    final header = Uint8List(36);
+    header.setRange(0, idBytes.length.clamp(0, 36), idBytes);
 
-    final frame = Uint8List(1 + 36 + data.length);
-    frame[0] = 0x01; // Magic byte
+    // Build full frame
+    const headerSize = 1 + 36 + 8 + 4 + 1;
+    final frame = Uint8List(headerSize + data.length);
+
+    // Magic
+    frame[0] = 0x01;
+    // ID
     frame.setRange(1, 37, header);
-    frame.setRange(37, 37 + data.length, data);
+    // Offset (8 bytes, big-endian)
+    final offsetBytes = ByteData(8)..setUint64(0, offset);
+    frame.setRange(37, 45, offsetBytes.buffer.asUint8List());
+    // Seq (4 bytes, big-endian)
+    final seqBytes = ByteData(4)..setUint32(0, seq);
+    frame.setRange(45, 49, seqBytes.buffer.asUint8List());
+    // Flags
+    frame[49] = flags;
+    // Data
+    frame.setRange(50, 50 + data.length, data);
 
     fsDC!.send(RTCDataChannelMessage.fromBinary(frame));
+  }
+
+  /// Initialize a resume-aware upload transfer.
+  void sendTransferInit({
+    required String id,
+    required String path,
+    required int totalSize,
+    String? hash,
+    int resumeOffset = 0,
+  }) {
+    sendToChannel(fsDC, jsonEncode({
+      'type': DcMsg.TransferInit,
+      'id': id,
+      'path': path,
+      'total_size': totalSize,
+      'hash': hash,
+      'resume_offset': resumeOffset,
+    }), "FS");
+  }
+
+  /// Cancel a transfer.
+  void sendTransferCancel(String id) {
+    sendToChannel(fsDC, jsonEncode({
+      'type': DcMsg.TransferCancel,
+      'id': id,
+    }), "FS");
+  }
+
+  /// Initialize a resume-aware download.
+  void sendDownloadInit({
+    required String id,
+    required String path,
+    int resumeOffset = 0,
+  }) {
+    sendToChannel(fsDC, jsonEncode({
+      'type': DcMsg.DownloadInit,
+      'id': id,
+      'path': path,
+      'resume_offset': resumeOffset,
+    }), "FS");
   }
 
   /// Completes an active file upload session.

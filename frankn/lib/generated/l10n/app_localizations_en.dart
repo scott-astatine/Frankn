@@ -87,6 +87,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get establish => 'Establish';
 
   @override
+  String get disconnect => 'Disconnect';
+
+  @override
+  String get disconnectLink => 'Disconnect Link';
+
+  @override
   String get adminOverride => 'Admin Override';
 
   @override

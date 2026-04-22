@@ -65,22 +65,9 @@ pub enum SignalingMessage {
 pub struct SignalingClient {
     peer_id: String,
     sender: Arc<RwLock<Option<UnboundedSender<SignalingMessage>>>>,
-    is_dummy: bool,
 }
 
 impl SignalingClient {
-    pub fn dummy() -> Self {
-        Self {
-            peer_id: String::new(),
-            sender: Arc::new(RwLock::new(None)),
-            is_dummy: true,
-        }
-    }
-
-    pub fn is_dummy(&self) -> bool {
-        self.is_dummy
-    }
-
     /// Connect to a signaling server
     pub async fn connect(
         signaling_server_url: &str,
@@ -160,7 +147,6 @@ impl SignalingClient {
         let client = Self {
             peer_id: peer_id.clone(),
             sender,
-            is_dummy: false,
         };
 
         client
@@ -191,23 +177,6 @@ impl SignalingClient {
         } else {
             Err("Sender not available".into())
         }
-    }
-
-    pub async fn send_offer(
-        &self,
-        to: &str,
-        sdp: String,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.send_message(SignalingMessage::Offer {
-            from: self.peer_id.clone(),
-            to: to.to_string(),
-            sdp,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        })
-        .await
     }
 
     /// Send Answer to Client

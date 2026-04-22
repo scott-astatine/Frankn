@@ -17,6 +17,25 @@ mixin RtcConnection on RtcClientBase {
   /// Ensures only one connection process runs at a time.
   bool _isConnectingInternal = false;
 
+  /// Timer for the next reconnection attempt. Stored to prevent timer stacking.
+  Timer? _reconnectTimer;
+
+  /// Buffer for SSH messages that arrive before SshController takes over the handler.
+  final List<Uint8List> _sshEarlyBuffer = [];
+
+  /// Flag indicating whether SshController has installed its own handler.
+  bool _sshHandlerActive = false;
+
+  /// Returns the early-buffered SSH messages and clears the buffer.
+  /// Called by SshController when it installs its onMessage handler.
+  @override
+  List<Uint8List> drainSshEarlyBuffer() {
+    final drained = List<Uint8List>.from(_sshEarlyBuffer);
+    _sshEarlyBuffer.clear();
+    _sshHandlerActive = true;
+    return drained;
+  }
+
   /// Initiates a WebRTC P2P connection to the specified host.
   ///
   /// This method handles the complete connection establishment process:
@@ -85,24 +104,37 @@ mixin RtcConnection on RtcClientBase {
         'frankn_cmd',
         RTCDataChannelInit()..id = 1,
       );
+      // Set handler immediately to prevent message loss during channel setup
+      genDC!.onMessage = (msg) =>
+          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+
       sshDC = await peerConnection!.createDataChannel(
         'frankn_ssh',
         RTCDataChannelInit()..id = 2,
       );
+      // Default buffering handler — SshController overrides this when starting a session.
+      // Messages arriving before SshController takes over are queued in _sshEarlyBuffer.
+      _sshEarlyBuffer.clear();
+      _sshHandlerActive = false;
+      sshDC!.onMessage = (msg) {
+        if (_sshHandlerActive) return; // SshController has taken over
+        final data = msg.isBinary ? msg.binary : utf8.encode(msg.text);
+        _sshEarlyBuffer.add(Uint8List.fromList(data));
+      };
+
       fsDC = await peerConnection!.createDataChannel(
         'frankn_fs',
         RTCDataChannelInit()..id = 3,
       );
+      // Set handler immediately to prevent message loss during channel setup
+      fsDC!.onMessage = (msg) =>
+          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+
       mediaDC = await peerConnection!.createDataChannel(
         'frankn_media',
         RTCDataChannelInit()..id = 4,
       );
-
-      // Set up message handlers for incoming data from host
-      genDC!.onMessage = (msg) =>
-          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
-      fsDC!.onMessage = (msg) =>
-          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+      // Set handler immediately to prevent message loss during channel setup
       mediaDC!.onMessage = (msg) =>
           handleHostMessage(msg.isBinary ? msg.binary : msg.text);
 
@@ -147,7 +179,7 @@ mixin RtcConnection on RtcClientBase {
 
       // Forward ICE candidates to signaling server for NAT traversal
       peerConnection!.onIceCandidate = (candidate) {
-        _sendToSignaling(SinalingMessage.IceCandidate, {
+        _sendToSignaling(SignalingMessage.IceCandidate, {
           'to': hostId,
           'candidate': candidate.candidate,
           'sdp_mid': candidate.sdpMid,
@@ -165,7 +197,10 @@ mixin RtcConnection on RtcClientBase {
       });
 
       await peerConnection!.setLocalDescription(offer);
-      _sendToSignaling(SinalingMessage.Offer, {'to': hostId, 'sdp': offer.sdp});
+      _sendToSignaling(SignalingMessage.Offer, {
+        'to': hostId,
+        'sdp': offer.sdp,
+      });
     } catch (e) {
       log("CORE ERROR: Failed to initialize WebRTC stack: $e");
       updateHostState(HostConnectionState.failed);
@@ -202,7 +237,7 @@ mixin RtcConnection on RtcClientBase {
             currentHostId != null) {
           firstDisconnectTime ??= DateTime.now();
           requestHostList();
-          
+
           final elapsed = DateTime.now()
               .difference(firstDisconnectTime!)
               .inSeconds;
@@ -216,7 +251,10 @@ mixin RtcConnection on RtcClientBase {
 
             _clearHostConnections();
 
-            Timer(const Duration(seconds: 3), () {
+            // Cancel any pending reconnect timer before scheduling a new one
+            _reconnectTimer?.cancel();
+            _reconnectTimer = Timer(const Duration(seconds: 3), () {
+              _reconnectTimer = null;
               if (currentHostId != null && !isIntentionalDisconnect) {
                 connectToHost(currentHostId!);
               }
@@ -243,6 +281,18 @@ mixin RtcConnection on RtcClientBase {
     client.currentHostState = newState;
     hostStateController.add(newState);
 
+    // Manage persistent notification based on Host Connection State
+    if (newState == HostConnectionState.authenticated) {
+      final hostName = client.currentHostName ?? "Unknown";
+      startBackgroundService(
+        title: "☁️ $hostName",
+        text: '⚡ Connected to Host',
+      );
+    } else if (newState == HostConnectionState.disconnected ||
+        newState == HostConnectionState.failed) {
+      stopBackgroundService();
+    }
+
     if (newState == HostConnectionState.disconnected ||
         newState == HostConnectionState.failed) {
       _clearHostConnections();
@@ -266,19 +316,44 @@ mixin RtcConnection on RtcClientBase {
   /// Nullifies all connection objects to prevent reuse.
   /// Used both during reconnection and final disconnection.
   Future<void> _clearHostConnections() async {
+    // Cancel any pending reconnect timer
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+
     try {
       await genDC?.close();
+    } catch (e) {
+      log("WARN: Error closing genDC: $e");
+    }
+    try {
       await fsDC?.close();
+    } catch (e) {
+      log("WARN: Error closing fsDC: $e");
+    }
+    try {
       await mediaDC?.close();
+    } catch (e) {
+      log("WARN: Error closing mediaDC: $e");
+    }
+    try {
       await sshDC?.close();
-      await peerConnection?.dispose(); // Use dispose for full cleanup
-    } catch (_) {}
+    } catch (e) {
+      log("WARN: Error closing sshDC: $e");
+    }
+    try {
+      await peerConnection?.dispose();
+    } catch (e) {
+      log("WARN: Error disposing peerConnection: $e");
+    }
 
     genDC = null;
     fsDC = null;
     mediaDC = null;
     sshDC = null;
     peerConnection = null;
+    // Reset SSH buffering state
+    _sshEarlyBuffer.clear();
+    _sshHandlerActive = false;
   }
 
   @override

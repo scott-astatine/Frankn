@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <filter id="insetShadow">
+      <feOffset dx="4" dy="4"/>
+      <feGaussianBlur stdDeviation="6" result="offset-blur"/>
+      <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse"/>
+      <feFlood flood-color="black" flood-opacity="0.8" result="color"/>
+      <feComposite operator="in" in="color" in2="inverse" result="shadow"/>
+      <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
+    </filter>
+
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <!-- Large soft glow -->
+      <feGaussianBlur in="SourceGraphic" stdDeviation="24" result="blur1"/>
+      <!-- Medium glow -->
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur2"/>
+      <!-- Tight intense glow -->
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur3"/>
+      
+      <feMerge>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur3"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g transform="translate(256, 256) scale(0.8) rotate(45) translate(-256, -256)" filter="url(#insetShadow)">
+    <rect x="176" y="176" width="160" height="160" rx="32" fill="none" stroke="#222222" stroke-width="48" />
+    <rect x="112" y="112" width="96" height="96" rx="16" fill="none" stroke="#222222" stroke-width="48" />
+    <rect x="304" y="304" width="96" height="96" rx="16" fill="none" stroke="#222222" stroke-width="48" />
+  </g>
+
+  <g transform="translate(256, 256) scale(0.8) rotate(45) translate(-256, -256)" filter="url(#neonGlow)">
+    <rect x="176" y="176" width="160" height="160" rx="32" fill="none" stroke="#00FFCC" stroke-width="16" />
+    <rect x="112" y="112" width="96" height="96" rx="16" fill="none" stroke="#00FFCC" stroke-width="16" />
+    <rect x="304" y="304" width="96" height="96" rx="16" fill="none" stroke="#00FFCC" stroke-width="16" />
+  </g>
+</svg>

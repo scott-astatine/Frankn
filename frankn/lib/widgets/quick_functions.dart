@@ -21,7 +21,7 @@ class QuickFunction extends StatefulWidget {
 
 class _QuickFunctionState extends State<QuickFunction> {
   String _mediaStatus = "Paused";
-  String _mediaMetadata = "No Media Sync";
+  String _mediaMetadata = "No Media Playing";
   String _mediaArtist = "Idle";
   double _mediaPosition = 0.0;
   double _mediaLength = 1.0;

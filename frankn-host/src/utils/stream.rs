@@ -81,6 +81,9 @@ pub async fn stream_data<R: AsyncRead + Unpin>(
 }
 
 /// Sends the start and end control messages for a transfer, wrapping the binary stream.
+/// Always emits a StreamEnd message so the client can clean up resources, even if the
+/// transfer fails mid-stream. On failure the hash field is None so the client can
+/// detect the incomplete transfer.
 pub async fn send_managed_transfer<R: AsyncRead + Unpin + Send + 'static>(
     reader: R,
     id: String,
@@ -110,22 +113,26 @@ pub async fn send_managed_transfer<R: AsyncRead + Unpin + Send + 'static>(
         // 2. Stream the binary data
         let hash_result = stream_data(reader, transfer_id.clone(), Arc::clone(&conn_for_stream), options).await;
 
-        // 3. Send Transfer End
-        match hash_result {
-            Ok(hash) => {
-                let end_msg = HostMessage::StreamEnd {
-                    id: transfer_id,
+        // 3. Always send Transfer End so the client can clean up
+        let end_msg = match hash_result {
+            Ok(hash) => HostMessage::StreamEnd {
+                id: transfer_id.clone(),
+                timestamp: crate::utils::get_timestamp(),
+                hash: Some(hash),
+            },
+            Err(ref e) => {
+                crate::elog!("FS: Transfer failed for {} ({:?}). Sending StreamEnd without hash.", transfer_id, e);
+                HostMessage::StreamEnd {
+                    id: transfer_id.clone(),
                     timestamp: crate::utils::get_timestamp(),
-                    hash: Some(hash),
-                };
-                if let Ok(json) = serde_json::to_string(&end_msg) {
-                    let conn = conn_for_stream.lock().await;
-                    let _ = conn.send_message(&label, &Bytes::from(json)).await;
+                    hash: None,
                 }
             }
-            Err(e) => {
-                eprintln!("Transfer stream failed for {}: {}", transfer_id, e);
-            }
+        };
+
+        if let Ok(json) = serde_json::to_string(&end_msg) {
+            let conn = conn_for_stream.lock().await;
+            let _ = conn.send_message(&label, &Bytes::from(json)).await;
         }
     });
 }

@@ -9,6 +9,10 @@
 part of 'rtc.dart';
 
 mixin RtcSignaling on RtcClientBase {
+  /// Minimum interval between host list requests to avoid spamming the signaling server.
+  DateTime? _lastHostListRequest;
+  static const Duration _hostListCooldown = Duration(seconds: 2);
+
   /// Establishes WebSocket connection to the signaling server.
   ///
   /// Handles the complete signaling connection lifecycle:
@@ -26,8 +30,6 @@ mixin RtcSignaling on RtcClientBase {
         client.sigState == SignalConnectionState.connecting) {
       return;
     }
-
-    _startBackgroundService();
 
     _updateSigState(SignalConnectionState.connecting);
     log("Initializing Neural Link to ${SettingsService().signalingUrl}...");
@@ -78,9 +80,9 @@ mixin RtcSignaling on RtcClientBase {
         'peer_id': selfId,
         'peer_type': 'Client',
         'display_name': displayName,
-        'is_public': false
+        'is_public': false,
       });
-      
+
       // Optimistically set to connected after registration is sent
       _updateSigState(SignalConnectionState.connected);
     } catch (e) {
@@ -91,13 +93,23 @@ mixin RtcSignaling on RtcClientBase {
 
   /// Handles signaling server disconnection and initiates reconnection.
   ///
-  /// Updates connection state to failed, closes WebSocket, cancels existing
-  /// timers, and schedules automatic reconnection after 2 seconds.
+  /// Updates connection state to disconnected (not failed), closes WebSocket,
+  /// cancels existing timers, and schedules automatic reconnection after 2 seconds.
+  /// Uses 'disconnected' state so the connectToSignaling guard allows reconnection.
   void _handleDisconnection() {
     final client = this as RtcClient;
-    _updateSigState(SignalConnectionState.failed);
     signalingChannel?.sink.close();
     client.reconnectTimer?.cancel();
+
+    // Clear online hosts and notify UI
+    client.onlineHostIds.clear();
+    client._peerStatusController.add({'type': 'refresh'});
+
+    // Reset to disconnected so the guard at the top of connectToSignaling
+    // doesn't block the retry. We keep the old 'failed' emission for any
+    // listeners that care about it, but set the actual state to disconnected.
+    client._connectionStateController.add(SignalConnectionState.failed);
+    client.sigState = SignalConnectionState.disconnected;
     client.reconnectTimer = Timer(const Duration(seconds: 2), () {
       connectToSignaling();
     });
@@ -108,16 +120,24 @@ mixin RtcSignaling on RtcClientBase {
   /// The foreground service maintains the app's network connection when
   /// the app is backgrounded or the screen is off. It displays a persistent
   /// notification to indicate the service is running.
-  Future<void> _startBackgroundService() async {
-    if (await FlutterForegroundTask.isRunningService) return;
+  @override
+  Future<void> startBackgroundService({
+    String title = 'Frankn Active',
+    String text = 'Secure Link Established',
+  }) async {
+    if (await FlutterForegroundTask.isRunningService) {
+      updateBackgroundService(title: title, text: text);
+      return;
+    }
 
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
         channelId: 'frankn_connection',
         channelName: 'Frankn Connection',
         channelDescription: 'Maintains connection to Frankn Host',
-        channelImportance: NotificationChannelImportance.HIGH,
-        priority: NotificationPriority.HIGH,
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+        onlyAlertOnce: true,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: true,
@@ -132,14 +152,41 @@ mixin RtcSignaling on RtcClientBase {
     );
 
     await FlutterForegroundTask.startService(
-      notificationTitle: 'Frankn Active',
-      notificationText: 'Connected to Neural Link',
+      notificationTitle: title,
+      notificationText: text,
+      notificationIcon: const NotificationIcon(
+        metaDataName: 'com.pravera.flutter_foreground_task.NOTIFICATION_ICON',
+        backgroundColor: AppColors.neonCyan,
+      ),
+      notificationButtons: [
+        const NotificationButton(
+          id: 'disconnect',
+          text: '🛑 DISCONNECT',
+          textColor: AppColors.errorRed,
+        ),
+      ],
       callback: startCallback,
     );
   }
 
-  /// Processes incoming messages from the signaling server.
-  ///
+  @override
+  Future<void> stopBackgroundService() async {
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.stopService();
+    }
+  }
+
+  @override
+  Future<void> updateBackgroundService({String? title, String? text}) async {
+    if (await FlutterForegroundTask.isRunningService) {
+      FlutterForegroundTask.updateService(
+        notificationTitle: title,
+        notificationText: text,
+      );
+    }
+  }
+
+  /// Processes incoming messages from the signaling server.  ///
   /// Handles different message types for the WebRTC signaling process:
   /// - Registration responses
   /// - Host list updates
@@ -148,17 +195,17 @@ mixin RtcSignaling on RtcClientBase {
   void _handleSignalingMessage(Map<String, dynamic> data) async {
     final type = data['type'];
     switch (type) {
-      case SinalingMessage.RegisterSuccess:
+      case SignalingMessage.RegisterSuccess:
         log("Identity Verified. Access Granted!");
         _updateSigState(SignalConnectionState.connected);
         requestHostList();
         break;
 
-      case SinalingMessage.PeerStatusUpdate:
+      case SignalingMessage.PeerStatusUpdate:
         final id = data['peer_id'];
         final isOnline = data['online'] as bool;
         final client = this as RtcClient;
-        
+
         if (isOnline) {
           log("Neural Link Active: $id");
           client.onlineHostIds.add(id);
@@ -169,10 +216,10 @@ mixin RtcSignaling on RtcClientBase {
         client._peerStatusController.add(data);
         break;
 
-      case SinalingMessage.HostList:
+      case SignalingMessage.HostList:
         final client = this as RtcClient;
         client.currentHosts = data['hosts'];
-        
+
         // Add public hosts from the list to onlineHostIds
         for (var host in client.currentHosts) {
           if (host['host_id'] != null) {
@@ -184,27 +231,47 @@ mixin RtcSignaling on RtcClientBase {
         // Trigger a status update to refresh the UI indicators
         // Use a short delay to ensure UI listeners are registered
         Future.delayed(const Duration(milliseconds: 100), () {
-          client._peerStatusController.add({'type': 'refresh'}); 
+          client._peerStatusController.add({'type': 'refresh'});
         });
         break;
 
-      case SinalingMessage.Answer:
+      case SignalingMessage.Answer:
         // Set the remote SDP answer to complete WebRTC handshake
-        await peerConnection?.setRemoteDescription(
-          RTCSessionDescription(data['sdp'], 'answer'),
-        );
+        if (peerConnection == null) {
+          log(
+            "WARN: Received SDP answer but no active peer connection. Ignoring.",
+          );
+        } else {
+          try {
+            await peerConnection!.setRemoteDescription(
+              RTCSessionDescription(data['sdp'], 'answer'),
+            );
+          } catch (e) {
+            log("CORE ERROR: Failed to set remote description: $e");
+          }
+        }
         break;
 
-      case SinalingMessage.IceCandidate:
+      case SignalingMessage.IceCandidate:
         // Add ICE candidate for NAT traversal
-        var candidate = RTCIceCandidate(
-          data['candidate'],
-          data['sdp_mid'],
-          data['sdp_m_line_index'],
-        );
-        await peerConnection?.addCandidate(candidate);
+        if (peerConnection == null) {
+          log(
+            "WARN: Received ICE candidate but no active peer connection. Ignoring.",
+          );
+        } else {
+          try {
+            var candidate = RTCIceCandidate(
+              data['candidate'],
+              data['sdp_mid'],
+              data['sdp_m_line_index'],
+            );
+            await peerConnection!.addCandidate(candidate);
+          } catch (e) {
+            log("CORE ERROR: Failed to add ICE candidate: $e");
+          }
+        }
         break;
-      case SinalingMessage.Error:
+      case SignalingMessage.Error:
         log("DEBUG: Signaling error: $data['message']");
         currentHostName = null;
         currentHostId = null;
@@ -216,8 +283,17 @@ mixin RtcSignaling on RtcClientBase {
   /// Requests the current list of available hosts from the signaling server.
   ///
   /// This populates the host list that users can select from in the UI.
+  /// Rate-limited to prevent spamming the signaling server.
   @override
-  void requestHostList() => _sendToSignaling('list_hosts', {});
+  void requestHostList() {
+    final now = DateTime.now();
+    if (_lastHostListRequest != null &&
+        now.difference(_lastHostListRequest!) < _hostListCooldown) {
+      return; // Cooldown active — skip this request
+    }
+    _lastHostListRequest = now;
+    _sendToSignaling('list_hosts', {});
+  }
 
   /// Updates the signaling connection state and notifies listeners.
   ///

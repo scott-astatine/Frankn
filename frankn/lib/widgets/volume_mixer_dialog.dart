@@ -85,7 +85,7 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF0A0A0A),
+          color: AppColors.deepSpace.withAlpha(200),
           border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.3), width: 1.5),
           borderRadius: BorderRadius.circular(24),
         ),

@@ -62,10 +62,13 @@ async fn handle_signaling_message(
             // Perform registration and store info needed for broadcast
             let (registration_id, registration_type) = {
                 let mut peers_map = peers.write().await;
-                
+
                 log!(
                     "Registering peer: ID '{:?}', Name: '{}', Type: {:?}, Public: {}",
-                    peer_id, display_name, peer_type, is_public
+                    peer_id,
+                    display_name,
+                    peer_type,
+                    is_public
                 );
 
                 peers_map.insert(
@@ -93,7 +96,7 @@ async fn handle_signaling_message(
             .map_err(|e| e.to_string())?;
 
             // Broadcasts (Safe because the write lock above is dropped)
-            
+
             // 1. Notify existing clients if a new HOST just joined
             if registration_type == PeerType::Host {
                 let status_msg = SignalingMessage::PeerStatusUpdate {
@@ -101,7 +104,7 @@ async fn handle_signaling_message(
                     online: true,
                     timestamp: get_timestamp(),
                 };
-                
+
                 let peers_read = peers.read().await;
                 for (id, conn) in peers_read.iter() {
                     if conn.peer_type == PeerType::Client && id != &registration_id {
@@ -124,7 +127,7 @@ async fn handle_signaling_message(
                     }
                 }
             }
-            
+
             Ok(())
         }
 
@@ -305,27 +308,40 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap) {
 
     // --- Cleanup on disconnect ---
     if let Some(id) = peer_id {
-        log!("Peer {} disconnected. Removing from map.", id);
-        
-        let was_host = {
-            let peers_read = peers.read().await;
-            peers_read.get(&id).map(|c| c.peer_type == PeerType::Host).unwrap_or(false)
-        };
+        log!("Peer {} disconnected. Checking if it should be removed from map.", id);
 
-        peers.write().await.remove(&id);
+        let mut should_remove = false;
+        let mut was_host = false;
 
-        if was_host {
-            let status_msg = SignalingMessage::PeerStatusUpdate {
-                peer_id: id,
-                online: false,
-                timestamp: get_timestamp(),
-            };
+        {
             let peers_read = peers.read().await;
-            for conn in peers_read.values() {
-                if conn.peer_type == PeerType::Client {
-                    let _ = send_signaling_msg(&conn.sender, status_msg.clone()).await;
+            if let Some(conn) = peers_read.get(&id) {
+                if conn.sender.same_channel(&tx) {
+                    should_remove = true;
+                    was_host = conn.peer_type == PeerType::Host;
                 }
             }
+        }
+
+        if should_remove {
+            peers.write().await.remove(&id);
+            log!("Peer {} removed from map.", id);
+
+            if was_host {
+                let status_msg = SignalingMessage::PeerStatusUpdate {
+                    peer_id: id,
+                    online: false,
+                    timestamp: get_timestamp(),
+                };
+                let peers_read = peers.read().await;
+                for conn in peers_read.values() {
+                    if conn.peer_type == PeerType::Client {
+                        let _ = send_signaling_msg(&conn.sender, status_msg.clone()).await;
+                    }
+                }
+            }
+        } else {
+            log!("Peer {} has a newer connection in the map, skipping removal.", id);
         }
     }
     log!("Connection handling closed.");

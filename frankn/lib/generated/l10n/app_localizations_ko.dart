@@ -87,6 +87,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get establish => '연결';
 
   @override
+  String get disconnect => '연결 해제';
+
+  @override
+  String get disconnectLink => '링크 해제';
+
+  @override
   String get adminOverride => '관리자 오버라이드';
 
   @override

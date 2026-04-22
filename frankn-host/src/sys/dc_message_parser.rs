@@ -12,6 +12,8 @@ pub enum DcMsg {
     Ping,
     #[serde(rename = "shutdown")]
     Shutdown { args: String },
+    #[serde(rename = "disconnect")]
+    Disconnect,
     #[serde(rename = "reboot")]
     Reboot,
     #[serde(rename = "lock_screen")]
@@ -127,6 +129,7 @@ impl DcMsg {
         dispatch!(id, rtc_conn, command, {
             // System & Power
             Ping => sys::system::ping,
+            Disconnect => sys::system::disconnect,
             Shutdown { args } => sys::system::shutdown,
             Reboot => sys::system::reboot,
             LockScreen => sys::system::lock_screen,
@@ -196,7 +199,7 @@ async fn _handle_system_log(
     {
         use tokio::process::Command;
         let mut cmd = Command::new("journalctl");
-        cmd.args(["--no-pager", "--since", "-5m"]);
+        cmd.args(["--no-pager", "--since", "-1m"]);
         if let Some(service) = args {
             if !service.trim().is_empty() {
                 cmd.arg(service);

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Frankn Brand Colours -->
+    <color name="void_black">#050505</color>
+    <color name="neon_cyan">#00F3FF</color>
+    <color name="neon_green">#00FF41</color>
+    <color name="neon_magenta">#FF00FF</color>
+    <color name="panel_grey">#1A1A2E</color>
+</resources>

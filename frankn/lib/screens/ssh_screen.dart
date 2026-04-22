@@ -21,7 +21,7 @@ class SShScreen extends StatefulWidget {
 
 class _SShScreenState extends State<SShScreen> {
   late final SshController _controller;
-  final _userController = TextEditingController(text: 'scott');
+  final _userController = TextEditingController(text: '',);
   final _passController = TextEditingController();
 
   @override
@@ -77,7 +77,7 @@ class _SShScreenState extends State<SShScreen> {
     _controller.terminal.write('Uplink: \x1b[35mENCRYPTED P2P\x1b[0m\r\n\n');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _showLoginDialog();
+      if (mounted) _loginDialog();
     });
   }
 
@@ -110,13 +110,13 @@ class _SShScreenState extends State<SShScreen> {
     );
   }
 
-  void _showLoginDialog({String? error}) {
+  void _loginDialog({String? error}) {
     if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.panelGrey,
+        backgroundColor: AppColors.deepSpace.withAlpha(200),
         shape: const BeveledRectangleBorder(
           side: BorderSide(color: AppColors.neonCyan, width: 1),
           borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -195,7 +195,7 @@ class _SShScreenState extends State<SShScreen> {
                   _passController.text.isNotEmpty ? _passController.text : null,
                 );
               } catch (e) {
-                _showLoginDialog(error: e.toString());
+                _loginDialog(error: e.toString());
               }
             },
           ),

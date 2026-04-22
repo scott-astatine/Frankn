@@ -72,6 +72,17 @@ pub async fn restart_host(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     handle_res(id, out)
 }
 
+pub async fn disconnect(id: &str, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+    let rtc = rtc.lock().await;
+    let _ = rtc.peer_connection.close().await;
+    HostMessage::Response {
+        id: id.to_string(),
+        status: Status::Success,
+        data: None,
+        timestamp: get_timestamp(),
+    }
+}
+
 fn handle_res(id: &str, result: std::io::Result<std::process::Output>) -> HostMessage {
     match result {
         Ok(output) => HostMessage::Response {
