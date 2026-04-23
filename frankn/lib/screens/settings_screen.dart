@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frankn/services/settings_service.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/main.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
@@ -15,7 +15,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _settings = SettingsService();
-  final _client = RtcClient();
+  final _client = RtcThinClient();
 
   void _showLanguageSelector() {
     showModalBottomSheet(
@@ -25,19 +25,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.symmetric(vertical: 24),
         decoration: const BoxDecoration(
           color: Color(0xFF0F0F0F),
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-          border: Border(top: BorderSide(color: AppColors.neonCyan, width: 1.5)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+          border: Border(
+            top: BorderSide(color: AppColors.neonCyan, width: 1.5),
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildSelectorTile("ENGLISH", _settings.localeCode == 'en', () async {
-              await _settings.setLocaleCode('en');
-              appLocale.value = const Locale('en');
-              if (!context.mounted) return;
-              Navigator.pop(context);
-              setState(() {});
-            }),
+            _buildSelectorTile(
+              "ENGLISH",
+              _settings.localeCode == 'en',
+              () async {
+                await _settings.setLocaleCode('en');
+                appLocale.value = const Locale('en');
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                setState(() {});
+              },
+            ),
             _buildSelectorTile("한국어", _settings.localeCode == 'ko', () async {
               await _settings.setLocaleCode('ko');
               appLocale.value = const Locale('ko');
@@ -53,8 +62,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSelectorTile(String label, bool isSelected, VoidCallback onTap) {
     return ListTile(
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
-      trailing: isSelected ? const Icon(Icons.check, color: AppColors.neonCyan) : null,
+      title: Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 14,
+          letterSpacing: 1,
+        ),
+      ),
+      trailing: isSelected
+          ? const Icon(Icons.check, color: AppColors.neonCyan)
+          : null,
       onTap: onTap,
     );
   }
@@ -64,24 +82,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 24),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: const BoxDecoration(
           color: Color(0xFF0F0F0F),
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-          border: Border(top: BorderSide(color: AppColors.neonCyan, width: 1.5)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+          border: Border(
+            top: BorderSide(color: AppColors.neonCyan, width: 1.5),
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [10, 12, 13, 14, 16, 18, 20].map((size) => ListTile(
-            title: Text("$size PX", style: const TextStyle(fontWeight: FontWeight.w900, fontFamily: 'JetBrainsMonoNerdFont')),
-            trailing: _settings.terminalFontSize == size.toDouble() ? const Icon(Icons.check, color: AppColors.neonCyan) : null,
-            onTap: () async {
-              await _settings.setTerminalFontSize(size.toDouble());
-              if (!context.mounted) return;
-              Navigator.pop(context);
-              setState(() {});
-            },
-          )).toList(),
+          children: [8, 9, 10, 12, 13, 14, 16, 18, 20]
+              .map(
+                (size) => ListTile(
+                  title: Text(
+                    "$size PX",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'JetBrainsMonoNerdFont',
+                    ),
+                  ),
+                  trailing: _settings.terminalFontSize == size.toDouble()
+                      ? const Icon(Icons.check, color: AppColors.neonCyan)
+                      : null,
+                  onTap: () async {
+                    await _settings.setTerminalFontSize(size.toDouble());
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                    setState(() {});
+                  },
+                ),
+              )
+              .toList(),
         ),
       ),
     );
@@ -96,18 +131,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF0F0F0F),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppColors.neonCyan)),
-        title: const Text("RENAME_HOST", style: TextStyle(color: AppColors.neonCyan, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 2)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.neonCyan),
+        ),
+        title: const Text(
+          "RENAME_HOST",
+          style: TextStyle(
+            color: AppColors.neonCyan,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+            letterSpacing: 2,
+          ),
+        ),
         content: TextField(
           controller: controller,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
           decoration: const InputDecoration(
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white10)),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.neonCyan)),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white10),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.neonCyan),
+            ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ABORT", style: TextStyle(color: AppColors.textGrey))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "ABORT",
+              style: TextStyle(color: AppColors.textGrey),
+            ),
+          ),
           TextButton(
             onPressed: () async {
               final newName = controller.text.trim();
@@ -119,7 +178,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 setState(() {});
               }
             },
-            child: const Text("UPDATE", style: TextStyle(color: AppColors.neonCyan, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "UPDATE",
+              style: TextStyle(
+                color: AppColors.neonCyan,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -132,18 +197,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF0F0F0F),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppColors.neonCyan)),
-        title: const Text("SIGNALING_SERVER", style: TextStyle(color: AppColors.neonCyan, fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 2)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.neonCyan),
+        ),
+        title: const Text(
+          "SIGNALING_SERVER",
+          style: TextStyle(
+            color: AppColors.neonCyan,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+            letterSpacing: 2,
+          ),
+        ),
         content: TextField(
           controller: controller,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
           decoration: const InputDecoration(
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white10)),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.neonCyan)),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white10),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.neonCyan),
+            ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ABORT", style: TextStyle(color: AppColors.textGrey))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "ABORT",
+              style: TextStyle(color: AppColors.textGrey),
+            ),
+          ),
           TextButton(
             onPressed: () async {
               final newUrl = controller.text.trim();
@@ -154,23 +244,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (!context.mounted) return;
                 Navigator.pop(context);
                 setState(() {});
-                
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Re-initializing Neural Link to new server...', style: TextStyle(fontWeight: FontWeight.bold)),
+                    content: Text(
+                      'Re-initializing Neural Link to new server...',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     backgroundColor: AppColors.matrixGreen,
                   ),
                 );
               } else {
-                 ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Invalid URL format. Must start with ws:// or wss://', style: TextStyle(fontWeight: FontWeight.bold)),
+                    content: Text(
+                      'Invalid URL format. Must start with ws:// or wss://',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     backgroundColor: AppColors.errorRed,
                   ),
                 );
               }
             },
-            child: const Text("UPDATE", style: TextStyle(color: AppColors.neonCyan, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "UPDATE",
+              style: TextStyle(
+                color: AppColors.neonCyan,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -184,8 +286,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppColors.voidBlack,
       appBar: AppBar(
-        title: Text(l10n.settings.toUpperCase(), 
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 2)),
+        title: Text(
+          l10n.settings.toUpperCase(),
+          style: const TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
+            letterSpacing: 2,
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -212,7 +320,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _editSignalingUrl,
             accentColor: AppColors.neonPink,
           ),
-          
+
           const SizedBox(height: 32),
           _buildSectionHeader(l10n.uiPreferences),
           const SizedBox(height: 12),
@@ -224,8 +332,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             crossAxisSpacing: 12,
             childAspectRatio: 1.4,
             children: [
-              _buildOpSettingCard(l10n.language.toUpperCase(), _settings.localeCode == 'ko' ? "한국어" : "ENGLISH", Icons.language, _showLanguageSelector),
-              _buildOpSettingCard(l10n.terminalFontSize.toUpperCase(), "${_settings.terminalFontSize.toInt()} PX", Icons.format_size, _showFontSizeSelector),
+              _buildOpSettingCard(
+                l10n.language.toUpperCase(),
+                _settings.localeCode == 'ko' ? "한국어" : "ENGLISH",
+                Icons.language,
+                _showLanguageSelector,
+              ),
+              _buildOpSettingCard(
+                l10n.terminalFontSize.toUpperCase(),
+                "${_settings.terminalFontSize.toInt()} PX",
+                Icons.format_size,
+                _showFontSizeSelector,
+              ),
             ],
           ),
 
@@ -242,12 +360,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 context: context,
                 builder: (context) => AlertDialog(
                   backgroundColor: const Color(0xFF0F0F0F),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppColors.errorRed)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: AppColors.errorRed),
+                  ),
                   title: const Text("CRITICAL_RESET"),
-                  content: const Text("Terminate all persistent links and system configurations?"),
+                  content: const Text(
+                    "Terminate all persistent links and system configurations?",
+                  ),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ABORT")),
-                    TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("EXECUTE", style: TextStyle(color: AppColors.errorRed))),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("ABORT"),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text(
+                        "EXECUTE",
+                        style: TextStyle(color: AppColors.errorRed),
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -264,10 +396,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSectionHeader(String title) {
-    return Text(title.toUpperCase(), style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2));
+    return Text(
+      title.toUpperCase(),
+      style: const TextStyle(
+        color: Colors.white24,
+        fontSize: 10,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 2,
+      ),
+    );
   }
 
-  Widget _buildSettingCard({required String title, required String value, required IconData icon, required VoidCallback onTap, Color accentColor = Colors.white24}) {
+  Widget _buildSettingCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+    Color accentColor = Colors.white24,
+  }) {
     return CyberCard(
       borderColor: accentColor.withValues(alpha: 0.2),
       child: InkWell(
@@ -277,15 +423,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(icon, color: accentColor == Colors.white24 ? Colors.white38 : accentColor, size: 24),
+              Icon(
+                icon,
+                color: accentColor == Colors.white24
+                    ? Colors.white38
+                    : accentColor,
+                size: 24,
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -297,7 +463,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildOpSettingCard(String title, String value, IconData icon, VoidCallback onTap) {
+  Widget _buildOpSettingCard(
+    String title,
+    String value,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
     return CyberCard(
       borderColor: Colors.white.withValues(alpha: 0.05),
       child: InkWell(
@@ -311,8 +482,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Icon(icon, color: AppColors.neonCyan, size: 22),
               const SizedBox(height: 12),
-              Text(title, style: const TextStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1)),
-              Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
+              ),
             ],
           ),
         ),

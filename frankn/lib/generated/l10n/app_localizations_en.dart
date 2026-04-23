@@ -250,5 +250,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selected => 'Selected';
 
   @override
+  String get search => 'Search';
+
+  @override
   String get filterProcesses => 'Filter Processes...';
 }

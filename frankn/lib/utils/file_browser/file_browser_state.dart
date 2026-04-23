@@ -6,19 +6,19 @@
 /// ARCHITECTURE:
 /// This class acts as the "ViewModel" or "Controller" for the File Browser.
 /// It holds all mutable state (current path, entries, selection) and exposes
-/// methods to modify that state. It listens to the [RtcClient] stream for
+/// methods to modify that state. It listens to the [RtcThinClient] stream for
 /// updates from the host and notifies listeners (the UI) when changes occur.
 library;
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
 import 'package:frankn/utils/utils.dart';
 
 /// State manager for file browser operations.
 class FileBrowserState with ChangeNotifier {
-  final RtcClient client;
+  final RtcThinClient client;
   StreamSubscription? _responseSub;
 
   FileBrowserState(this.client) {
@@ -186,7 +186,7 @@ class FileBrowserState with ChangeNotifier {
     });
   }
 
-  /// Listens to the global [RtcClient] response stream.
+  /// Listens to the global [RtcThinClient] response stream.
   /// This connects the UI state to the networking layer.
   void _listenForResponses() {
     _responseSub = client.commandResponseStream.listen((resp) {
@@ -196,19 +196,17 @@ class FileBrowserState with ChangeNotifier {
       // Handle directory listing response
       if (data.containsKey('entries')) {
         setEntries(data['entries']);
-      } 
+      }
       // Handle file transfer completion (from FileTransferMixin)
       else if (type == DcMsg.StreamEnd) {
         setTransferMessage("");
         setTransferProgress(0.0);
         setIsLoading(false);
-      }
-      else if (type == DcMsg.StreamStart) {
+      } else if (type == DcMsg.StreamStart) {
         setTransferMessage("DOWNLOADING: ${resp['file_name']}");
         setTransferProgress(0.0);
         setIsLoading(true);
-      }
-      else if (type == DcMsg.FileChunk) {
+      } else if (type == DcMsg.FileChunk) {
         notifyListeners();
       }
     });

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/cyber_button.dart';
 import 'package:frankn/utils/utils.dart';
@@ -12,7 +12,7 @@ import 'package:frankn/widgets/ssh/terminal_context_menu.dart';
 import 'package:xterm/xterm.dart';
 
 class SShScreen extends StatefulWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   const SShScreen({super.key, required this.client});
 
   @override
@@ -21,7 +21,7 @@ class SShScreen extends StatefulWidget {
 
 class _SShScreenState extends State<SShScreen> {
   late final SshController _controller;
-  final _userController = TextEditingController(text: '',);
+  final _userController = TextEditingController(text: '');
   final _passController = TextEditingController();
 
   @override

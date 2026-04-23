@@ -163,7 +163,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
         while let Some(msg) = signaling_rx.recv().await {
             match msg {
                 SignalingMessage::RegisterSuccess { .. } => {
-                    crate::log!("NODE: Neural Link established.");
+                    crate::log!("NODE: Connected to signaling server.");
                 }
                 SignalingMessage::RegisterFailure { error, .. } => {
                     crate::elog!("NODE: Handshake rejected: {}", error);
@@ -369,7 +369,7 @@ async fn parse_dc_msg(
 
     match serde_json::from_str::<ClientMessage>(&text) {
         Ok(msg) => match msg {
-            ClientMessage::AuthRequest => {
+            ClientMessage::AuthRequest { .. } => {
                 crate::log!("CHALLENGE: Generating for client...");
                 let challenge = auth_manager.generate_challenge();
                 {
@@ -462,6 +462,7 @@ async fn parse_dc_msg(
                 hash,
                 total_size,
                 resume_offset,
+                ..
             } => {
                 crate::log!("FS: Transfer init for {} → {}", id, path);
                 crate::fs_sync::transfer::handle_transfer_init(
@@ -476,7 +477,7 @@ async fn parse_dc_msg(
                 .await;
             }
 
-            ClientMessage::TransferCancel { id } => {
+            ClientMessage::TransferCancel { id, .. } => {
                 crate::log!("FS: Transfer cancel for {}", id);
                 let resp = crate::fs_sync::transfer::handle_transfer_cancel(&id).await;
                 if let Ok(json) = serde_json::to_string(&resp) {
@@ -489,6 +490,7 @@ async fn parse_dc_msg(
                 id,
                 path,
                 resume_offset,
+                ..
             } => {
                 crate::log!(
                     "FS: Download init for {} ← {} (offset={})",
@@ -545,9 +547,9 @@ async fn parse_dc_msg(
                 }
             }
         },
-        Err(_) => {
-            // Received valid UTF-8 that isn't a known JSON message format.
-            // Could be raw terminal output on the SSH channel — ignore.
+        Err(e) => {
+            crate::elog!("NODE: Protocol Error - Failed to parse DC message: {e}");
+            crate::elog!("NODE: Raw payload was: {text}");
         }
     }
 }

@@ -250,5 +250,8 @@ class AppLocalizationsKo extends AppLocalizations {
   String get selected => '선택됨';
 
   @override
-  String get filterProcesses => '프로세스 필터링...';
+  String get search => '검색';
+
+  @override
+  String get filterProcesses => '프로세스 필터...';
 }

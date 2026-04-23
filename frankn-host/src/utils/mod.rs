@@ -28,10 +28,17 @@ pub enum Status {
 #[serde(tag = "type")]
 pub enum ClientMessage {
     #[serde(rename = "auth_request")]
-    AuthRequest,
+    AuthRequest {
+        #[serde(default)]
+        timestamp: u64,
+    },
 
     #[serde(rename = "auth_response")]
-    AuthResponse { response: String },
+    AuthResponse {
+        response: String,
+        #[serde(default)]
+        timestamp: u64,
+    },
 
     #[serde(rename = "dc_msg")]
     XDcMsg {
@@ -40,6 +47,8 @@ pub enum ClientMessage {
         command: DcMsg,
         params: Option<serde_json::Value>,
         auth_token: String,
+        #[serde(default)]
+        timestamp: u64,
     },
 
     #[serde(rename = "upload_start")]

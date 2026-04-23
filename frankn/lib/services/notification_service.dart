@@ -153,7 +153,6 @@ class NotificationService {
 /// Handles the 'OPEN_FILE' action by launching the file at `file_path`
 /// using the [OpenFilex] plugin.
 @pragma("vm:entry-point")
-
 Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
   if (receivedAction.buttonKeyPressed == 'OPEN_FILE' ||
       (receivedAction.channelKey == 'frankn_host_alerts' &&

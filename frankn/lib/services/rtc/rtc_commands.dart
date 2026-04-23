@@ -15,6 +15,7 @@ mixin RtcCommands on RtcClientBase {
   /// an authentication request to the host to begin the security handshake.
   @override
   void authenticate(String password) {
+    isAuthFailed = false; // Clear previous failure state
     currentPassword = password;
     log("Requesting Authentication...");
     sendHostMessage({'type': DcMsg.AuthRequest, 'timestamp': getTimestamp()});
@@ -124,22 +125,27 @@ mixin RtcCommands on RtcClientBase {
     String? hash,
     int resumeOffset = 0,
   }) {
-    sendToChannel(fsDC, jsonEncode({
-      'type': DcMsg.TransferInit,
-      'id': id,
-      'path': path,
-      'total_size': totalSize,
-      'hash': hash,
-      'resume_offset': resumeOffset,
-    }), "FS");
+    sendToChannel(
+      fsDC,
+      jsonEncode({
+        'type': DcMsg.TransferInit,
+        'id': id,
+        'path': path,
+        'total_size': totalSize,
+        'hash': hash,
+        'resume_offset': resumeOffset,
+      }),
+      "FS",
+    );
   }
 
   /// Cancel a transfer.
   void sendTransferCancel(String id) {
-    sendToChannel(fsDC, jsonEncode({
-      'type': DcMsg.TransferCancel,
-      'id': id,
-    }), "FS");
+    sendToChannel(
+      fsDC,
+      jsonEncode({'type': DcMsg.TransferCancel, 'id': id}),
+      "FS",
+    );
   }
 
   /// Initialize a resume-aware download.
@@ -148,12 +154,16 @@ mixin RtcCommands on RtcClientBase {
     required String path,
     int resumeOffset = 0,
   }) {
-    sendToChannel(fsDC, jsonEncode({
-      'type': DcMsg.DownloadInit,
-      'id': id,
-      'path': path,
-      'resume_offset': resumeOffset,
-    }), "FS");
+    sendToChannel(
+      fsDC,
+      jsonEncode({
+        'type': DcMsg.DownloadInit,
+        'id': id,
+        'path': path,
+        'resume_offset': resumeOffset,
+      }),
+      "FS",
+    );
   }
 
   /// Completes an active file upload session.
@@ -206,9 +216,9 @@ mixin RtcCommands on RtcClientBase {
 
     final type = msg[DcMsg.Key];
     final jsonMsg = jsonEncode(finalMsg);
-    
+
     if (type != DcMsg.Ping && type != DcMsg.Telemetry) {
-       // log("DEBUG: dc_msg type=$type id=$msgId");
+      // log("DEBUG: dc_msg type=$type id=$msgId");
     }
 
     switch (type) {
@@ -216,6 +226,9 @@ mixin RtcCommands on RtcClientBase {
       case DcMsg.Ls:
       case DcMsg.GetFile:
       case DcMsg.DeleteFile:
+      case DcMsg.TransferInit:
+      case DcMsg.TransferCancel:
+      case DcMsg.DownloadInit:
         sendToChannel(fsDC, jsonMsg, "FS");
         break;
 

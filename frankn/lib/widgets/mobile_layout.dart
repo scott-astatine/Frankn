@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/host_list_panel.dart';
 import 'package:frankn/widgets/quick_functions.dart';
 
 class MobileLayout extends StatelessWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   const MobileLayout({super.key, required this.client});
 
   @override

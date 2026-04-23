@@ -78,5 +78,6 @@
   "sortBySize": "크기순 정렬",
   "sortByDate": "날짜순 정렬",
   "selected": "선택됨",
-  "filterProcesses": "프로세스 필터링..."
+  "search": "검색",
+  "filterProcesses": "프로세스 필터..."
 }

@@ -5,10 +5,24 @@ mixin RtcMessageHandler on RtcClientBase {
   final Map<String, IOSink> _activeSinks = {};
   final Map<String, String> _tempPaths = {};
   final Map<String, String> _expectedHashes = {};
+  final Map<String, String> _downloadTargetDirs = {};
+  final Map<String, int> _totalSizes = {};
+  final Map<String, int> _receivedSizes = {};
+  final Map<String, bool> _showNotificationMap = {};
 
-  // Pending transfer setup — buffers download_end/download chunks until
-  // download_start completes its async file setup.
-  final Map<String, Completer<void>> _pendingTransferSetups = {};
+  Future<void> _moveFile(File source, String destPath) async {
+    try {
+      await source.rename(destPath);
+    } catch (e) {
+      if (e is FileSystemException && e.osError?.errorCode == 18) {
+        // Cross-device link (e.g., temp to SD card). Copy and delete.
+        await source.copy(destPath);
+        await source.delete();
+      } else {
+        rethrow;
+      }
+    }
+  }
 
   @override
   void handleHostMessage(dynamic rawData) {
@@ -80,6 +94,20 @@ mixin RtcMessageHandler on RtcClientBase {
         final tempDir = globalTempDir;
         final tempFile = File('${tempDir.path}/$transferId.part');
 
+        // Initialize tracking
+        _totalSizes[transferId] = data['total_size'] ?? 0;
+        _receivedSizes[transferId] = data['offset'] as int? ?? 0;
+
+        // Show initial notification if requested
+        if (_showNotificationMap[transferId] ?? true) {
+          NotificationService().showProgressNotification(
+            transferId.hashCode.abs() % 100000,
+            "Downloading '$fileName'...",
+            "0.0%",
+            0.0,
+          );
+        }
+
         // For resume-aware downloads, the host tells us what offset it started from.
         // We open the file in append mode if resuming, or create fresh.
         final hostOffset = data['offset'] as int? ?? 0;
@@ -106,6 +134,9 @@ mixin RtcMessageHandler on RtcClientBase {
         final String transferId = data['id'];
         final sink = _activeSinks.remove(transferId);
         final tempPath = _tempPaths.remove(transferId);
+        final bool showNotif = _showNotificationMap.remove(transferId) ?? true;
+        _totalSizes.remove(transferId);
+        _receivedSizes.remove(transferId);
 
         if (sink == null || tempPath == null) {
           log(
@@ -132,9 +163,8 @@ mixin RtcMessageHandler on RtcClientBase {
         if (expectedHash != null) {
           // Verify hash without loading full file into RAM
           final stream = file.openRead();
-          final actualHash = (await sha256.bind(stream).single)
-              .toString()
-              .toLowerCase();
+          final actualHash =
+              (await sha256.bind(stream).single).toString().toLowerCase();
 
           if (actualHash != expectedHash.toLowerCase()) {
             log(
@@ -149,10 +179,39 @@ mixin RtcMessageHandler on RtcClientBase {
           );
         }
 
+        // Relocate the file to its final destination
+        String? finalPath;
+        try {
+          final targetDir = _downloadTargetDirs.remove(transferId);
+          if (targetDir != null && targetDir.isNotEmpty) {
+            finalPath = "$targetDir/$fileName";
+            await _moveFile(file, finalPath);
+            log("FS: File relocated to $finalPath");
+          } else {
+            // Default to app documents if no target dir specified
+            final appDocDir = await getApplicationDocumentsDirectory();
+            finalPath = "${appDocDir.path}/$fileName";
+            await _moveFile(file, finalPath);
+            log("FS: File relocated to default path: $finalPath");
+          }
+        } catch (e) {
+          log("FS ERROR: Failed to relocate $fileName: $e");
+        }
+
+        if (showNotif && finalPath != null) {
+          final notifId = transferId.hashCode.abs() % 100000;
+          await NotificationService().showDownloadComplete(
+            notifId,
+            fileName,
+            finalPath,
+          );
+        }
+
         commandResponseController.add({
           'type': DcMsg.StreamEnd,
           'file_name': fileName,
           'temp_path': tempPath,
+          'final_path': finalPath,
           'id': transferId,
           'completed': expectedHash != null,
         });
@@ -190,10 +249,16 @@ mixin RtcMessageHandler on RtcClientBase {
         final cpu = data['cpu_load']?.toStringAsFixed(1);
         final usedMem = ((data['used_mem'] ?? 0) / 1024 / 1024 / 1024)
             .toStringAsFixed(1);
+        final totalMem = ((data['total_mem'] ?? 0) / 1024 / 1024 / 1024)
+            .toStringAsFixed(1);
         final cpuTemp = data['cpu_temp']?.toStringAsFixed(1) ?? '0.0';
 
+        // Use standard Unicode emojis for the notification body
+        final cpuVal = data['cpu_load'] as double? ?? 0.0;
+        final statusIcon = cpuVal > 80 ? '🔥' : '🟢';
+
         updateBackgroundService(
-          text: "🌡️$cpuTemp°C   🖥️: $cpu%  |  💾: $usedMem GB",
+          text: "$statusIcon CPU: $cpu% | 💾 RAM: $usedMem/$totalMem GB | 🌡️ $cpuTemp°C",
         );
         commandResponseController.add(data);
         break;
@@ -210,15 +275,30 @@ mixin RtcMessageHandler on RtcClientBase {
     int seq,
     int flags,
   ) {
-    log(
-      "FS DEBUG: Received chunk for $id. Size: ${chunk.length}, Offset: $offset, Seq: $seq",
-    );
     final sink = _activeSinks[id];
     if (sink != null) {
       sink.add(chunk);
 
       // Track progress for resume-aware transfers
       final currentTotal = (offset + chunk.length);
+      _receivedSizes[id] = currentTotal;
+
+      final totalSize = _totalSizes[id] ?? 1;
+      final progress = (currentTotal / totalSize).clamp(0.0, 1.0);
+
+      // Update notification every 1MB or on completion
+      if ((_showNotificationMap[id] ?? true) &&
+          (currentTotal % (1024 * 1024) < chunk.length ||
+              currentTotal == totalSize)) {
+        final fileName = activeFileNames[id] ?? "File";
+        NotificationService().showProgressNotification(
+          id.hashCode.abs() % 100000,
+          "Downloading '$fileName'...",
+          "${(progress * 100).toStringAsFixed(1)}%",
+          progress * 100,
+        );
+      }
+
       commandResponseController.add({
         'type': DcMsg.FileChunk,
         'id': id,
@@ -258,7 +338,6 @@ mixin RtcMessageHandler on RtcClientBase {
       sendHostMessage({
         'type': 'auth_response',
         'response': response,
-        'timestamp': getTimestamp(),
       });
     }
   }
@@ -288,6 +367,16 @@ mixin RtcMessageHandler on RtcClientBase {
       if (d['media_status'] != null || d['metadata'] != null) {
         _handleMediaUpdate(d);
       }
+    }
+  }
+
+  bool _isAudioHandlerInitialized() {
+    try {
+      // Accessing a late variable before initialization throws LateInitializationError
+      // ignore: unnecessary_null_comparison
+      return audioHandler != null;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -344,7 +433,7 @@ mixin RtcMessageHandler on RtcClientBase {
       }
     }
 
-    if (audioHandler is FranknAudioHandler) {
+    if (_isAudioHandlerInitialized() && audioHandler is FranknAudioHandler) {
       (audioHandler as FranknAudioHandler).updateMediaState(
         status: status,
         title: title,

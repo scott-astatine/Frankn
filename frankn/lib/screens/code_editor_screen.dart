@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/languages/dart.dart';
@@ -20,7 +21,7 @@ import 'package:re_highlight/styles/monokai-sublime.dart';
 import 'package:share_plus/share_plus.dart';
 
 class CodeEditorScreen extends StatefulWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   final String remotePath;
   final String fileName;
 
@@ -35,14 +36,17 @@ class CodeEditorScreen extends StatefulWidget {
   State<CodeEditorScreen> createState() => _CodeEditorScreenState();
 }
 
-class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMixin {
+class _CodeEditorScreenState extends State<CodeEditorScreen>
+    with FileTransferMixin {
   @override
-  RtcClient get client => widget.client;
+  RtcThinClient get client => widget.client;
 
   late CodeLineEditingController _controller;
   File? _localFile;
   bool _isInitialized = false;
   bool _isSaving = false;
+
+  StreamSubscription? _transferSub;
 
   @override
   void initState() {
@@ -50,7 +54,34 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
     _controller = CodeLineEditingController();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     setupTransferListener();
+    
+    // Listen for the specific completion of this file in the background
+    _transferSub = client.transferProgressStream.listen((data) {
+      if (data['type'] == 'complete' && data['file_name'] == widget.fileName) {
+        final String? path = data['final_path'];
+        if (path != null) {
+          _readLocalFile(path);
+        }
+      }
+    });
+
     _loadFile();
+  }
+
+  Future<void> _readLocalFile(String path) async {
+    try {
+      final file = File(path);
+      final content = await file.readAsString();
+      if (mounted) {
+        setState(() {
+          _localFile = file;
+          _controller.text = content;
+          _isInitialized = true;
+        });
+      }
+    } catch (e) {
+      client.log("EDITOR ERROR: Failed to read file: $e");
+    }
   }
 
   @override
@@ -60,27 +91,23 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
     downloadFile(
       widget.remotePath,
       showNotification: false,
-      onComplete: (file) async {
-        final content = await file.readAsString();
-        setState(() {
-          _localFile = file;
-          _controller.text = content;
-          _isInitialized = true;
-        });
-      },
+      isTemporary: true,
     );
   }
 
   Future<void> _handleSave() async {
     if (_isSaving) return;
     setState(() => _isSaving = true);
-    
+
     try {
       await saveEditorContent(widget.remotePath, _controller.text);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("FILE SAVED TO HOST", style: TextStyle(fontWeight: FontWeight.bold)),
+            content: Text(
+              "FILE SAVED TO HOST",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             backgroundColor: AppColors.matrixGreen,
           ),
         );
@@ -101,6 +128,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
 
   @override
   void dispose() {
+    _transferSub?.cancel();
     _controller.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -115,13 +143,9 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
       body: Stack(
         children: [
           Positioned.fill(
-            child: SafeArea(
-              bottom: false,
-              top: false,
-              child: _buildBody(),
-            ),
+            child: SafeArea(bottom: false, top: false, child: _buildBody()),
           ),
-          
+
           if (!isKeyboardVisible && _isInitialized)
             Positioned(
               bottom: 0,
@@ -139,14 +163,20 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
       height: 32,
       decoration: BoxDecoration(
         color: AppColors.deepSpace.withValues(alpha: 0.8),
-        border: const Border(top: BorderSide(color: AppColors.neonCyan, width: 0.5)),
+        border: const Border(
+          top: BorderSide(color: AppColors.neonCyan, width: 0.5),
+        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: const Icon(Icons.chevron_left, color: AppColors.neonCyan, size: 18),
+            child: const Icon(
+              Icons.chevron_left,
+              color: AppColors.neonCyan,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -167,10 +197,12 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
             icon: const Icon(Icons.share, color: AppColors.neonCyan, size: 16),
             onPressed: () {
               if (_localFile != null) {
-                SharePlus.instance.share(ShareParams(
-                  files: [XFile(_localFile!.path)],
-                  text: widget.fileName,
-                ));
+                SharePlus.instance.share(
+                  ShareParams(
+                    files: [XFile(_localFile!.path)],
+                    text: widget.fileName,
+                  ),
+                );
               }
             },
           ),
@@ -179,7 +211,10 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
             const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.neonCyan),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.neonCyan,
+              ),
             )
           else
             IconButton(
@@ -201,8 +236,14 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
           children: [
             const CircularProgressIndicator(color: AppColors.neonCyan),
             const SizedBox(height: 16),
-            Text(transferMsg.isEmpty ? "LOADING FILE..." : transferMsg, 
-              style: const TextStyle(color: AppColors.neonCyan, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(
+              transferMsg.isEmpty ? "LOADING FILE..." : transferMsg,
+              style: const TextStyle(
+                color: AppColors.neonCyan,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       );
@@ -216,62 +257,90 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> with FileTransferMi
         fontSize: 13,
         fontFamily: 'JetBrainsMonoNerdFont',
         codeTheme: CodeHighlightTheme(
-          languages: {
-            lang: CodeHighlightThemeMode(mode: _getLangMode(lang)),
-          },
+          languages: {lang: CodeHighlightThemeMode(mode: _getLangMode(lang))},
           theme: monokaiSublimeTheme,
         ),
       ),
-      indicatorBuilder: (context, editingController, chunkController, notifier) {
-        return Row(
-          children: [
-            DefaultCodeLineNumber(
-              controller: editingController,
-              notifier: notifier,
-            ),
-            DefaultCodeChunkIndicator(
-              width: 20,
-              controller: chunkController,
-              notifier: notifier,
-            ),
-          ],
-        );
-      },
+      indicatorBuilder:
+          (context, editingController, chunkController, notifier) {
+            return Row(
+              children: [
+                DefaultCodeLineNumber(
+                  controller: editingController,
+                  notifier: notifier,
+                ),
+                DefaultCodeChunkIndicator(
+                  width: 20,
+                  controller: chunkController,
+                  notifier: notifier,
+                ),
+              ],
+            );
+          },
     );
   }
 
   String _detectLanguage() {
     final ext = widget.fileName.split('.').last.toLowerCase();
     switch (ext) {
-      case 'dart': return 'dart';
-      case 'rs': return 'rust';
-      case 'py': return 'python';
-      case 'js': return 'javascript';
-      case 'sh': return 'bash';
-      case 'json': return 'json';
-      case 'yaml': case 'yml': return 'yaml';
-      case 'md': return 'markdown';
-      case 'cpp': case 'hpp': case 'h': case 'c': return 'cpp';
-      case 'java': return 'java';
-      case 'xml': case 'html': return 'xml';
-      default: return 'bash';
+      case 'dart':
+        return 'dart';
+      case 'rs':
+        return 'rust';
+      case 'py':
+        return 'python';
+      case 'js':
+        return 'javascript';
+      case 'sh':
+        return 'bash';
+      case 'json':
+        return 'json';
+      case 'yaml':
+      case 'yml':
+        return 'yaml';
+      case 'md':
+        return 'markdown';
+      case 'cpp':
+      case 'hpp':
+      case 'h':
+      case 'c':
+        return 'cpp';
+      case 'java':
+        return 'java';
+      case 'xml':
+      case 'html':
+        return 'xml';
+      default:
+        return 'bash';
     }
   }
 
   dynamic _getLangMode(String lang) {
     switch (lang) {
-      case 'dart': return langDart;
-      case 'rust': return langRust;
-      case 'python': return langPython;
-      case 'javascript': return langJavascript;
-      case 'bash': return langBash;
-      case 'json': return langJson;
-      case 'yaml': return langYaml;
-      case 'markdown': return langMarkdown;
-      case 'cpp': return langCpp;
-      case 'java': return langJava;
-      case 'xml': return langXml;
-      default: return langBash;
+      case 'dart':
+        return langDart;
+      case 'rust':
+        return langRust;
+      case 'python':
+        return langPython;
+      case 'javascript':
+        return langJavascript;
+      case 'bash':
+        return langBash;
+      case 'json':
+        return langJson;
+      case 'yaml':
+        return langYaml;
+      case 'markdown':
+        return langMarkdown;
+      case 'cpp':
+        return langCpp;
+      case 'java':
+        return langJava;
+      case 'xml':
+        return langXml;
+      default:
+        return langBash;
     }
   }
 }

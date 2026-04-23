@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/cyber_card.dart';
 import 'package:frankn/widgets/quick_functions.dart';
@@ -8,7 +8,7 @@ import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/screens/log_terminal_screen.dart';
 
 class FranknDashboard extends StatefulWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   const FranknDashboard({super.key, required this.client});
 
   @override
@@ -21,14 +21,14 @@ class _FranknDashboardState extends State<FranknDashboard> {
   double _ram = 0.0;
   int _ping = 0;
   bool _hasTelemetry = false;
-  
+
   Timer? _pingTimer;
   int? _lastPingTime;
 
   @override
   void initState() {
     super.initState();
-    
+
     // 1. Listen for connection logs
     widget.client.logStream.listen((log) {
       if (mounted) {
@@ -50,8 +50,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
           _ram = (resp['used_mem'] as num).toDouble() / (1024 * 1024 * 1024);
           _hasTelemetry = true;
         });
-      } 
-      
+      }
       // Handle Ping Response (RTT calculation)
       else if (resp['type'] == 'response') {
         final data = resp['data'];
@@ -68,7 +67,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
 
     // 3. Start periodic Ping heartbeat (every 5s)
     _pingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _sendPing());
-    _sendPing(); 
+    _sendPing();
   }
 
   void _sendPing() {
@@ -112,25 +111,61 @@ class _FranknDashboardState extends State<FranknDashboard> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildStatItem(l10n.cpu, _hasTelemetry ? "${_cpu.toStringAsFixed(1)}%" : l10n.syncing.toUpperCase(), AppColors.neonCyan),
+            _buildStatItem(
+              l10n.cpu,
+              _hasTelemetry
+                  ? "${_cpu.toStringAsFixed(1)}%"
+                  : l10n.syncing.toUpperCase(),
+              AppColors.neonCyan,
+            ),
             _buildHUDDivider(),
-            _buildStatItem(l10n.ram, _hasTelemetry ? "${_ram.toStringAsFixed(1)} GB" : l10n.syncing.toUpperCase(), Colors.white),
+            _buildStatItem(
+              l10n.ram,
+              _hasTelemetry
+                  ? "${_ram.toStringAsFixed(1)} GB"
+                  : l10n.syncing.toUpperCase(),
+              Colors.white,
+            ),
             _buildHUDDivider(),
-            _buildStatItem(l10n.ping, _ping > 0 ? "${_ping}ms" : l10n.syncing.toUpperCase(), AppColors.matrixGreen),
+            _buildStatItem(
+              l10n.ping,
+              _ping > 0 ? "${_ping}ms" : l10n.syncing.toUpperCase(),
+              AppColors.matrixGreen,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHUDDivider() => Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.05));
+  Widget _buildHUDDivider() => Container(
+    width: 1,
+    height: 32,
+    color: Colors.white.withValues(alpha: 0.05),
+  );
 
   Widget _buildStatItem(String label, String value, Color color) {
     return Column(
       children: [
-        Text(label.toUpperCase(), style: const TextStyle(fontSize: 10, color: AppColors.textGrey, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.textGrey,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(value, style: TextStyle(fontSize: 16, color: color, fontFamily: 'JetBrainsMonoNerdFont', fontWeight: FontWeight.w900)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            color: color,
+            fontFamily: 'JetBrainsMonoNerdFont',
+            fontWeight: FontWeight.w900,
+          ),
+        ),
       ],
     );
   }
@@ -139,28 +174,53 @@ class _FranknDashboardState extends State<FranknDashboard> {
     final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.only(bottom: 16, top: 16),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: Colors.white10))),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(l10n.liveLog.toUpperCase(), style: const TextStyle(color: AppColors.neonCyan, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+              Text(
+                l10n.liveLog.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.neonCyan,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                ),
+              ),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.fullscreen_exit, size: 16, color: Colors.white24),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LogTerminalScreen(client: widget.client))),
+                icon: const Icon(
+                  Icons.fullscreen_exit,
+                  size: 16,
+                  color: Colors.white24,
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LogTerminalScreen(client: widget.client),
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            _logs.isEmpty ? "> [IDLE] Listening for neural signals..." : "> ${_logs.first}",
+            _logs.isEmpty
+                ? "> [IDLE] Listening for neural signals..."
+                : "> ${_logs.first}",
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontFamily: 'JetBrainsMonoNerdFont', fontSize: 10, color: Colors.white38),
+            style: const TextStyle(
+              fontFamily: 'JetBrainsMonoNerdFont',
+              fontSize: 10,
+              color: Colors.white38,
+            ),
           ),
         ],
       ),

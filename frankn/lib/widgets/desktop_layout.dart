@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/host_list_panel.dart';
 import 'package:frankn/widgets/quick_functions.dart';
 
 class DesktopLayout extends StatelessWidget {
-  const DesktopLayout({super.key, required RtcClient client})
+  const DesktopLayout({super.key, required RtcThinClient client})
     : _client = client;
 
-  final RtcClient _client;
+  final RtcThinClient _client;
 
   @override
   Widget build(BuildContext context) {

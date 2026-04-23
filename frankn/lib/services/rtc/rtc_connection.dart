@@ -61,8 +61,12 @@ mixin RtcConnection on RtcClientBase {
     _isConnectingInternal = true;
     currentHostId = hostId;
     if (hostName != null) currentHostName = hostName;
+
+    // Aggressively reset lifecycle flags for the new connection attempt
     isAuthFailed = false;
     isIntentionalDisconnect = false;
+    firstDisconnectTime = null;
+
     if (password != null) currentPassword = password;
 
     log("Initiating P2P to ${currentHostName ?? hostId}");
@@ -117,9 +121,12 @@ mixin RtcConnection on RtcClientBase {
       _sshEarlyBuffer.clear();
       _sshHandlerActive = false;
       sshDC!.onMessage = (msg) {
-        if (_sshHandlerActive) return; // SshController has taken over
         final data = msg.isBinary ? msg.binary : utf8.encode(msg.text);
-        _sshEarlyBuffer.add(Uint8List.fromList(data));
+        final bytes = Uint8List.fromList(data);
+        if (!_sshHandlerActive) {
+          _sshEarlyBuffer.add(bytes);
+        }
+        sshDataController.add(bytes);
       };
 
       fsDC = await peerConnection!.createDataChannel(
@@ -183,7 +190,7 @@ mixin RtcConnection on RtcClientBase {
           'to': hostId,
           'candidate': candidate.candidate,
           'sdp_mid': candidate.sdpMid,
-          'sdp_mline_index': candidate.sdpMLineIndex,
+          'sdp_m_line_index': candidate.sdpMLineIndex,
         });
       };
 
@@ -197,12 +204,26 @@ mixin RtcConnection on RtcClientBase {
       });
 
       await peerConnection!.setLocalDescription(offer);
+
+      // Ensure signaling is ready before sending offer
+      int retryCount = 0;
+      while (signalingChannel == null && retryCount < 10) {
+        log("UPLINK: Waiting for Signaling Server... ($retryCount)");
+        await Future.delayed(const Duration(milliseconds: 500));
+        retryCount++;
+      }
+
+      if (signalingChannel == null) {
+        throw Exception("Signaling Server offline. Handshake aborted.");
+      }
+
       _sendToSignaling(SignalingMessage.Offer, {
         'to': hostId,
         'sdp': offer.sdp,
       });
     } catch (e) {
       log("CORE ERROR: Failed to initialize WebRTC stack: $e");
+      isAuthFailed = false; // Reset so UI can retry
       updateHostState(HostConnectionState.failed);
     } finally {
       _isConnectingInternal = false;
@@ -283,14 +304,16 @@ mixin RtcConnection on RtcClientBase {
 
     // Manage persistent notification based on Host Connection State
     if (newState == HostConnectionState.authenticated) {
-      final hostName = client.currentHostName ?? "Unknown";
+      final hostName = client.currentHostName ?? "Remote PC";
       startBackgroundService(
         title: "☁️ $hostName",
         text: '⚡ Connected to Host',
       );
     } else if (newState == HostConnectionState.disconnected ||
         newState == HostConnectionState.failed) {
-      stopBackgroundService();
+      if (isIntentionalDisconnect) {
+        stopBackgroundService();
+      }
     }
 
     if (newState == HostConnectionState.disconnected ||

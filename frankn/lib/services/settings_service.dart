@@ -37,31 +37,38 @@ class SettingsService {
   String get localeCode => _prefs.getString(_keyLocale) ?? _defaultLocale;
 
   /// Persists a new locale preference.
-  Future<bool> setLocaleCode(String value) async => await _prefs.setString(_keyLocale, value);
+  Future<bool> setLocaleCode(String value) async =>
+      await _prefs.setString(_keyLocale, value);
 
   /// Returns the configured signaling server URL.
-  String get signalingUrl => _prefs.getString(_keySignalingUrl) ?? _defaultSignalingUrl;
-  
+  String get signalingUrl =>
+      _prefs.getString(_keySignalingUrl) ?? _defaultSignalingUrl;
+
   /// Persists a new signaling server URL.
-  Future<bool> setSignalingUrl(String value) async => await _prefs.setString(_keySignalingUrl, value);
+  Future<bool> setSignalingUrl(String value) async =>
+      await _prefs.setString(_keySignalingUrl, value);
 
   /// Returns the ID of the most recently connected host.
   String? get lastHostId => _prefs.getString(_keyLastHostId);
-  
+
   /// Persists the ID of the currently connected host for future auto-reconnect.
-  Future<bool> setLastHostId(String value) async => await _prefs.setString(_keyLastHostId, value);
+  Future<bool> setLastHostId(String value) async =>
+      await _prefs.setString(_keyLastHostId, value);
 
   /// Returns the preferred font size for terminal-like views.
   double get terminalFontSize => _prefs.getDouble(_keyTerminalFontSize) ?? 13.0;
-  
+
   /// Persists a new terminal font size preference.
-  Future<bool> setTerminalFontSize(double value) async => await _prefs.setDouble(_keyTerminalFontSize, value);
+  Future<bool> setTerminalFontSize(double value) async =>
+      await _prefs.setDouble(_keyTerminalFontSize, value);
 
   /// Returns the selected color scheme name.
-  String get colorScheme => _prefs.getString(_keyColorScheme) ?? _defaultColorScheme;
+  String get colorScheme =>
+      _prefs.getString(_keyColorScheme) ?? _defaultColorScheme;
 
   /// Persists a new color scheme preference.
-  Future<bool> setColorScheme(String value) async => await _prefs.setString(_keyColorScheme, value);
+  Future<bool> setColorScheme(String value) async =>
+      await _prefs.setString(_keyColorScheme, value);
 
   /// Returns a list of manually saved/paired hosts.
   List<Map<String, String>> get savedHosts {
@@ -73,7 +80,7 @@ class SettingsService {
   Future<void> saveHost(String id, String name) async {
     final hosts = savedHosts;
     if (hosts.any((h) => h['id'] == id)) return;
-    
+
     hosts.add({'id': id, 'name': name});
     final list = hosts.map((e) => jsonEncode(e)).toList();
     await _prefs.setStringList(_keySavedHosts, list);

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:frankn/services/rtc/rtc.dart' as rtc;
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/cyber_card.dart';
@@ -9,7 +9,7 @@ import 'package:frankn/widgets/pairing_dialog.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class HostListPanel extends StatefulWidget {
-  final rtc.RtcClient client;
+  final RtcThinClient client;
   const HostListPanel({super.key, required this.client});
 
   @override
@@ -260,75 +260,144 @@ class _HostListPanelState extends State<HostListPanel> {
   ) {
     final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController();
+    bool isLoading = false;
+    String? errorMessage;
+    StreamSubscription? errorSub;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.deepSpace.withAlpha(200),
-        shape: const BeveledRectangleBorder(
-          side: BorderSide(color: AppColors.neonCyan),
-          borderRadius: BorderRadiusGeometry.all(Radius.circular(9.0)),
-        ),
-        title: Text(
-          l10n.uplinkSecurity.toUpperCase(),
-          style: const TextStyle(
-            color: AppColors.neonCyan,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          ),
-        ),
-        content: TextField(
-          controller: controller,
-          obscureText: true,
-          style: const TextStyle(color: Colors.white),
-          onSubmitted: (_) {
-            Navigator.pop(context);
-            widget.client.connectToHost(
-              hostId,
-              password: controller.text,
-              hostName: hostName,
-            );
-          },
-          decoration: InputDecoration(
-            hintText: l10n.enterPasscode.toUpperCase(),
-            hintStyle: const TextStyle(color: AppColors.textGrey, fontSize: 12),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.neonCyan),
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          errorSub ??= widget.client.authErrorStream.listen((err) {
+            if (mounted) {
+              if (err == 'SUCCESS') {
+                errorSub?.cancel();
+                if (context.mounted) Navigator.pop(context);
+                return;
+              }
+              setState(() {
+                isLoading = false;
+                errorMessage = err;
+                controller.clear();
+              });
+            }
+          });
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF0F0F0F),
+            shape: const BeveledRectangleBorder(
+              side: BorderSide(color: AppColors.neonCyan),
+              borderRadius: BorderRadius.all(Radius.circular(9.0)),
             ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              l10n.cancel.toUpperCase(),
-              style: const TextStyle(color: AppColors.textGrey),
-            ),
-          ),
-          TextButton(
-            // style: ElevatedButton.styleFrom(
-            //   backgroundColor: AppColors.neonCyan,
-            //   foregroundColor: Colors.black,
-            // ),
-            onPressed: () {
-              Navigator.pop(context);
-              widget.client.connectToHost(
-                hostId,
-                password: controller.text,
-                hostName: hostName,
-              );
-            },
-            child: Text(
-              l10n.establish.toUpperCase(),
+            title: Text(
+              l10n.uplinkSecurity.toUpperCase(),
               style: const TextStyle(
-                fontWeight: FontWeight.bold,
                 color: AppColors.neonCyan,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
               ),
             ),
-          ),
-        ],
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (errorMessage != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.errorRed.withValues(alpha: 0.1),
+                      border: Border.all(color: AppColors.errorRed),
+                    ),
+                    child: Text(
+                      errorMessage!.toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.errorRed,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (isLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: CircularProgressIndicator(color: AppColors.neonCyan),
+                  )
+                else
+                  TextField(
+                    controller: controller,
+                    obscureText: true,
+                    autofocus: true,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'JetBrainsMonoNerdFont',
+                    ),
+                    onSubmitted: (val) {
+                      if (val.isEmpty) return;
+                      setState(() {
+                        isLoading = true;
+                        errorMessage = null;
+                      });
+                      widget.client.connectToHost(
+                        hostId,
+                        password: val,
+                        hostName: hostName,
+                      );
+                    },
+                    decoration: InputDecoration(
+                      hintText: l10n.enterPasscode.toUpperCase(),
+                      hintStyle: const TextStyle(
+                        color: AppColors.textGrey,
+                        fontSize: 12,
+                      ),
+                      enabledBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.neonCyan),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  errorSub?.cancel();
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  l10n.cancel.toUpperCase(),
+                  style: const TextStyle(color: AppColors.textGrey),
+                ),
+              ),
+              if (!isLoading)
+                TextButton(
+                  onPressed: () {
+                    if (controller.text.isEmpty) return;
+                    setState(() {
+                      isLoading = true;
+                      errorMessage = null;
+                    });
+                    widget.client.connectToHost(
+                      hostId,
+                      password: controller.text,
+                      hostName: hostName,
+                    );
+                  },
+                  child: Text(
+                    l10n.establish.toUpperCase(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.neonCyan,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
 }
-

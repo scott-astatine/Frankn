@@ -31,15 +31,30 @@ pub async fn list_processes(
 
     for p in sys.processes().values() {
         let name = p.name().to_string_lossy().to_string();
+        let cmd_vec: Vec<String> = p.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();
+        let cmd = cmd_vec.join(" ");
+
+        // --- Kernel Thread Filter ---
+        // 1. Skip if command line is empty (common for kernel tasks)
+        // 2. Skip common kernel patterns
+        if cmd.is_empty() || 
+           name.starts_with("kworker/") || 
+           name.starts_with("migration/") || 
+           name.contains("cpuhp/") ||
+           name == "idle" ||
+           name == "ksoftirqd" ||
+           name == "kthreadd" 
+        {
+            continue;
+        }
         
-        // Host-side filtering
+        // Host-side filtering (user search)
         if let Some(ref f) = filter_lower {
-            if !name.to_lowercase().contains(f) {
+            if !name.to_lowercase().contains(f) && !cmd.to_lowercase().contains(f) {
                 continue;
             }
         }
 
-        let cmd = p.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect::<Vec<_>>().join(" ");
         let status = format!("{:?}", p.status());
         let user = p.user_id().map(|u| u.to_string()).unwrap_or_else(|| "root".to_string());
 
@@ -48,12 +63,15 @@ pub async fn list_processes(
             0, 
             0.0, 
             status, 
-            cmd,
+            cmd.clone(),
             user
         ));
 
+        // Keep the lowest PID as the "representative" for the group
         if p.pid().as_u32() < entry.0 {
             entry.0 = p.pid().as_u32();
+            entry.3 = format!("{:?}", p.status());
+            entry.4 = cmd;
         }
         entry.1 += p.memory();
         entry.2 += p.cpu_usage();
@@ -83,10 +101,10 @@ pub async fn list_processes(
         },
         Some("name") => {
             list.sort_by(|a, b| {
-                a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or(""))
+                a["name"].as_str().unwrap_or("").to_lowercase().cmp(&b["name"].as_str().unwrap_or("").to_lowercase())
             });
         },
-        _ => { // Default: CPU
+        _ => { // Default: CPU (descending)
             list.sort_by(|a, b| {
                 b["cpu"]
                     .as_f64()

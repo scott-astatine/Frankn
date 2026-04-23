@@ -572,6 +572,12 @@ abstract class AppLocalizations {
   /// **'Selected'**
   String get selected;
 
+  /// No description provided for @search.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get search;
+
   /// No description provided for @filterProcesses.
   ///
   /// In en, this message translates to:

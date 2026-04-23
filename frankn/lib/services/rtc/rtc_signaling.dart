@@ -182,6 +182,13 @@ mixin RtcSignaling on RtcClientBase {
       FlutterForegroundTask.updateService(
         notificationTitle: title,
         notificationText: text,
+        notificationButtons: [
+          const NotificationButton(
+            id: 'disconnect',
+            text: '🛑 Severe',
+            textColor: AppColors.errorRed,
+          ),
+        ],
       );
     }
   }
@@ -207,10 +214,10 @@ mixin RtcSignaling on RtcClientBase {
         final client = this as RtcClient;
 
         if (isOnline) {
-          log("Neural Link Active: $id");
+          log("Host online: $id");
           client.onlineHostIds.add(id);
         } else {
-          log("Neural Link Severed: $id");
+          log("Host went down: $id");
           client.onlineHostIds.remove(id);
         }
         client._peerStatusController.add(data);

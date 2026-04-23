@@ -36,6 +36,7 @@ import 'package:frankn/main.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/auth_service.dart';
+import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/settings_service.dart';
 
 part 'rtc_message_handler.dart';
@@ -119,6 +120,13 @@ abstract class RtcClientBase {
 
   /// Updates the foreground service notification content.
   Future<void> updateBackgroundService({String? title, String? text});
+
+  /// Maps transfer IDs to their final destination directories.
+  /// Used by RtcMessageHandler to relocate files after download.
+  Map<String, String> get downloadTargetDirs;
+
+  /// Maps transfer IDs to whether notifications should be shown.
+  Map<String, bool> get showNotificationMap;
 
   /// Marks authentication as failed. Used by message handlers.
   set authFailed(bool value);
@@ -230,8 +238,11 @@ abstract class RtcClientBase {
   StreamController<Map<String, dynamic>> get commandResponseController;
 
   /// Controller for system notifications from host.
-  /// Streams D-Bus notifications for display on mobile device.
+  /// Receives D-Bus notifications that are displayed on the mobile device.
   StreamController<Map<String, dynamic>> get notificationController;
+
+  /// Controller for SSH binary data from host.
+  StreamController<Uint8List> get sshDataController;
 
   /// Controller for host connection state changes.
   /// Used by UI to update connection status indicators.
@@ -335,7 +346,8 @@ class RtcClient extends RtcClientBase
   /// Broadcast controller for peer status updates (online/offline).
   final StreamController<Map<String, dynamic>> _peerStatusController =
       StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get peerStatusStream => _peerStatusController.stream;
+  Stream<Map<String, dynamic>> get peerStatusStream =>
+      _peerStatusController.stream;
 
   /// Broadcast controller for available hosts list from signaling server.
   /// Emitted when host list is received or updated.
@@ -389,10 +401,21 @@ class RtcClient extends RtcClientBase
   Stream<Map<String, dynamic>> get notificationStream =>
       notificationController.stream;
 
+  @override
+  final StreamController<Uint8List> sshDataController =
+      StreamController<Uint8List>.broadcast();
+  Stream<Uint8List> get sshDataStream => sshDataController.stream;
+
   // ========== BASE IMPLEMENTATION ==========
 
   /// Setter for authentication failure flag.
   /// Used by message handlers to mark auth failures.
+  @override
+  Map<String, String> get downloadTargetDirs => _downloadTargetDirs;
+
+  @override
+  Map<String, bool> get showNotificationMap => _showNotificationMap;
+
   @override
   set authFailed(bool value) => isAuthFailed = value;
 
@@ -417,10 +440,10 @@ class RtcClient extends RtcClientBase
     final time = DateTime.now().toIso8601String().substring(11, 19);
     final logMsg = "[$time] $msg";
     print(logMsg);
-    
+
     _logHistory.insert(0, logMsg);
     if (_logHistory.length > 1000) _logHistory.removeLast();
-    
+
     _logController.add(logMsg);
   }
 

@@ -20,10 +20,11 @@ class _PairingDialogState extends State<PairingDialog> {
   void _onInitialize() async {
     final id = _idController.text.trim();
     final l10n = AppLocalizations.of(context)!;
-    final alias = _aliasController.text.trim().isEmpty 
-        ? l10n.lastConnectedHost // Fallback alias
+    final alias = _aliasController.text.trim().isEmpty
+        ? l10n
+              .lastConnectedHost // Fallback alias
         : _aliasController.text.trim();
-    
+
     if (id.length >= 10) {
       await SettingsService().saveHost(id, alias);
       if (mounted) Navigator.pop(context, true);
@@ -48,29 +49,58 @@ class _PairingDialogState extends State<PairingDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.newNeuralLink.toUpperCase(), 
-                style: const TextStyle(color: AppColors.neonPink, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 2)),
+              Text(
+                l10n.newNeuralLink.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.neonPink,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  letterSpacing: 2,
+                ),
+              ),
               const SizedBox(height: 24),
-              
-              Text(l10n.visualHash.toUpperCase(), style: const TextStyle(color: AppColors.textGrey, fontSize: 10, fontWeight: FontWeight.bold)),
+
+              Text(
+                l10n.visualHash.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.textGrey,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 12),
               _buildScannerSection(l10n),
-              
+
               const SizedBox(height: 24),
               _buildDivider(l10n),
               const SizedBox(height: 24),
-              
-              _buildInputField(l10n.hostId.toUpperCase(), "e.g. 550e8400-e29b...", _idController),
+
+              _buildInputField(
+                l10n.hostId.toUpperCase(),
+                "e.g. 550e8400-e29b...",
+                _idController,
+              ),
               const SizedBox(height: 16),
-              _buildInputField(l10n.aliasOptional.toUpperCase(), "e.g. WORK-RIG", _aliasController),
-              
+              _buildInputField(
+                l10n.aliasOptional.toUpperCase(),
+                "e.g. WORK-RIG",
+                _aliasController,
+              ),
+
               const SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text(l10n.abort.toUpperCase(), style: const TextStyle(color: AppColors.textGrey, fontWeight: FontWeight.bold, fontSize: 12)),
+                    child: Text(
+                      l10n.abort.toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.textGrey,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 16),
                   CyberButton(
@@ -123,12 +153,23 @@ class _PairingDialogState extends State<PairingDialog> {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.qr_code_scanner, color: Colors.white24, size: 32),
+                const Icon(
+                  Icons.qr_code_scanner,
+                  color: Colors.white24,
+                  size: 32,
+                ),
                 const SizedBox(height: 12),
                 TextButton(
                   onPressed: () => setState(() => _isScanning = true),
-                  child: Text(l10n.tapToScan.toUpperCase(), 
-                    style: const TextStyle(color: AppColors.textGrey, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  child: Text(
+                    l10n.tapToScan.toUpperCase(),
+                    style: const TextStyle(
+                      color: AppColors.textGrey,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -140,29 +181,64 @@ class _PairingDialogState extends State<PairingDialog> {
   Widget _buildDivider(AppLocalizations l10n) {
     return Row(
       children: [
-        Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.05))),
+        Expanded(
+          child: Container(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.05),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(l10n.orManual.toUpperCase(), style: const TextStyle(color: Colors.white10, fontSize: 9, fontWeight: FontWeight.w900)),
+          child: Text(
+            l10n.orManual.toUpperCase(),
+            style: const TextStyle(
+              color: Colors.white10,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
-        Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.05))),
+        Expanded(
+          child: Container(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.05),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildInputField(String label, String hint, TextEditingController controller) {
+  Widget _buildInputField(
+    String label,
+    String hint,
+    TextEditingController controller,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: AppColors.textGrey, fontSize: 10, fontWeight: FontWeight.bold)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textGrey,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         TextField(
           controller: controller,
-          style: const TextStyle(fontFamily: 'JetBrainsMonoNerdFont', fontSize: 13),
+          style: const TextStyle(
+            fontFamily: 'JetBrainsMonoNerdFont',
+            fontSize: 13,
+          ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(color: Colors.white10),
-            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white10)),
-            focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.neonPink)),
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white10),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.neonPink),
+            ),
           ),
         ),
       ],

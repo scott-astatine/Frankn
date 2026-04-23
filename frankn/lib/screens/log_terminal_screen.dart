@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class LogTerminalScreen extends StatefulWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   const LogTerminalScreen({super.key, required this.client});
 
   @override
@@ -19,12 +20,12 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
     super.initState();
     // Initialize with full history
     _logs = List.from(widget.client.logHistory);
-    
+
     widget.client.logStream.listen((log) {
       if (mounted) {
         setState(() {
           _logs.insert(0, log);
-          if (_logs.length > 1000) _logs.removeLast();
+          if (_logs.length > 5000) _logs.removeLast();
         });
       }
     });
@@ -52,14 +53,22 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("> ", style: TextStyle(color: AppColors.neonCyan, fontFamily: 'JetBrainsMonoNerdFont', fontSize: 12, fontWeight: FontWeight.bold)),
+                           Text(
+                            "> ",
+                            style: TextStyle(
+                              color: AppColors.neonCyan,
+                              fontFamily: 'JetBrainsMonoNerdFont',
+                              fontSize: SettingsService().terminalFontSize,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           Expanded(
                             child: Text(
-                              _logs[index],
-                              style: const TextStyle(
+                              _logs.reversed.toList()[index],
+                              style: TextStyle(
                                 fontFamily: 'JetBrainsMonoNerdFont',
                                 color: AppColors.matrixGreen,
-                                fontSize: 12,
+                                fontSize: SettingsService().terminalFontSize,
                                 height: 1.4,
                               ),
                             ),

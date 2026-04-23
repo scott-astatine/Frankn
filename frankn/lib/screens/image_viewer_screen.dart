@@ -1,13 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:share_plus/share_plus.dart';
 
 class ImageViewerScreen extends StatefulWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   final String remotePath;
   final String fileName;
 
@@ -22,18 +23,35 @@ class ImageViewerScreen extends StatefulWidget {
   State<ImageViewerScreen> createState() => _ImageViewerScreenState();
 }
 
-class _ImageViewerScreenState extends State<ImageViewerScreen> with FileTransferMixin {
+class _ImageViewerScreenState extends State<ImageViewerScreen>
+    with FileTransferMixin {
   @override
-  RtcClient get client => widget.client;
+  RtcThinClient get client => widget.client;
 
   File? _imageFile;
   bool _isInitialized = false;
+
+  StreamSubscription? _transferSub;
 
   @override
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     setupTransferListener();
+
+    // Listen for the specific completion of this file in the background
+    _transferSub = client.transferProgressStream.listen((data) {
+      if (data['type'] == 'complete' && data['file_name'] == widget.fileName) {
+        final String? path = data['final_path'];
+        if (path != null && mounted) {
+          setState(() {
+            _imageFile = File(path);
+            _isInitialized = true;
+          });
+        }
+      }
+    });
+
     _loadFile();
   }
 
@@ -44,17 +62,13 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> with FileTransfer
     downloadFile(
       widget.remotePath,
       showNotification: false,
-      onComplete: (file) async {
-        setState(() {
-          _imageFile = file;
-          _isInitialized = true;
-        });
-      },
+      isTemporary: true,
     );
   }
 
   @override
   void dispose() {
+    _transferSub?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -65,9 +79,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> with FileTransfer
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: _buildBody(),
-          ),
+          Positioned.fill(child: _buildBody()),
 
           if (_isInitialized)
             Positioned(
@@ -105,12 +117,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> with FileTransfer
     return InteractiveViewer(
       minScale: 0.5,
       maxScale: 4.0,
-      child: Center(
-        child: Image.file(
-          _imageFile!,
-          fit: BoxFit.contain,
-        ),
-      ),
+      child: Center(child: Image.file(_imageFile!, fit: BoxFit.contain)),
     );
   }
 
@@ -153,10 +160,12 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> with FileTransfer
             icon: const Icon(Icons.share, color: AppColors.neonCyan, size: 16),
             onPressed: () {
               if (_imageFile != null) {
-                SharePlus.instance.share(ShareParams(
-                  files: [XFile(_imageFile!.path)],
-                  text: widget.fileName,
-                ));
+                SharePlus.instance.share(
+                  ShareParams(
+                    files: [XFile(_imageFile!.path)],
+                    text: widget.fileName,
+                  ),
+                );
               }
             },
           ),

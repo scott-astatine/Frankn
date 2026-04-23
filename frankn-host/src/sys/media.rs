@@ -530,7 +530,7 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                         }
                     }
                 }
-                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(700)).await;
             }
         });
 
@@ -570,7 +570,7 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                         }
                     }
                 }
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
             }
         });
     }

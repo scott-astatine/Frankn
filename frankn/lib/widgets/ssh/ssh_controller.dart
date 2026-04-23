@@ -5,18 +5,16 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:xterm/xterm.dart';
 
 class SshController extends ChangeNotifier {
-  final RtcClient client;
+  final RtcThinClient client;
   final Terminal terminal = Terminal(maxLines: 5000);
 
   SSHClient? _sshClient;
   SSHSession? _sshSession;
   ServerSocket? _localServer;
-  RTCDataChannel? _sshChannel;
 
   bool _isConnecting = false;
   bool get isConnecting => _isConnecting;
@@ -33,6 +31,7 @@ class SshController extends ChangeNotifier {
   StreamController<Uint8List>? _hostToSocket;
   StreamSubscription? _socketSubscription;
   StreamSubscription? _commandSubscription;
+  StreamSubscription? _sshDataSub;
 
   SshController(this.client);
 
@@ -58,43 +57,18 @@ class SshController extends ChangeNotifier {
     );
 
     try {
-      _sshChannel = client.sshDC;
-      if (_sshChannel == null) {
-        throw Exception("WebRTC SSH Channel not found.");
-      }
-
-      // 1. Prepare for data flow
+      // 1. Prepare for data flow via Isolate Bridge
       _buffer.clear();
-      _hostToSocket =
-          StreamController<Uint8List>(); // Single subscriber (the socket)
+      _hostToSocket = StreamController<Uint8List>();
 
-      // Drain any early-buffered messages from RtcConnection and feed them
-      // into the buffer so nothing is lost before we installed this handler.
-      for (var data in client.drainSshEarlyBuffer()) {
-        _buffer.add(data);
-      }
-
-      _sshChannel!.onMessage = (msg) {
+      _sshDataSub = client.sshDataStream.listen((data) {
         if (_isDisposed) return;
-        final data = msg.isBinary ? msg.binary : utf8.encode(msg.text);
         if (_hostToSocket != null && _hostToSocket!.hasListener) {
-          _hostToSocket!.add(Uint8List.fromList(data));
+          _hostToSocket!.add(data);
         } else {
-          _buffer.add(Uint8List.fromList(data));
+          _buffer.add(data);
         }
-      };
-
-      // Set state handler once — outside the socket listen callback — to avoid
-      // reassignment on every new socket connection.
-      _sshChannel!.onDataChannelState = (state) {
-        if (_isDisposed) return;
-        if (state == RTCDataChannelState.RTCDataChannelClosed) {
-          terminal.write(
-            '\r\n\x1b[31m[SYSTEM] P2P Tunnel Terminated by Host.\x1b[0m\r\n',
-          );
-          stopSession();
-        }
-      };
+      });
 
       // 2. Start listening for the response BEFORE sending the command
       bool hostReady = false;
@@ -102,8 +76,7 @@ class SshController extends ChangeNotifier {
 
       _commandSubscription = client.commandResponseStream.listen((resp) {
         if (_isDisposed) return;
-        print("DEBUG: SshController received response: $resp");
-
+        
         final Map<String, dynamic> data;
         if (resp['type'] == 'response' && resp.containsKey('data')) {
           data = (resp['data'] as Map<String, dynamic>?) ?? {};
@@ -150,30 +123,6 @@ class SshController extends ChangeNotifier {
       if (_isDisposed) return;
       if (!hostReady) throw Exception("Host SSH not ready.");
 
-      // 5. Wait for channel to be OPEN
-
-      int retries = 0;
-      terminal.write(
-        '\x1b[36m[SYSTEM]\x1b[0m Waiting for P2P DataChannel (State: ${_sshChannel!.state})...\r\n',
-      );
-      while (_sshChannel!.state != RTCDataChannelState.RTCDataChannelOpen &&
-          retries < 100) {
-        if (_isDisposed) return;
-        await Future.delayed(const Duration(milliseconds: 100));
-        retries++;
-        if (retries % 10 == 0) {
-          terminal.write(
-            '\x1b[36m[SYSTEM]\x1b[0m Still waiting... (${_sshChannel!.state})\r\n',
-          );
-        }
-      }
-
-      if (_sshChannel!.state != RTCDataChannelState.RTCDataChannelOpen) {
-        throw Exception(
-          "WebRTC SSH Tunnel failed to open (State: ${_sshChannel!.state}).",
-        );
-      }
-
       terminal.write(
         '\x1b[36m[SYSTEM]\x1b[0m P2P Tunnel Open. Spawning bridge...\r\n',
       );
@@ -185,15 +134,11 @@ class SshController extends ChangeNotifier {
           socket.destroy();
           return;
         }
-        // Forward data from local socket to DataChannel
+        // Forward data from local socket to background isolate (via ThinClient)
         socket.listen(
           (data) {
             if (_isDisposed) return;
-            if (_sshChannel?.state == RTCDataChannelState.RTCDataChannelOpen) {
-              _sshChannel?.send(
-                RTCDataChannelMessage.fromBinary(Uint8List.fromList(data)),
-              );
-            }
+            client.sendSshInput(Uint8List.fromList(data));
           },
           onDone: () => stopSession(),
           onError: (e) {
@@ -202,7 +147,7 @@ class SshController extends ChangeNotifier {
           },
         );
 
-        // Forward buffered and future data from DataChannel to local socket
+        // Forward buffered and future data from isolate stream to local socket
         for (var data in _buffer) {
           socket.add(data);
         }
@@ -222,7 +167,7 @@ class SshController extends ChangeNotifier {
       final socket = await SSHSocket.connect(
         '127.0.0.1',
         _localServer!.port,
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 15));
 
       if (_isDisposed) {
         socket.destroy();
@@ -332,6 +277,7 @@ class SshController extends ChangeNotifier {
     _socketSubscription?.cancel();
     _hostToSocket?.close();
     _commandSubscription?.cancel();
+    _sshDataSub?.cancel();
 
     _sshSession = null;
     _sshClient = null;
@@ -339,6 +285,7 @@ class SshController extends ChangeNotifier {
     _hostToSocket = null;
     _socketSubscription = null;
     _commandSubscription = null;
+    _sshDataSub = null;
     ctrlActive = false;
     altActive = false;
     notifyListeners();

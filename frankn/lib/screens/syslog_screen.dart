@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class SyslogScreen extends StatefulWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   const SyslogScreen({super.key, required this.client});
 
   @override
@@ -26,7 +27,8 @@ class _SyslogScreenState extends State<SyslogScreen> {
 
     widget.client.commandResponseStream.listen((resp) {
       if (!mounted) return;
-      final Map<String, dynamic> data = (resp['type'] == 'response' && resp.containsKey('data'))
+      final Map<String, dynamic> data =
+          (resp['type'] == 'response' && resp.containsKey('data'))
           ? resp['data'] as Map<String, dynamic>
           : resp;
 
@@ -76,15 +78,18 @@ class _SyslogScreenState extends State<SyslogScreen> {
             Expanded(
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: SingleChildScrollView(
                   child: SelectableText(
                     _logContent,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'JetBrainsMonoNerdFont',
                       fontWeight: FontWeight.w600,
                       color: AppColors.matrixGreen,
-                      fontSize: 13,
+                      fontSize: SettingsService().terminalFontSize,
                     ),
                   ),
                 ),
@@ -114,7 +119,11 @@ class _SyslogScreenState extends State<SyslogScreen> {
                   setState(() => _isSearching = false);
                   _fetchLogs();
                 },
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'JetBrainsMonoNerdFont'),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: SettingsService().terminalFontSize,
+                  fontFamily: 'JetBrainsMonoNerdFont',
+                ),
                 decoration: const InputDecoration(
                   hintText: "SERVICE (e.g. sshd) or EMPTY",
                   hintStyle: TextStyle(color: Colors.white24, fontSize: 12),
@@ -135,7 +144,11 @@ class _SyslogScreenState extends State<SyslogScreen> {
               ),
             ),
           IconButton(
-            icon: Icon(_isSearching ? Icons.close : Icons.search, color: AppColors.neonCyan, size: 20),
+            icon: Icon(
+              _isSearching ? Icons.close : Icons.search,
+              color: AppColors.neonCyan,
+              size: 20,
+            ),
             onPressed: () => setState(() {
               _isSearching = !_isSearching;
               if (!_isSearching) {
@@ -145,7 +158,11 @@ class _SyslogScreenState extends State<SyslogScreen> {
             }),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: AppColors.neonCyan, size: 20),
+            icon: const Icon(
+              Icons.refresh,
+              color: AppColors.neonCyan,
+              size: 20,
+            ),
             onPressed: _fetchLogs,
           ),
         ],

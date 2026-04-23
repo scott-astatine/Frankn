@@ -52,7 +52,6 @@ class SignalingMessage {
   static const Error = "error";
 }
 
-
 class DcMsg {
   static const Challenge = "challenge";
   static const AuthSuccess = "auth_success";
@@ -64,7 +63,6 @@ class DcMsg {
   static const FileChunk = "file_chunk";
   static const StreamEnd = "stream_end";
   static const Telemetry = "telemetry";
-
 
   static const Key = "dc_msg_type";
 
@@ -122,7 +120,6 @@ class DcMsg {
 class MediaDCMessage {
   static const MediaUpdate = "media_update";
   static const MediaPositionUpdate = "media_position_update";
-
 }
 
 class FileUtils {

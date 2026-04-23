@@ -1,22 +1,17 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:frankn/services/notification_service.dart';
-import 'package:frankn/services/rtc/rtc.dart';
-import 'package:frankn/services/transfer_engine.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:crypto/crypto.dart';
 import 'package:hex/hex.dart';
 
 /// Mixin providing file transfer capabilities to any Stateful Widget.
 mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
-  RtcClient get client;
+  RtcThinClient get client;
 
   bool isLoading = false;
   String transferMsg = "";
@@ -74,21 +69,40 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
         _onGenericMessage(data['message'].toString());
       }
     });
+
+    client.transferProgressStream.listen((data) {
+      if (!mounted) return;
+      final type = data['type'];
+
+      if (type == 'complete') {
+        setState(() {
+          isLoading = false;
+          transferMsg = "";
+        });
+        refreshDirectory();
+      } else if (type == 'failed') {
+        setState(() {
+          isLoading = false;
+          transferMsg = "";
+        });
+      } else if (data['progress'] != null) {
+        // Safe progress update
+        setState(() {
+          transferProgress = (data['progress'] as num).toDouble();
+        });
+      }
+    });
   }
 
   void _onDownloadStart(Map<String, dynamic> data) {
     final id = data['id'];
-    final bool showNotif = _showNotificationMap[id] ?? false;
     _totalSizes[id] = data['total_size'];
 
-    // For resume-aware downloads, the host tells us what offset it started from.
-    // We track this so progress reflects total bytes (not just new bytes).
     final hostOffset = data['offset'] as int? ?? 0;
     _downloadResumeOffsets[id] = hostOffset;
     _downloadedSizes[id] = hostOffset;
     _downloadFileNames[id] = data['file_name'] ?? "File";
 
-    // Set a 5-minute timeout to clean up stalled transfers
     _transferTimeouts[id]?.cancel();
     _transferTimeouts[id] = Timer(const Duration(minutes: 5), () {
       client.log("FS TIMEOUT: Download $id stalled — cleaning up.");
@@ -106,23 +120,12 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       transferProgress = hostOffset / (_totalSizes[id] ?? 1);
       transferMsg = "DOWNLOADING: ${data['file_name']}";
     });
-
-    if (showNotif) {
-      NotificationService().showProgressNotification(
-        id.hashCode.abs() % 100000,
-        "Downloading '${data['file_name']}'...",
-        "${(transferProgress * 100).toStringAsFixed(1)}%",
-        transferProgress * 100,
-      );
-    }
   }
 
   void _onDownloadChunk(Map<String, dynamic> data) {
     final id = data['id'];
-    final bool showNotif = _showNotificationMap[id] ?? true;
     final chunkSize = data['chunk_size'] as int;
 
-    // Extended frames provide total_received directly; legacy frames need incrementing.
     final totalReceived =
         data['total_received'] as int? ??
         (_downloadedSizes[id] ?? 0) + chunkSize;
@@ -134,77 +137,15 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
     setState(() {
       transferProgress = progress;
     });
-
-    // Notification update every 1MB
-    if (showNotif &&
-        (totalReceived % (1024 * 1024) < chunkSize ||
-            totalReceived == totalSize)) {
-      NotificationService().showProgressNotification(
-        id.hashCode.abs() % 100000,
-        "Dowonloading ...",
-        "${(progress * 100).toStringAsFixed(1)}%",
-        progress * 100,
-      );
-    }
-  }
-
-  Future<void> _moveFile(File source, String destPath) async {
-    try {
-      await source.rename(destPath);
-    } catch (e) {
-      // Fallback for cross-device link error (errno 18)
-      if (e is FileSystemException && e.osError?.errorCode == 18) {
-        await source.copy(destPath);
-        await source.delete();
-      } else {
-        rethrow;
-      }
-    }
   }
 
   Future<void> _onDownloadComplete(Map<String, dynamic> data) async {
     final id = data['id'] ?? "0";
-    final tempPath = data['temp_path'] as String;
-    final fileName = data['file_name'] as String;
-    final bool showNotif = _showNotificationMap[id] ?? true;
 
     try {
-      setState(() => transferMsg = "FINALIZING...");
-      final tempFile = File(tempPath);
-      String? targetDir = _downloadTargetDirs[id];
-
-      if (targetDir == null) {
-        // No target dir — user picked a directory via FilePicker
-        final appDocDir = await getApplicationDocumentsDirectory();
-        final destPath = "${appDocDir.path}/$fileName";
-        await _moveFile(tempFile, destPath);
-
-        if (_onFileReceived.containsKey(id)) {
-          _onFileReceived[id]!(File(destPath));
-          _onFileReceived.remove(id);
-        }
-      } else if (targetDir.isEmpty) {
-        // Empty string means "keep in temp" — used by onComplete callbacks
-        if (_onFileReceived.containsKey(id)) {
-          _onFileReceived[id]!(tempFile);
-          _onFileReceived.remove(id);
-        }
-        // Don't delete — caller owns the temp file now
-      } else {
-        final destPath = "$targetDir/$fileName";
-        await _moveFile(tempFile, destPath);
-
-        if (showNotif) {
-          final notifId = id.hashCode.abs() % 100000;
-          await NotificationService().showDownloadComplete(
-            notifId,
-            fileName,
-            destPath,
-          );
-        }
-      }
+      setState(() => transferMsg = "DOWNLOAD COMPLETE");
     } catch (e) {
-      client.log("FS ERROR: Finalization failed: $e");
+      client.log("FS ERROR: Notification failed: $e");
     } finally {
       _cleanupTransfer(id);
       setState(() {
@@ -232,31 +173,15 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
 
   void refreshDirectory();
 
-  /// Waits until the FS channel's buffered amount drains below the given threshold.
-  /// Prevents UploadEnd from racing ahead of pending data chunks.
-  Future<void> _drainFsBuffer({
-    int threshold = 0,
-    int maxWaitMs = 10000,
-  }) async {
-    final start = DateTime.now();
-    while ((client.fsDC?.bufferedAmount ?? 0) > threshold) {
-      if (DateTime.now().difference(start).inMilliseconds > maxWaitMs) {
-        client.log("FS WARN: Buffer drain timed out — proceeding anyway.");
-        break;
-      }
-      await Future.delayed(const Duration(milliseconds: 10));
-    }
-  }
-
   Future<void> downloadFile(
     String remotePath, {
     Function(File)? onComplete,
     bool showNotification = true,
+    bool isTemporary = false,
   }) async {
     final requestId = const Uuid().v4();
     _showNotificationMap[requestId] = showNotification;
 
-    // Determine resume offset by checking for existing partial file
     int resumeOffset = 0;
     final tempDir = globalTempDir;
     final partialFile = File('${tempDir.path}/$requestId.part');
@@ -265,15 +190,15 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       client.log("FS: Resuming download $requestId from offset $resumeOffset");
     }
 
-    if (onComplete != null) {
-      _onFileReceived[requestId] = onComplete;
-      // Keep the file in the temp directory — the callback decides what to do with it.
-      // Setting an empty string targetDir signals _onDownloadComplete to skip relocation.
+    if (onComplete != null || isTemporary) {
+      if (onComplete != null) _onFileReceived[requestId] = onComplete;
       _downloadTargetDirs[requestId] = '';
       client.sendDownloadInit(
         id: requestId,
         path: remotePath,
         resumeOffset: resumeOffset,
+        targetDir: '', // Empty means temp dir only
+        showNotification: showNotification,
       );
       return;
     }
@@ -289,55 +214,38 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       id: requestId,
       path: remotePath,
       resumeOffset: resumeOffset,
+      targetDir: selectedDir,
+      showNotification: showNotification,
     );
   }
 
   Future<void> saveEditorContent(String remotePath, String content) async {
-    final bytes = utf8.encode(content);
     final transferId = const Uuid().v4();
-    final hash = HEX.encode(sha256.convert(bytes).bytes).toLowerCase();
 
     setState(() {
       isLoading = true;
+      transferMsg = "PREPARING UPLOAD...";
+      transferProgress = 0.0;
+    });
+
+    final tempDir = globalTempDir;
+    final file = File('${tempDir.path}/$transferId.txt');
+    await file.writeAsString(content);
+
+    final hash = await sha256.bind(file.openRead()).first;
+    final hashStr = HEX.encode(hash.bytes).toLowerCase();
+
+    setState(() {
       transferMsg = "SAVING TO HOST...";
     });
 
-    // Use new transfer protocol
-    client.sendTransferInit(
-      id: transferId,
-      path: remotePath,
-      totalSize: bytes.length,
-      hash: hash,
-    );
-
-    int offset = 0;
-    int seq = 0;
-    const chunkSize = 61440; // 60KB
-    const bufferThreshold = 1024 * 1024; // 1MB
-
-    while (offset < bytes.length) {
-      if ((client.fsDC?.bufferedAmount ?? 0) > bufferThreshold) {
-        await Future.delayed(const Duration(milliseconds: 10));
-        continue;
-      }
-      int end = (offset + chunkSize < bytes.length)
-          ? offset + chunkSize
-          : bytes.length;
-      final chunk = Uint8List.fromList(bytes.sublist(offset, end));
-      final isFinal = end >= bytes.length;
-      client.sendUploadChunkRaw(
-        id: transferId,
-        data: chunk,
-        offset: offset,
-        seq: seq,
-        flags: (isFinal ? 0x02 : 0) | (seq % 50 == 0 ? 0x04 : 0),
-      );
-      offset = end;
-      seq++;
-      if (mounted) setState(() => transferProgress = offset / bytes.length);
-    }
-    // Drain all buffered data before final chunk is processed
-    await _drainFsBuffer();
+    client.sendIntent('upload_init', {
+      'id': transferId,
+      'file_name': remotePath.split('/').last,
+      'local_path': file.path,
+      'remote_path': remotePath,
+      'hash': hashStr,
+    });
   }
 
   Future<void> uploadFile(String currentRemotePath) async {
@@ -357,72 +265,19 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       transferProgress = 0.0;
     });
 
-    // Compute hash efficiently by streaming from disk
     final hash = await sha256.bind(file.openRead()).first;
     final hashStr = HEX.encode(hash.bytes).toLowerCase();
 
     setState(() {
       transferMsg = "UPLOADING: ${result.files.single.name}";
     });
-    
-    NotificationService().showProgressNotification(
-      transferId.hashCode.abs() % 100000,
-      "Uploading '${result.files.single.name}'...",
-      "0.0%",
-      0.0,
-    );
 
-    try {
-      final engine = TransferEngine(client);
-      await engine.upload(
-        id: transferId,
-        remotePath: targetPath,
-        file: file,
-        hash: hashStr,
-        onProgress: ({required progress, required bytesTransferred, required totalBytes}) {
-          if (mounted) {
-            setState(() {
-              transferProgress = progress;
-            });
-          }
-          
-          // Update notification every 1MB or on completion
-          if (bytesTransferred % (1024 * 1024) < 61440 || bytesTransferred == totalBytes) {
-            NotificationService().showProgressNotification(
-              transferId.hashCode.abs() % 100000,
-              "Uploading '${result.files.single.name}'...",
-              "${(progress * 100).toStringAsFixed(1)}%",
-              progress * 100,
-            );
-          }
-        },
-      );
-      engine.dispose();
-      
-      NotificationService().showProgressNotification(
-        transferId.hashCode.abs() % 100000,
-        "Upload Complete",
-        "'${result.files.single.name}' uploaded successfully.",
-        100.0,
-      );
-      
-      client.log("FS: Upload complete for $targetPath");
-      refreshDirectory();
-    } catch (e) {
-      NotificationService().showProgressNotification(
-        transferId.hashCode.abs() % 100000,
-        "Upload Failed",
-        "'${result.files.single.name}' failed to upload.",
-        100.0, // Finish progress to let it be dismissed
-      );
-      client.log("FS ERROR: Upload failed - $e");
-    } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-          transferMsg = "";
-        });
-      }
-    }
+    client.sendIntent('upload_init', {
+      'id': transferId,
+      'file_name': result.files.single.name,
+      'local_path': file.path,
+      'remote_path': targetPath,
+      'hash': hashStr,
+    });
   }
 }

@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/utils/cyber_card.dart';
 
 class VolumeMixerDialog extends StatefulWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   const VolumeMixerDialog({super.key, required this.client});
 
   @override
@@ -86,7 +86,10 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: AppColors.deepSpace.withAlpha(200),
-          border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.3), width: 1.5),
+          border: Border.all(
+            color: AppColors.neonCyan.withValues(alpha: 0.3),
+            width: 1.5,
+          ),
           borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
@@ -112,7 +115,11 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.refresh, color: Colors.white38, size: 20),
+                  icon: const Icon(
+                    Icons.refresh,
+                    color: Colors.white38,
+                    size: 20,
+                  ),
                   onPressed: _refresh,
                 ),
               ],
@@ -123,7 +130,9 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                   ? const SizedBox(
                       height: 200,
                       child: Center(
-                        child: CircularProgressIndicator(color: AppColors.neonCyan),
+                        child: CircularProgressIndicator(
+                          color: AppColors.neonCyan,
+                        ),
                       ),
                     )
                   : ListView.builder(
@@ -132,14 +141,19 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                       itemBuilder: (context, index) {
                         final dev = _devices[index];
                         final bool isActive = dev['is_active'] ?? false;
-                        final double currentVol = (dev['volume'] as num).toDouble();
+                        final double currentVol = (dev['volume'] as num)
+                            .toDouble();
                         final bool isOverdrive = currentVol > 1.0;
-                        final Color accentColor = isOverdrive ? AppColors.neonPink : AppColors.neonCyan;
+                        final Color accentColor = isOverdrive
+                            ? AppColors.neonPink
+                            : AppColors.neonCyan;
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 16),
                           child: CyberCard(
-                            borderColor: isActive ? accentColor.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05),
+                            borderColor: isActive
+                                ? accentColor.withValues(alpha: 0.3)
+                                : Colors.white.withValues(alpha: 0.05),
                             child: Padding(
                               padding: const EdgeInsets.all(12),
                               child: Column(
@@ -148,14 +162,32 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                                   Row(
                                     children: [
                                       GestureDetector(
-                                        onTap: () => _setActiveDevice(dev['id']),
+                                        onTap: () =>
+                                            _setActiveDevice(dev['id']),
                                         child: Container(
-                                          width: 20, height: 20,
+                                          width: 20,
+                                          height: 20,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            border: Border.all(color: isActive ? accentColor : Colors.white24, width: 2),
+                                            border: Border.all(
+                                              color: isActive
+                                                  ? accentColor
+                                                  : Colors.white24,
+                                              width: 2,
+                                            ),
                                           ),
-                                          child: isActive ? Center(child: Container(width: 10, height: 10, decoration: BoxDecoration(color: accentColor, shape: BoxShape.circle))) : null,
+                                          child: isActive
+                                              ? Center(
+                                                  child: Container(
+                                                    width: 10,
+                                                    height: 10,
+                                                    decoration: BoxDecoration(
+                                                      color: accentColor,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                )
+                                              : null,
                                         ),
                                       ),
                                       const SizedBox(width: 12),
@@ -163,7 +195,9 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                                         child: Text(
                                           dev['name'].toString().toUpperCase(),
                                           style: TextStyle(
-                                            color: isActive ? Colors.white : Colors.white38,
+                                            color: isActive
+                                                ? Colors.white
+                                                : Colors.white38,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w900,
                                             letterSpacing: 0.5,
@@ -186,11 +220,16 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                                   SliderTheme(
                                     data: SliderThemeData(
                                       activeTrackColor: accentColor,
-                                      inactiveTrackColor: Colors.white.withValues(alpha: 0.05),
+                                      inactiveTrackColor: Colors.white
+                                          .withValues(alpha: 0.05),
                                       thumbColor: Colors.white,
-                                      overlayColor: accentColor.withValues(alpha: 0.1),
+                                      overlayColor: accentColor.withValues(
+                                        alpha: 0.1,
+                                      ),
                                       trackHeight: 2,
-                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                      thumbShape: const RoundSliderThumbShape(
+                                        enabledThumbRadius: 6,
+                                      ),
                                     ),
                                     child: Slider(
                                       value: currentVol.clamp(0.0, 1.5),
@@ -217,11 +256,17 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Colors.white.withValues(alpha: 0.05),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: Text(
                   l10n.close.toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 2),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                  ),
                 ),
               ),
             ),

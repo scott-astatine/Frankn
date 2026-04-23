@@ -88,5 +88,6 @@
   "sortBySize": "Sort by Size",
   "sortByDate": "Sort by Date",
   "selected": "Selected",
+  "search": "Search",
   "filterProcesses": "Filter Processes..."
 }

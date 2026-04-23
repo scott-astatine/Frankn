@@ -10,8 +10,8 @@ class CyberButton extends StatefulWidget {
   final bool isSmall;
 
   const CyberButton({
-    super.key, 
-    required this.text, 
+    super.key,
+    required this.text,
     required this.onPressed,
     this.variant = CyberButtonVariant.primary,
     this.isSmall = false,
@@ -21,9 +21,10 @@ class CyberButton extends StatefulWidget {
   State<CyberButton> createState() => _CyberButtonState();
 }
 
-class _CyberButtonState extends State<CyberButton> with SingleTickerProviderStateMixin {
+class _CyberButtonState extends State<CyberButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  
+
   @override
   void initState() {
     super.initState();
@@ -43,10 +44,14 @@ class _CyberButtonState extends State<CyberButton> with SingleTickerProviderStat
 
   Color _getVariantColor() {
     switch (widget.variant) {
-      case CyberButtonVariant.warning: return AppColors.cyberYellow;
-      case CyberButtonVariant.destructive: return AppColors.errorRed;
-      case CyberButtonVariant.secondary: return AppColors.neonPink;
-      default: return AppColors.neonCyan;
+      case CyberButtonVariant.warning:
+        return AppColors.cyberYellow;
+      case CyberButtonVariant.destructive:
+        return AppColors.errorRed;
+      case CyberButtonVariant.secondary:
+        return AppColors.neonPink;
+      default:
+        return AppColors.neonCyan;
     }
   }
 
@@ -68,8 +73,8 @@ class _CyberButtonState extends State<CyberButton> with SingleTickerProviderStat
             offset: Offset(_controller.value, _controller.value),
             child: Container(
               padding: EdgeInsets.symmetric(
-                horizontal: widget.isSmall ? 12 : 20, 
-                vertical: widget.isSmall ? 8 : 12
+                horizontal: widget.isSmall ? 12 : 20,
+                vertical: widget.isSmall ? 8 : 12,
               ),
               decoration: BoxDecoration(
                 color: color,
@@ -78,14 +83,22 @@ class _CyberButtonState extends State<CyberButton> with SingleTickerProviderStat
                 boxShadow: [
                   BoxShadow(
                     color: color.withValues(alpha: 0.4),
-                    offset: Offset(4 - _controller.value, 4 - _controller.value),
+                    offset: Offset(
+                      4 - _controller.value,
+                      4 - _controller.value,
+                    ),
                     blurRadius: 0,
                   ),
                 ],
               ),
               child: Text(
                 widget.text.toUpperCase(),
-                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1),
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                  letterSpacing: 1,
+                ),
               ),
             ),
           );

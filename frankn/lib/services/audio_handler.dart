@@ -1,5 +1,5 @@
 import 'package:audio_service/audio_service.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:volume_controller/volume_controller.dart';
 
@@ -20,7 +20,7 @@ Future<void> initAudioService() async {
 }
 
 class FranknAudioHandler extends BaseAudioHandler {
-  final RtcClient _client = RtcClient();
+  final RtcThinClient _client = RtcThinClient();
 
   FranknAudioHandler() {
     _initVolumeListener();
@@ -78,7 +78,7 @@ class FranknAudioHandler extends BaseAudioHandler {
         MediaItem(
           id: 'frankn_remote_media',
           album: hostLabel,
-          title: "[$hostLabel] ${title ?? currentItem?.title ?? 'No Media'}",
+          title: title ?? currentItem?.title ?? 'No Media',
           artist: artist ?? currentItem?.artist ?? 'Frankn Host',
           duration: duration ?? currentItem?.duration,
           artUri: artUri ?? currentItem?.artUri,
@@ -165,4 +165,3 @@ class FranknAudioHandler extends BaseAudioHandler {
     }
   }
 }
-

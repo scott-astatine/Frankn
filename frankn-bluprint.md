@@ -52,7 +52,7 @@ I've implemented a robust backend that interfaces directly with Linux system API
 ### B. The "interface" (Flutter Client)
 The UI is now highly functional and visually polished:
 - **Immersive Terminal**: Full-screen SSH via `dartssh2` and `xterm.dart` with Nerd Font support.
-- **Pairing System**: QR Code scanner and manual 12-digit ID entry for persistent "Neural Links."
+- **Pairing System**: QR Code scanner and manual 12-digit ID entry for persistent "Hosts"
 - **File Browser**: Refactored for speed with real-time progress bars and bulk actions.
 - **Notification Mirroring**: Linux D-Bus notifications pushed to mobile via `awesome_notifications`.
 - **Dynamic Settings**: Persistent app configuration (Signaling URL, font size, themes).

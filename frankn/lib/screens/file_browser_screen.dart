@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/file_browser/file_browser_state.dart';
 import 'package:frankn/utils/file_browser/file_browser_ui.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
@@ -11,7 +11,7 @@ import 'package:frankn/screens/image_viewer_screen.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class FileBrowserScreen extends StatefulWidget {
-  final RtcClient client;
+  final RtcThinClient client;
   const FileBrowserScreen({super.key, required this.client});
 
   @override
@@ -21,7 +21,7 @@ class FileBrowserScreen extends StatefulWidget {
 class _FileBrowserScreenState extends State<FileBrowserScreen>
     with FileTransferMixin {
   @override
-  RtcClient get client => widget.client;
+  RtcThinClient get client => widget.client;
   late final FileBrowserState _browserState;
   bool _isGridView = false;
 
@@ -80,6 +80,10 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
         onClearSelection: () => _browserState.clearSelection(),
         onDeleteSelected: _handleBulkDelete,
         onDownloadSelected: _handleBulkDownload,
+        isSearching: _browserState.isSearching,
+        searchController: _browserState.searchController,
+        onSearchChanged: (val) => _browserState.setSearchQuery(val),
+        onExitSearch: () => _browserState.exitSearch(),
         onSort: (val) {
           if (val == "name") _browserState.setSortBy(SortOption.name);
           if (val == "size") _browserState.setSortBy(SortOption.size);
@@ -136,7 +140,7 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
 
   Widget _buildMainContent(AppLocalizations l10n) {
     final entries = _browserState.getFilteredEntries();
-    if (entries.isEmpty && !_browserState.isLoading)
+    if (entries.isEmpty && !_browserState.isLoading) {
       return Center(
         child: Text(
           l10n.noDataFound.toUpperCase().replaceAll(" ", "_"),
@@ -146,15 +150,16 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
           ),
         ),
       );
+    }
 
     if (_isGridView) {
       return GridView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.85,
+          crossAxisSpacing: 5,
+          mainAxisSpacing: 2,
+          childAspectRatio: 0.75,
         ),
         itemCount: entries.length,
         itemBuilder: (context, index) => _buildItem(entries[index], true),
@@ -187,7 +192,9 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
           _browserState.navigateDown(entry['name']);
         } else {
           final name = entry['name'] as String;
-          if (FileUtils.getFileIcon(name) == Icons.image) {
+          final icon = FileUtils.getFileIcon(name);
+
+          if (icon == Icons.image) {
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -198,7 +205,7 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
                 ),
               ),
             );
-          } else {
+          } else if (icon == Icons.code || icon == Icons.article_outlined || name.endsWith('.txt')) {
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -209,6 +216,9 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
                 ),
               ),
             );
+          } else {
+            // For PDFs, Videos, and other binaries, just trigger a normal download with notification
+            downloadFile(fullPath);
           }
         }
       },

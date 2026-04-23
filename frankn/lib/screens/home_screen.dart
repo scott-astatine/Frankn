@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frankn/screens/frankn_dashboard.dart';
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/host_list_panel.dart';
 import 'package:frankn/widgets/status_badge.dart';
@@ -15,7 +15,7 @@ class HomeScreen extends StatelessWidget {
 
   void _confirmDestructiveAction(
     BuildContext context,
-    RtcClient client,
+    RtcThinClient client,
     String title,
     String cmd,
     Map<String, dynamic>? args,
@@ -64,7 +64,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _showAdminOverride(BuildContext context, RtcClient client) {
+  void _showAdminOverride(BuildContext context, RtcThinClient client) {
     final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
@@ -186,6 +186,7 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildGridButton(
                   Icons.link_off,
@@ -197,8 +198,6 @@ class HomeScreen extends StatelessWidget {
                     Navigator.pop(context);
                   },
                 ),
-                const SizedBox(width: 16),
-                Expanded(child: const SizedBox()),
               ],
             ),
           ],
@@ -264,7 +263,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final client = RtcClient();
+    final client = RtcThinClient();
 
     return StreamBuilder<HostConnectionState>(
       stream: client.hostStateStream,
@@ -286,7 +285,7 @@ class HomeScreen extends StatelessWidget {
 
   PreferredSizeWidget _buildAppBar(
     BuildContext context,
-    RtcClient client,
+    RtcThinClient client,
     bool isAuthenticated,
   ) {
     final l10n = AppLocalizations.of(context)!;
@@ -308,12 +307,12 @@ class HomeScreen extends StatelessWidget {
           if (isAuthenticated) ...[
             Text(
               client.currentHostName ?? "",
-              style:  GoogleFonts.songMyung(
-              color: AppColors.textWhite,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 2,
-              fontSize: 12,
-            ),
+              style: GoogleFonts.songMyung(
+                color: AppColors.textWhite,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+                fontSize: 12,
+              ),
             ),
           ],
         ],
