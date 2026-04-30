@@ -1,10 +1,10 @@
+use crate::HostMessage;
+use crate::ops::rtc::RTCConn;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Bytes;
-use sha2::{Digest, Sha256};
-use crate::sys::rtc::RTCConn;
-use crate::HostMessage;
 
 /// Options for the data streamer
 pub struct StreamOptions {
@@ -16,7 +16,7 @@ pub struct StreamOptions {
 impl Default for StreamOptions {
     fn default() -> Self {
         Self {
-            chunk_size: 61440,           // 60KB chunks (max safe density)
+            chunk_size: 61440,             // 60KB chunks (max safe density)
             buffer_threshold: 1024 * 1024, // 1MB backpressure limit
             channel_label: "frankn_fs".to_string(),
         }
@@ -59,19 +59,29 @@ pub async fn stream_data<R: AsyncRead + Unpin>(
         loop {
             let conn = rtc_conn.lock().await;
             let buffered = conn.get_buffered_amount(&options.channel_label).await;
-            
+
             if buffered < options.buffer_threshold {
-                if let Err(e) = conn.send_message(&options.channel_label, &Bytes::from(frame)).await {
-                    return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e.to_string()));
+                if let Err(e) = conn
+                    .send_message(&options.channel_label, &Bytes::from(frame))
+                    .await
+                {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::BrokenPipe,
+                        e.to_string(),
+                    ));
                 }
                 crate::log!("FS: Sent chunk for {}. Length: {} bytes", id, n);
                 break; // Move to next chunk
             }
-            
+
             drop(conn);
             wait_count += 1;
             if wait_count % 100 == 0 {
-                crate::log!("FS: Backpressure stall for session {}. Current Buffer: {} bytes", id, buffered);
+                crate::log!(
+                    "FS: Backpressure stall for session {}. Current Buffer: {} bytes",
+                    id,
+                    buffered
+                );
             }
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         }
@@ -111,7 +121,13 @@ pub async fn send_managed_transfer<R: AsyncRead + Unpin + Send + 'static>(
         }
 
         // 2. Stream the binary data
-        let hash_result = stream_data(reader, transfer_id.clone(), Arc::clone(&conn_for_stream), options).await;
+        let hash_result = stream_data(
+            reader,
+            transfer_id.clone(),
+            Arc::clone(&conn_for_stream),
+            options,
+        )
+        .await;
 
         // 3. Always send Transfer End so the client can clean up
         let end_msg = match hash_result {
@@ -121,7 +137,11 @@ pub async fn send_managed_transfer<R: AsyncRead + Unpin + Send + 'static>(
                 hash: Some(hash),
             },
             Err(ref e) => {
-                crate::elog!("FS: Transfer failed for {} ({:?}). Sending StreamEnd without hash.", transfer_id, e);
+                crate::elog!(
+                    "FS: Transfer failed for {} ({:?}). Sending StreamEnd without hash.",
+                    transfer_id,
+                    e
+                );
                 HostMessage::StreamEnd {
                     id: transfer_id.clone(),
                     timestamp: crate::utils::get_timestamp(),

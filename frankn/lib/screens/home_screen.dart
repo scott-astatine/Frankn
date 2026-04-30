@@ -1,17 +1,202 @@
 import 'package:flutter/material.dart';
+import 'package:frankn/services/settings_service.dart';
+import 'package:frankn/screens/dohee_chat_screen.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/screens/frankn_dashboard.dart';
+import 'package:frankn/widgets/dohee_chat/model_selector_dialog.dart';
+import 'package:frankn/screens/settings_screen.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/utils/cyber_button.dart';
+import 'package:frankn/utils/cyber_card.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/host_list_panel.dart';
 import 'package:frankn/widgets/status_badge.dart';
-import 'package:frankn/screens/settings_screen.dart';
-import 'package:frankn/utils/cyber_card.dart';
-import 'package:frankn/utils/cyber_button.dart';
-import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final client = RtcThinClient();
+
+    return StreamBuilder<HostConnectionState>(
+      stream: client.hostStateStream,
+      initialData: client.currentHostState,
+      builder: (context, snapshot) {
+        final isAuthenticated =
+            snapshot.data == HostConnectionState.authenticated;
+
+        return Scaffold(
+          backgroundColor: AppColors.voidBlack,
+          appBar: _buildAppBar(context, client, isAuthenticated),
+          body: isAuthenticated
+              ? FranknDashboard(client: client)
+              : HostListPanel(client: client),
+        );
+      },
+    );
+  }
+
+  void _showNeuralChatDialog(BuildContext context, RtcThinClient client) {
+    final defaultModel = SettingsService().llmDefaultModel;
+    if (defaultModel.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            client: client,
+            modelPath: defaultModel,
+          ),
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (context) => ModelSelectorDialog(client: client),
+      );
+    }
+  }
+
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    RtcThinClient client,
+    bool isAuthenticated,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      title: Row(
+        children: [
+          isAuthenticated
+              ? IconButton(
+                  onPressed: () => _showNeuralChatDialog(context, client),
+                  icon: Icon(Icons.auto_awesome),
+                )
+              : SizedBox(),
+          Text(
+            l10n.appName,
+            style: GoogleFonts.songMyung(
+              color: AppColors.neonCyan,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+              fontSize: 16,
+            ),
+          ),
+          const Text(":", style: TextStyle(color: Colors.white24)),
+          if (isAuthenticated) ...[
+            Text(
+              client.currentHostName ?? "",
+              style: GoogleFonts.songMyung(
+                color: AppColors.textWhite,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        if (isAuthenticated) ...[
+          IconButton(
+            icon: const Icon(
+              Icons.power_settings_new,
+              color: AppColors.errorRed,
+              size: 22,
+            ),
+            onPressed: () => _showAdminOverride(context, client),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.settings_outlined,
+              color: AppColors.textGrey,
+              size: 20,
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+          StreamBuilder<SignalConnectionState>(
+            stream: client.connectionStateStream,
+            initialData: client.sigState,
+            builder: (context, snapshot) => Padding(
+              padding: const EdgeInsets.only(right: 16, left: 8),
+              child: Center(child: StatusBadge(state: snapshot.data!)),
+            ),
+          ),
+        ] else
+          IconButton(
+            icon: const Icon(
+              Icons.settings_outlined,
+              color: AppColors.textGrey,
+              size: 20,
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildGridButton(
+    IconData? icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: CyberCard(
+            borderColor: color.withValues(alpha: 0.2),
+            child: Container(
+              height: 100,
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) Icon(icon, color: color, size: 24),
+                  if (icon != null) const SizedBox(height: 12),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: color == AppColors.textGrey
+                          ? Colors.white70
+                          : color,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Colors.white24,
+        fontSize: 10,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.5,
+      ),
+    );
+  }
 
   void _confirmDestructiveAction(
     BuildContext context,
@@ -203,162 +388,6 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSectionLabel(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: Colors.white24,
-        fontSize: 10,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 1.5,
-      ),
-    );
-  }
-
-  Widget _buildGridButton(
-    IconData? icon,
-    String label,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: CyberCard(
-            borderColor: color.withValues(alpha: 0.2),
-            child: Container(
-              height: 100,
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (icon != null) Icon(icon, color: color, size: 24),
-                  if (icon != null) const SizedBox(height: 12),
-                  Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: color == AppColors.textGrey
-                          ? Colors.white70
-                          : color,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 10,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final client = RtcThinClient();
-
-    return StreamBuilder<HostConnectionState>(
-      stream: client.hostStateStream,
-      initialData: client.currentHostState,
-      builder: (context, snapshot) {
-        final isAuthenticated =
-            snapshot.data == HostConnectionState.authenticated;
-
-        return Scaffold(
-          backgroundColor: AppColors.voidBlack,
-          appBar: _buildAppBar(context, client, isAuthenticated),
-          body: isAuthenticated
-              ? FranknDashboard(client: client)
-              : HostListPanel(client: client),
-        );
-      },
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(
-    BuildContext context,
-    RtcThinClient client,
-    bool isAuthenticated,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    return AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      title: Row(
-        children: [
-          Text(
-            l10n.appName.toUpperCase(),
-            style: GoogleFonts.songMyung(
-              color: AppColors.neonCyan,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-              fontSize: 22,
-            ),
-          ),
-          const Text(":", style: TextStyle(color: Colors.white24)),
-          if (isAuthenticated) ...[
-            Text(
-              client.currentHostName ?? "",
-              style: GoogleFonts.songMyung(
-                color: AppColors.textWhite,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ],
-      ),
-      actions: [
-        if (isAuthenticated) ...[
-          IconButton(
-            icon: const Icon(
-              Icons.power_settings_new,
-              color: AppColors.errorRed,
-              size: 22,
-            ),
-            onPressed: () => _showAdminOverride(context, client),
-          ),
-          IconButton(
-            icon: const Icon(
-              Icons.settings_outlined,
-              color: AppColors.textGrey,
-              size: 20,
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
-          StreamBuilder<SignalConnectionState>(
-            stream: client.connectionStateStream,
-            initialData: client.sigState,
-            builder: (context, snapshot) => Padding(
-              padding: const EdgeInsets.only(right: 16, left: 8),
-              child: Center(child: StatusBadge(state: snapshot.data!)),
-            ),
-          ),
-        ] else
-          IconButton(
-            icon: const Icon(
-              Icons.settings_outlined,
-              color: AppColors.textGrey,
-              size: 20,
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
-      ],
     );
   }
 }

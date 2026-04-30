@@ -43,6 +43,7 @@ impl App {
                 "Public Listing".to_string(),
                 "Signaling URL".to_string(),
                 "Change Passcode".to_string(),
+                "Neural Model Directory".to_string(),
                 "SAVE & EXIT".to_string(),
             ],
             state,
@@ -115,6 +116,7 @@ impl App {
                     match i {
                         0 => self.config.host_name = self.input.clone(),
                         2 => self.config.signaling_url = self.input.clone(),
+                        4 => self.config.llm_model_dir = if self.input.is_empty() { None } else { Some(self.input.clone()) },
                         _ => {}
                     }
                 }
@@ -207,7 +209,12 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                         app.input.clear();
                                         app.cursor_position = 0;
                                     }
-                                    4 => return Ok(app.config),
+                                    4 => {
+                                        app.input_mode = InputMode::Editing;
+                                        app.input = app.config.llm_model_dir.clone().unwrap_or_default();
+                                        app.cursor_position = app.input.len();
+                                    }
+                                    5 => return Ok(app.config.clone()),
                                     _ => {}
                                 }
                             }
@@ -264,6 +271,7 @@ fn ui(f: &mut Frame, app: &mut App) {
                 1 => format!(": {}", if app.config.is_public { "PUBLIC" } else { "PRIVATE" }),
                 2 => format!(": {}", app.config.signaling_url),
                 3 => ": ********".to_string(),
+                4 => format!(": {}", app.config.llm_model_dir.as_deref().unwrap_or("None")),
                 _ => String::new(),
             };
             

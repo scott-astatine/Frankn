@@ -16,6 +16,7 @@ pub struct HostConfig {
     pub signaling_url: String,
     pub is_public: bool,
     pub restricted_cmds: Vec<String>,
+    pub llm_model_dir: Option<String>,
 }
 
 impl HostConfig {
@@ -95,6 +96,13 @@ impl HostConfig {
                 .interact_text()
                 .expect("Failed to get signaling URL");
 
+            let llm_model_dir: String = Input::new()
+                .with_prompt("Neural Model Directory (e.g., /home/user/Models) [Optional]")
+                .default(String::new())
+                .interact_text()
+                .expect("Failed to get model dir");
+            let llm_model_dir = if llm_model_dir.trim().is_empty() { None } else { Some(llm_model_dir.trim().to_string()) };
+
             // Generate 12-digit alphanumeric ID
             let host_id: String = rand::rng()
                 .sample_iter(&Alphanumeric)
@@ -113,6 +121,7 @@ impl HostConfig {
                 signaling_url,
                 is_public,
                 restricted_cmds: Vec::new(),
+                llm_model_dir,
             }
         })
         .await

@@ -13,6 +13,15 @@ enum HostConnectionState {
   authenticated,
 }
 
+class NeoColors {
+  static const background = Color(0xFF09090B);
+  static const darkZinc = Color(0xFF18181B);
+  static const zinc = Color(0xFF71717A);
+  static const cyan = Color(0xFF06B6D4);
+  static const fuchsia = Color(0xFFD946EF);
+  static const matrixGreen = Color(0xFF10B981);
+}
+
 class AppColors {
   // Backgrounds
   static const Color voidBlack = Color(0xFF050505);
@@ -115,6 +124,15 @@ class DcMsg {
   static const ListPlayers = "list_players";
   static const SetActivePlayer = "set_active_player";
   static const Seek = "seek";
+
+  // LLM
+  static const LlmStart = "llm_start";
+  static const LlmChat = "llm_chat";
+  static const LlmLoadChat = "llm_load_chat";
+  static const LlmDeleteChat = "llm_delete_chat";
+  static const LlmListChats = "llm_list_chats";
+  static const LlmStop = "llm_stop";
+  static const LlmToken = "llm_token";
 }
 
 class MediaDCMessage {

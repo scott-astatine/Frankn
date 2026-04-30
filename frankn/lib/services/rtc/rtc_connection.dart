@@ -145,6 +145,13 @@ mixin RtcConnection on RtcClientBase {
       mediaDC!.onMessage = (msg) =>
           handleHostMessage(msg.isBinary ? msg.binary : msg.text);
 
+      aiDC = await peerConnection!.createDataChannel(
+        'dohee_x',
+        RTCDataChannelInit()..id = 5,
+      );
+      aiDC!.onMessage = (msg) =>
+          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+
       // Monitor data channel state for connection progress
       genDC!.onDataChannelState = (dcState) {
         log("DC State [frankn_cmd]: $dcState");

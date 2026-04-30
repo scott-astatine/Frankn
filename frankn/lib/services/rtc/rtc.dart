@@ -193,6 +193,10 @@ abstract class RtcClientBase {
   RTCDataChannel? get sshDC;
   set sshDC(RTCDataChannel? value);
 
+  /// AI channel for LLM streaming (dohee_x, ID: 5).
+  RTCDataChannel? get aiDC;
+  set aiDC(RTCDataChannel? value);
+
   // ========== CLIENT IDENTITY ==========
 
   /// Unique identifier for this client instance.
@@ -290,6 +294,9 @@ class RtcClient extends RtcClientBase
 
   @override
   RTCDataChannel? sshDC;
+
+  @override
+  RTCDataChannel? aiDC;
 
   // ========== CLIENT IDENTITY ==========
 

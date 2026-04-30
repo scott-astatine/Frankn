@@ -245,6 +245,10 @@ mixin RtcMessageHandler on RtcClientBase {
         _handleHostResponse(data);
         break;
 
+      case DcMsg.LlmToken:
+        commandResponseController.add(data);
+        break;
+
       case DcMsg.Telemetry:
         final cpu = data['cpu_load']?.toStringAsFixed(1);
         final usedMem = ((data['used_mem'] ?? 0) / 1024 / 1024 / 1024)

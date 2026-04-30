@@ -1,6 +1,6 @@
 use crate::{
     HostMessage,
-    sys::rtc::RTCConn,
+    ops::rtc::RTCConn,
     utils::{Status, get_timestamp},
 };
 use std::sync::Arc;

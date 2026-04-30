@@ -244,6 +244,12 @@ mixin RtcCommands on RtcClientBase {
         sendToChannel(mediaDC, jsonMsg, "MEDIA");
         break;
 
+      case DcMsg.LlmStart:
+      case DcMsg.LlmChat:
+      case DcMsg.LlmStop:
+        sendToChannel(aiDC, jsonMsg, "AI");
+        break;
+
       // All other commands use the general command channel
       default:
         sendToChannel(genDC, jsonMsg, "CMD");

@@ -1,4 +1,4 @@
-use crate::{HostMessage, sys::rtc::RTCConn, utils::Status};
+use crate::{HostMessage, ops::rtc::RTCConn, utils::Status};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -30,7 +30,12 @@ pub async fn handle_upload_start(
     _hash: Option<String>, // We hash on-the-fly now
     total_size: u64,
 ) -> HostMessage {
-    crate::log!("FS: Starting upload for {} ({} bytes) to {}", id, total_size, path);
+    crate::log!(
+        "FS: Starting upload for {} ({} bytes) to {}",
+        id,
+        total_size,
+        path
+    );
 
     // Ensure parent directories exist
     if let Some(parent) = Path::new(path).parent() {
@@ -122,7 +127,10 @@ pub async fn handle_upload_end(id: &str, expected_hash: Option<String>) -> HostM
             timestamp: crate::utils::get_timestamp(),
         }
     } else {
-        crate::elog!("FS: ERROR - Upload session {} not found at finalization", id);
+        crate::elog!(
+            "FS: ERROR - Upload session {} not found at finalization",
+            id
+        );
         HostMessage::Response {
             id: id.to_string(),
             status: Status::Error("Session lost".into()),
@@ -132,12 +140,7 @@ pub async fn handle_upload_end(id: &str, expected_hash: Option<String>) -> HostM
     }
 }
 
-pub fn ls(
-    id: &str,
-    path: &str,
-    sort_by: Option<String>,
-    show_hidden: Option<bool>,
-) -> HostMessage {
+pub fn ls(id: &str, path: &str, sort_by: Option<String>, show_hidden: Option<bool>) -> HostMessage {
     let entries = fs::read_dir(path);
     match entries {
         Ok(read_dir) => {
@@ -150,7 +153,7 @@ pub fn ls(
                 let metadata = fs::metadata(entry.path()).ok();
                 let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
                 let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
-                
+
                 let modified_time = metadata
                     .as_ref()
                     .and_then(|m| m.modified().ok())
@@ -159,21 +162,21 @@ pub fn ls(
                 let modified_str = dt.format("%Y-%m-%d %H:%M:%S").to_string();
                 let timestamp = dt.timestamp();
 
-                list.push(serde_json::json!({ 
-                    "name": name, 
-                    "is_dir": is_dir, 
+                list.push(serde_json::json!({
+                    "name": name,
+                    "is_dir": is_dir,
                     "size": size,
                     "modified": modified_str,
                     "timestamp": timestamp,
                 }));
             }
-            
+
             // Sorting logic
             let sort_by_field = sort_by.as_deref().unwrap_or("name");
             list.sort_by(|a, b| {
                 let is_dir_a = a["is_dir"].as_bool().unwrap_or(false);
                 let is_dir_b = b["is_dir"].as_bool().unwrap_or(false);
-                
+
                 // Always put directories first
                 if is_dir_a && !is_dir_b {
                     return std::cmp::Ordering::Less;
@@ -288,3 +291,4 @@ pub fn delete_file(id: &str, path: &str) -> HostMessage {
         },
     }
 }
+

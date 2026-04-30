@@ -5,6 +5,7 @@ import 'package:frankn/utils/utils.dart';
 import 'package:frankn/main.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/utils/cyber_card.dart';
+import 'package:frankn/widgets/dohee_chat/model_selector_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -279,6 +280,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _editDefaultModel() async {
+    final selectedModel = await showDialog<String>(
+      context: context,
+      builder: (context) => ModelSelectorDialog(
+        client: _client,
+        isSettingsMode: true,
+      ),
+    );
+
+    if (selectedModel != null && mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -319,6 +334,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.hub_outlined,
             onTap: _editSignalingUrl,
             accentColor: AppColors.neonPink,
+          ),
+          const SizedBox(height: 12),
+          _buildSettingCard(
+            title: "DEFAULT_LLM_MODEL",
+            value: _settings.llmDefaultModel.isEmpty ? "NOT_SET" : _settings.llmDefaultModel,
+            icon: Icons.memory_outlined,
+            onTap: _editDefaultModel,
+            accentColor: AppColors.neonCyan,
           ),
 
           const SizedBox(height: 32),

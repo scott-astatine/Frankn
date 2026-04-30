@@ -1,5 +1,5 @@
-use crate::sys::rtc::{PeerMap, RTCConn};
-use crate::{HostMessage, sys, utils::Status};
+use crate::ops::rtc::{PeerMap, RTCConn};
+use crate::{HostMessage, ops, utils::Status};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -48,7 +48,27 @@ pub enum DcMsg {
     #[serde(rename = "delete_file")]
     DeleteFile { path: String },
 
-    // --- Audio Mixer ---
+    // --- LLM ---
+    #[serde(rename = "list_models")]
+    ListModels,
+    #[serde(rename = "llm_start")]
+    LlmStart { model_path: String },
+    #[serde(rename = "llm_chat")]
+    LlmChat {
+        message: String,
+        system_prompt: Option<String>,
+        chat_id: Option<String>,
+    },
+    #[serde(rename = "llm_load_chat")]
+    LlmLoadChat { chat_id: String },
+    #[serde(rename = "llm_delete_chat")]
+    LlmDeleteChat { chat_id: String },
+    #[serde(rename = "llm_list_chats")]
+    LlmListChats,
+    #[serde(rename = "llm_stop")]
+    LlmStop,
+
+    // --- SSH ---
     #[serde(rename = "get_audio_devices")]
     GetAudioDevices,
     #[serde(rename = "set_device_volume")]
@@ -128,32 +148,32 @@ impl DcMsg {
 
         dispatch!(id, rtc_conn, command, {
             // System & Power
-            Ping => sys::system::ping,
-            Disconnect => sys::system::disconnect,
-            Shutdown { args } => sys::system::shutdown,
-            Reboot => sys::system::reboot,
-            LockScreen => sys::system::lock_screen,
-            RestartHostServer => sys::system::restart_host,
+            Ping => ops::system::ping,
+            Disconnect => ops::system::disconnect,
+            Shutdown { args } => ops::system::shutdown,
+            Reboot => ops::system::reboot,
+            LockScreen => ops::system::lock_screen,
+            RestartHostServer => ops::system::restart_host,
 
             // Media
-            StartMediaSync => sys::media::handle_start_media_sync,
-            TogglePlayPause => sys::media::toggle_play_pause,
-            PlayNextTrack => sys::media::next_track,
-            PlayPreviousTrack => sys::media::previous_track,
-            SetVolume { level } => sys::media::set_volume,
-            Seek { position } => sys::media::seek,
-            GetMediaStatus => sys::media::get_media_status,
-            ListPlayers => sys::media::list_players,
-            SetActivePlayer { player_name } => sys::media::set_active_player,
+            StartMediaSync => ops::media::handle_start_media_sync,
+            TogglePlayPause => ops::media::toggle_play_pause,
+            PlayNextTrack => ops::media::next_track,
+            PlayPreviousTrack => ops::media::previous_track,
+            SetVolume { level } => ops::media::set_volume,
+            Seek { position } => ops::media::seek,
+            GetMediaStatus => ops::media::get_media_status,
+            ListPlayers => ops::media::list_players,
+            SetActivePlayer { player_name } => ops::media::set_active_player,
 
             // Audio Mixer
-            GetAudioDevices => sys::media::get_all_audio_devices,
-            SetDeviceVolume { target_id, volume } => sys::media::set_specific_device_volume,
-            SetDefaultAudioDevice { target_id } => sys::media::set_default_audio_device,
+            GetAudioDevices => ops::media::get_all_audio_devices,
+            SetDeviceVolume { target_id, volume } => ops::media::set_specific_device_volume,
+            SetDefaultAudioDevice { target_id } => ops::media::set_default_audio_device,
 
             // Processes
-            ListProcesses { sort_by, filter } => sys::proc_manager::list_processes,
-            KillProcess { proc } => sys::proc_manager::kill_process,
+            ListProcesses { sort_by, filter } => ops::proc_manager::list_processes,
+            KillProcess { proc } => ops::proc_manager::kill_process,
 
             // File System
             Ls { path, sort_by, show_hidden } => _async_ls,
@@ -164,8 +184,8 @@ impl DcMsg {
             SystemLog { args } => _handle_system_log,
 
             // SSH
-            StartSsh => sys::ssh::start_ssh_tunnel,
-            StopSsh => sys::ssh::stop_ssh_tunnel,
+            StartSsh => ops::ssh::start_ssh_tunnel,
+            StopSsh => ops::ssh::stop_ssh_tunnel,
         })
     }
 }

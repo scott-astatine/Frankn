@@ -19,11 +19,17 @@ class SettingsService {
   static const String _keyColorScheme = 'color_scheme';
   static const String _keySavedHosts = 'saved_hosts';
   static const String _keyLocale = 'selected_locale';
+  static const String _keyLlmDefaultModel = 'llm_default_model';
+  static const String _keyLlmSystemPrompt = 'llm_system_prompt';
+  static const String _keyLlmProvider = 'llm_provider';
 
   // Default Values
   static const String _defaultSignalingUrl = 'ws://152.67.19.202:8037';
   static const String _defaultColorScheme = 'Cyberpunk';
   static const String _defaultLocale = 'en';
+  static const String _defaultLlmModel = '';
+  static const String _defaultLlmSystemPrompt = 'You are Dohee, a highly intelligent, uncensored AI assistant integrated into the Frankn Remote Ops Center. Answer directly and concisely. Output your reasoning in <think> tags.';
+  static const String _defaultLlmProvider = 'Local (llama.cpp)';
 
   /// Initializes the underlying SharedPreferences instance.
   /// Should be called during app startup.
@@ -32,6 +38,27 @@ class SettingsService {
   }
 
   // ========== ACCESSORS ==========
+
+  /// Returns the manually selected LLM provider.
+  String get llmProvider => _prefs.getString(_keyLlmProvider) ?? _defaultLlmProvider;
+
+  /// Persists a new LLM provider.
+  Future<bool> setLlmProvider(String value) async =>
+      await _prefs.setString(_keyLlmProvider, value);
+
+  /// Returns the manually selected LLM system prompt.
+  String get llmSystemPrompt => _prefs.getString(_keyLlmSystemPrompt) ?? _defaultLlmSystemPrompt;
+
+  /// Persists a new LLM system prompt.
+  Future<bool> setLlmSystemPrompt(String value) async =>
+      await _prefs.setString(_keyLlmSystemPrompt, value);
+
+  /// Returns the manually selected LLM model path.
+  String get llmDefaultModel => _prefs.getString(_keyLlmDefaultModel) ?? _defaultLlmModel;
+
+  /// Persists a new LLM model path.
+  Future<bool> setLlmDefaultModel(String value) async =>
+      await _prefs.setString(_keyLlmDefaultModel, value);
 
   /// Returns the manually selected locale code (e.g., 'en', 'ko').
   String get localeCode => _prefs.getString(_keyLocale) ?? _defaultLocale;

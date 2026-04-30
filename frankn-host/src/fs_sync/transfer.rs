@@ -14,7 +14,7 @@
 //   0x04 = ACK_REQUESTED (client wants host to send transfer_ack)
 // ============================================================================
 
-use crate::{HostMessage, sys::rtc::RTCConn, utils::Status};
+use crate::{HostMessage, ops::rtc::RTCConn, utils::Status};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::SeekFrom;
@@ -139,7 +139,7 @@ pub async fn handle_transfer_init(
                                 status: Status::Error(format!("Failed to create file: {}", e)),
                                 data: None,
                                 timestamp: crate::utils::get_timestamp(),
-                            }
+                            };
                         }
                     }
                 } else {
@@ -157,7 +157,7 @@ pub async fn handle_transfer_init(
                                 status: Status::Error(format!("Failed to open partial: {}", e)),
                                 data: None,
                                 timestamp: crate::utils::get_timestamp(),
-                            }
+                            };
                         }
                     }
                 }
@@ -172,7 +172,7 @@ pub async fn handle_transfer_init(
                             status: Status::Error(format!("Failed to create file: {}", e)),
                             data: None,
                             timestamp: crate::utils::get_timestamp(),
-                        }
+                        };
                     }
                 }
             }
@@ -187,7 +187,7 @@ pub async fn handle_transfer_init(
                     status: Status::Error(format!("Failed to create file: {}", e)),
                     data: None,
                     timestamp: crate::utils::get_timestamp(),
-                }
+                };
             }
         }
     };
@@ -271,7 +271,11 @@ pub async fn handle_transfer_chunk_raw(
     channel_label: &str,
 ) {
     if data.len() < FRAME_HEADER_SIZE || data[0] != FRAME_MAGIC {
-        crate::elog!("FS: Invalid binary frame (len={}, magic={})", data.len(), data[0]);
+        crate::elog!(
+            "FS: Invalid binary frame (len={}, magic={})",
+            data.len(),
+            data[0]
+        );
         return;
     }
 
@@ -379,11 +383,7 @@ pub async fn handle_transfer_chunk_raw(
 
 // ── Upload finalization ────────────────────────────────────────────────────
 
-async fn finalize_upload(
-    id: &str,
-    rtc_conn: Arc<Mutex<RTCConn>>,
-    channel_label: &str,
-) {
+async fn finalize_upload(id: &str, rtc_conn: Arc<Mutex<RTCConn>>, channel_label: &str) {
     let session = {
         let mut sessions = UPLOAD_SESSIONS.lock().await;
         sessions.remove(id)
@@ -512,7 +512,12 @@ pub async fn handle_download_init(
         };
         if let Ok(json) = serde_json::to_string(&end_msg) {
             let conn = rtc_conn.lock().await;
-            let _ = conn.send_message(channel_label, &tokio_tungstenite::tungstenite::Bytes::from(json)).await;
+            let _ = conn
+                .send_message(
+                    channel_label,
+                    &tokio_tungstenite::tungstenite::Bytes::from(json),
+                )
+                .await;
         }
         return HostMessage::Response {
             id: id.to_string(),
@@ -599,7 +604,8 @@ async fn stream_download(
                 let conn = rtc_conn.lock().await;
                 conn.get_buffered_amount(&channel_label).await
             };
-            if buffered < 1024 * 1024 { // 1MB buffer limit
+            if buffered < 1024 * 1024 {
+                // 1MB buffer limit
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -608,7 +614,13 @@ async fn stream_download(
         // Send the binary frame
         {
             let conn = rtc_conn.lock().await;
-            if let Err(e) = conn.send_message(&channel_label, &tokio_tungstenite::tungstenite::Bytes::from(frame)).await {
+            if let Err(e) = conn
+                .send_message(
+                    &channel_label,
+                    &tokio_tungstenite::tungstenite::Bytes::from(frame),
+                )
+                .await
+            {
                 crate::elog!("FS: Failed to send chunk {}: {}", seq, e);
                 break;
             }

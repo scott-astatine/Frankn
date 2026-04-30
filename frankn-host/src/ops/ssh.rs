@@ -6,7 +6,7 @@ use tokio_tungstenite::tungstenite::Bytes;
 use webrtc::data_channel::RTCDataChannel;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 
-use crate::sys::rtc::RTCConn;
+use crate::ops::rtc::RTCConn;
 use crate::{HostMessage, Status, elog, log};
 
 pub async fn start_ssh_tunnel(id: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> HostMessage {

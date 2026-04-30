@@ -44,6 +44,9 @@ class RtcThinClient {
   final _authErrorController = StreamController<String>.broadcast();
   Stream<String> get authErrorStream => _authErrorController.stream;
 
+  final _aiStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get aiStream => _aiStreamController.stream;
+
   HostConnectionState currentHostState = HostConnectionState.disconnected;
   SignalConnectionState sigState = SignalConnectionState.disconnected;
   String? currentHostId;
@@ -133,6 +136,10 @@ class RtcThinClient {
         if (msg.action == 'command_response') {
           _commandResponseController.add(msg.payload);
           
+          if (msg.payload['type'] == DcMsg.LlmToken || msg.payload['type'] == 'llm_token') {
+            _aiStreamController.add(msg.payload);
+          }
+
           // BRIDGE: If this is a stream_end, also notify the transfer progress stream
           // so that viewers (Editor/Image) know to stop loading.
           if (msg.payload['type'] == DcMsg.StreamEnd || msg.payload['type'] == 'download_end') {

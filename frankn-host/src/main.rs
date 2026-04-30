@@ -2,14 +2,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::ops::llm::LlmManager;
 use crate::signaling::SignalingClient;
 use crate::utils::{ClientMessage, get_cpu_temp};
 use crate::utils::{HostMessage, Status, get_timestamp};
 use auth::AuthManager;
 use base64::Engine;
 use clap::{Parser, Subcommand};
+use ops::rtc::{PeerMap, RTCConn};
 use signaling::SignalingMessage;
-use sys::rtc::{PeerMap, RTCConn};
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Bytes;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
@@ -19,8 +20,8 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 mod auth;
 mod config;
 mod fs_sync;
+mod ops;
 mod signaling;
-mod sys;
 mod utils;
 
 #[derive(Parser)]
@@ -41,6 +42,10 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Explicitly install the rustls crypto provider to prevent panics when
+    // multiple tokio tasks attempt to use cryptography (WebRTC Signaling + Reqwest LLM).
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let cli = Cli::parse();
 
     // Load config or initialize on first run
@@ -77,18 +82,19 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
     // =============================================================================
     let auth_manager = Arc::new(AuthManager::from_hash(&config.password_hash));
     let peer_map: PeerMap = Arc::new(Mutex::new(HashMap::new()));
+    let llm_manager = Arc::new(Mutex::new(LlmManager::new()));
 
     // =============================================================================
     // BACKGROUND SERVICES
     // =============================================================================
     let pm_notif = Arc::clone(&peer_map);
     tokio::spawn(async move {
-        sys::notifications::start_notification_listener(pm_notif).await;
+        ops::notifications::start_notification_listener(pm_notif).await;
     });
 
     let pm_media = Arc::clone(&peer_map);
     tokio::spawn(async move {
-        sys::media::start_media_sync(pm_media).await;
+        ops::media::start_media_sync(pm_media).await;
     });
 
     // =============================================================================
@@ -172,8 +178,9 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
                     let sig = Arc::clone(&signaling_client);
                     let auth = Arc::clone(&auth_manager);
                     let pm = Arc::clone(&peer_map);
+                    let llm = Arc::clone(&llm_manager);
                     tokio::spawn(async move {
-                        if let Err(e) = handle_new_connection(from, sdp, sig, auth, pm).await {
+                        if let Err(e) = handle_new_connection(from, sdp, sig, auth, pm, llm).await {
                             crate::elog!("CORE: Handshake error: {e}");
                         }
                     });
@@ -212,6 +219,7 @@ async fn handle_new_connection(
     signaling_client: Arc<SignalingClient>,
     auth_manager: Arc<AuthManager>,
     peer_map: PeerMap,
+    llm_manager: Arc<Mutex<LlmManager>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rtc_conn = Arc::new(Mutex::new(RTCConn::new().await?));
 
@@ -255,6 +263,7 @@ async fn handle_new_connection(
     let auth_manager_clone = Arc::clone(&auth_manager);
     let peer_map_clone = Arc::clone(&peer_map);
     let client_id_clone = client_id.clone();
+    let llm_manager_clone = Arc::clone(&llm_manager);
 
     {
         let conn = rtc_conn.lock().await;
@@ -263,12 +272,13 @@ async fn handle_new_connection(
             let pm = Arc::clone(&peer_map_clone);
             let auth = Arc::clone(&auth_manager_clone);
             let cid = client_id_clone.clone();
+            let llm = Arc::clone(&llm_manager_clone);
 
             match label.as_str() {
                 "frankn_ssh" => {
                     crate::log!("LINK: Data channel 'frankn_ssh' initialized.");
                 }
-                "frankn_cmd" | "frankn_fs" | "frankn_media" => {
+                "frankn_cmd" | "frankn_fs" | "frankn_media" | "dohee_x" => {
                     let channel_label = label.clone();
                     dc.on_message(Box::new(move |msg: DataChannelMessage| {
                         let p = Arc::clone(&pm);
@@ -276,7 +286,8 @@ async fn handle_new_connection(
                         let d = msg.data.to_vec();
                         let l = channel_label.clone();
                         let c = cid.clone();
-                        Box::pin(async move { parse_dc_msg(&d, p, a, &c, &l).await })
+                        let llm_m = Arc::clone(&llm);
+                        Box::pin(async move { parse_dc_msg(&d, p, a, &c, &l, llm_m).await })
                     }));
                 }
                 _ => {}
@@ -338,6 +349,7 @@ async fn parse_dc_msg(
     auth_manager: Arc<AuthManager>,
     client_id: &str,
     label: &str,
+    llm_manager: Arc<Mutex<LlmManager>>,
 ) {
     let rtc_conn = {
         let map = peer_map.lock().await;
@@ -520,17 +532,187 @@ async fn parse_dc_msg(
                     *auth_lock
                 };
                 if is_auth && auth_manager.verify_token(&auth_token).await {
-                    let response = crate::sys::dc_message_parser::DcMsg::parse_msg(
-                        &id,
-                        &command,
-                        params,
-                        Arc::clone(&peer_map),
-                        client_id,
-                    )
-                    .await;
-                    if let Ok(json) = serde_json::to_string(&response) {
-                        let conn = rtc_conn.lock().await;
-                        let _ = conn.send_message(label, &Bytes::from(json)).await;
+                    match &command {
+                        crate::ops::dc_message_parser::DcMsg::ListModels => {
+                            let rtc = Arc::clone(&rtc_conn);
+                            let lbl = label.to_string();
+                            let msg_id = id.clone();
+
+                            // Retrieve model directory from config or default
+                            let config = config::HostConfig::load_or_init().await;
+                            let model_dir = config.llm_model_dir.unwrap_or_else(|| {
+                                dirs::home_dir()
+                                    .map(|mut p| {
+                                        p.push("Models");
+                                        p.to_string_lossy().to_string()
+                                    })
+                                    .unwrap_or_else(|| {
+                                        "/home/scott/Projects/agi/models/".to_string()
+                                    })
+                            });
+
+                            tokio::spawn(async move {
+                                let res = match crate::ops::llm::LlmManager::scan_models(&model_dir)
+                                    .await
+                                {
+                                    Ok(models) => Status::Success,
+                                    Err(e) => Status::Error(e),
+                                };
+
+                                let data = match crate::ops::llm::LlmManager::scan_models(
+                                    &model_dir,
+                                )
+                                .await
+                                {
+                                    Ok(models) => Some(models),
+                                    Err(_) => None,
+                                };
+
+                                let response = HostMessage::Response {
+                                    id: msg_id,
+                                    status: res,
+                                    data,
+                                    timestamp: crate::utils::get_timestamp(),
+                                };
+                                if let Ok(json) = serde_json::to_string(&response) {
+                                    let conn = rtc.lock().await;
+                                    let _ = conn.send_message(&lbl, &Bytes::from(json)).await;
+                                }
+                            });
+                        }
+                        crate::ops::dc_message_parser::DcMsg::LlmStart { model_path } => {
+                            let path = model_path.clone();
+                            let llm = Arc::clone(&llm_manager);
+                            let rtc = Arc::clone(&rtc_conn);
+                            let lbl = label.to_string();
+                            let msg_id = id.clone();
+                            tokio::spawn(async move {
+                                let res = match llm.lock().await.start_server(&path).await {
+                                    Ok(_) => Status::Success,
+                                    Err(e) => Status::Error(e),
+                                };
+                                let response = HostMessage::Response {
+                                    id: msg_id,
+                                    status: res,
+                                    data: None,
+                                    timestamp: crate::utils::get_timestamp(),
+                                };
+                                if let Ok(json) = serde_json::to_string(&response) {
+                                    let conn = rtc.lock().await;
+                                    let _ = conn.send_message(&lbl, &Bytes::from(json)).await;
+                                }
+                            });
+                        }
+                        crate::ops::dc_message_parser::DcMsg::LlmChat { message, system_prompt, chat_id } => {
+                            let msg = message.clone();
+                            let sys_prompt = system_prompt.clone();
+                            let cid = chat_id.clone();
+                            let llm = Arc::clone(&llm_manager);
+                            let rtc = Arc::clone(&rtc_conn);
+                            let lbl = label.to_string();
+                            let msg_id = id.clone();
+                            tokio::spawn(async move {
+                                let (client, chats) = {
+                                    let mut l = llm.lock().await;
+                                    l.ensure_chats_loaded().await;
+                                    (l.get_client(), l.get_chats())
+                                };
+                                crate::ops::llm::LlmManager::chat_stream_detached(
+                                    client, chats, msg, sys_prompt, cid, msg_id, rtc, lbl
+                                ).await;
+                            });
+                        }
+                        crate::ops::dc_message_parser::DcMsg::LlmLoadChat { chat_id } => {
+                            let cid = chat_id.clone();
+                            let llm = Arc::clone(&llm_manager);
+                            let rtc = Arc::clone(&rtc_conn);
+                            let lbl = label.to_string();
+                            let msg_id = id.clone();
+                            tokio::spawn(async move {
+                                let mut l = llm.lock().await;
+                                let data = l.load_chat(&cid).await;
+                                let res = match data {
+                                    Some(ref _d) => Status::Success,
+                                    None => Status::Error("Chat not found".to_string()),
+                                };
+                                let response = HostMessage::Response {
+                                    id: msg_id,
+                                    status: res,
+                                    data,
+                                    timestamp: crate::utils::get_timestamp(),
+                                };
+                                if let Ok(json) = serde_json::to_string(&response) {
+                                    let conn = rtc.lock().await;
+                                    let _ = conn.send_message(&lbl, &Bytes::from(json)).await;
+                                }
+                            });
+                        }
+                        crate::ops::dc_message_parser::DcMsg::LlmListChats => {
+                            let llm = Arc::clone(&llm_manager);
+                            let rtc = Arc::clone(&rtc_conn);
+                            let lbl = label.to_string();
+                            let msg_id = id.clone();
+                            tokio::spawn(async move {
+                                let mut l = llm.lock().await;
+                                let data = l.list_chats().await;
+                                let response = HostMessage::Response {
+                                    id: msg_id,
+                                    status: Status::Success,
+                                    data: Some(data),
+                                    timestamp: crate::utils::get_timestamp(),
+                                };
+                                if let Ok(json) = serde_json::to_string(&response) {
+                                    let conn = rtc.lock().await;
+                                    let _ = conn.send_message(&lbl, &Bytes::from(json)).await;
+                                }
+                            });
+                        }
+                        crate::ops::dc_message_parser::DcMsg::LlmDeleteChat { chat_id } => {
+                            let cid = chat_id.clone();
+                            let llm = Arc::clone(&llm_manager);
+                            let rtc = Arc::clone(&rtc_conn);
+                            let lbl = label.to_string();
+                            let msg_id = id.clone();
+                            tokio::spawn(async move {
+                                let mut l = llm.lock().await;
+                                let deleted = l.delete_chat(&cid).await;
+                                let res = if deleted {
+                                    Status::Success
+                                } else {
+                                    Status::Error("Chat not found".to_string())
+                                };
+                                let response = HostMessage::Response {
+                                    id: msg_id,
+                                    status: res,
+                                    data: None,
+                                    timestamp: crate::utils::get_timestamp(),
+                                };
+                                if let Ok(json) = serde_json::to_string(&response) {
+                                    let conn = rtc.lock().await;
+                                    let _ = conn.send_message(&lbl, &Bytes::from(json)).await;
+                                }
+                            });
+                        }
+                        crate::ops::dc_message_parser::DcMsg::LlmStop => {
+                            let llm = Arc::clone(&llm_manager);
+                            tokio::spawn(async move {
+                                llm.lock().await.stop_server().await;
+                            });
+                        }
+                        _ => {
+                            let response = crate::ops::dc_message_parser::DcMsg::parse_msg(
+                                &id,
+                                &command,
+                                params,
+                                Arc::clone(&peer_map),
+                                client_id,
+                            )
+                            .await;
+                            if let Ok(json) = serde_json::to_string(&response) {
+                                let conn = rtc_conn.lock().await;
+                                let _ = conn.send_message(label, &Bytes::from(json)).await;
+                            }
+                        }
                     }
                 } else {
                     crate::elog!("EXEC: Permission denied for command {} (ID: {})", id, id);

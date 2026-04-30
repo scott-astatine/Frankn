@@ -1,7 +1,7 @@
 pub mod stream;
 use std::io::Error;
 
-pub use crate::sys::dc_message_parser::DcMsg;
+pub use crate::ops::dc_message_parser::DcMsg;
 use serde::{Deserialize, Serialize};
 
 pub fn get_timestamp() -> u64 {
@@ -108,6 +108,13 @@ pub enum HostMessage {
 
     #[serde(rename = "auth_failed")]
     AuthFailed { error: String, timestamp: u64 },
+
+    #[serde(rename = "llm_token")]
+    LlmToken {
+        token: String,
+        is_final: bool,
+        timestamp: u64,
+    },
 
     #[serde(rename = "media_update")]
     MediaUpdate {
