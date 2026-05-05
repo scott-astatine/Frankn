@@ -49,11 +49,10 @@ pub async fn list_processes(
         }
         
         // Host-side filtering (user search)
-        if let Some(ref f) = filter_lower {
-            if !name.to_lowercase().contains(f) && !cmd.to_lowercase().contains(f) {
+        if let Some(ref f) = filter_lower
+            && !name.to_lowercase().contains(f) && !cmd.to_lowercase().contains(f) {
                 continue;
             }
-        }
 
         let status = format!("{:?}", p.status());
         let user = p.user_id().map(|u| u.to_string()).unwrap_or_else(|| "root".to_string());

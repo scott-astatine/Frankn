@@ -77,8 +77,27 @@ class _SShScreenState extends State<SShScreen> {
     _controller.terminal.write('Uplink: \x1b[35mENCRYPTED P2P\x1b[0m\r\n\n');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loginDialog();
+      if (mounted) {
+        if (widget.client.lastSshUsername != null) {
+          _attemptAutoLogin();
+        } else {
+          _loginDialog();
+        }
+      }
     });
+  }
+
+  Future<void> _attemptAutoLogin() async {
+    try {
+      await _controller.startSession(
+        widget.client.lastSshUsername!,
+        widget.client.lastSshPassword,
+      );
+    } catch (e) {
+      widget.client.lastSshUsername = null;
+      widget.client.lastSshPassword = null;
+      if (mounted) _loginDialog(error: "Session restored failed: ${e.toString()}");
+    }
   }
 
   Widget _buildHud(bool isKeyboardActive) {
@@ -94,8 +113,8 @@ class _SShScreenState extends State<SShScreen> {
         children: [
           if (isKeyboardActive)
             SshKeyBar(
-              ctrlActive: _controller.ctrlActive,
-              altActive: _controller.altActive,
+              ctrlState: _controller.ctrlState,
+              altState: _controller.altState,
               onToggleCtrl: _controller.toggleCtrl,
               onToggleAlt: _controller.toggleAlt,
               onSendRaw: _controller.sendRaw,
@@ -189,11 +208,12 @@ class _SShScreenState extends State<SShScreen> {
             text: "INITIATE",
             onPressed: () async {
               Navigator.pop(context);
+              final user = _userController.text;
+              final pass = _passController.text.isNotEmpty ? _passController.text : null;
               try {
-                await _controller.startSession(
-                  _userController.text,
-                  _passController.text.isNotEmpty ? _passController.text : null,
-                );
+                await _controller.startSession(user, pass);
+                widget.client.lastSshUsername = user;
+                widget.client.lastSshPassword = pass;
               } catch (e) {
                 _loginDialog(error: e.toString());
               }

@@ -28,6 +28,10 @@ mod utils;
 #[command(name = "frankn-host")]
 #[command(about = "Frankn Personal Remote Ops Center Host", long_about = None)]
 struct Cli {
+    /// Path to a custom configuration file
+    #[arg(short, long, value_name = "FILE")]
+    config: Option<String>,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -47,9 +51,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let cli = Cli::parse();
+    let custom_path = cli.config.map(std::path::PathBuf::from);
 
     // Load config or initialize on first run
-    let config = config::HostConfig::load_or_init().await;
+    let config = config::HostConfig::load_or_init(custom_path).await;
 
     match cli.command {
         Some(Commands::Config) => {
@@ -73,6 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::error::Error>> {
+    let config = Arc::new(config);
     crate::log!("Neural Link Host Server initialized.");
     crate::log!("ID: {}", config.host_id);
     crate::log!("Display Name: {}", config.host_name);
@@ -83,6 +89,17 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
     let auth_manager = Arc::new(AuthManager::from_hash(&config.password_hash));
     let peer_map: PeerMap = Arc::new(Mutex::new(HashMap::new()));
     let llm_manager = Arc::new(Mutex::new(LlmManager::new()));
+    let input_manager = match crate::ops::input::InputManager::new() {
+        Ok(im) => Some(Arc::new(Mutex::new(im))),
+        Err(e) => {
+            crate::elog!("CRITICAL: Failed to initialize virtual input devices (uinput).");
+            crate::elog!("  ↳ Error: {}", e);
+            crate::elog!("  ↳ The trackpad and keyboard features will NOT work.");
+            crate::elog!("  ↳ Fix 1: Ensure the kernel module is loaded: 'sudo modprobe uinput'");
+            crate::elog!("  ↳ Fix 2: Ensure your user has permissions to /dev/uinput");
+            None
+        }
+    };
 
     // =============================================================================
     // BACKGROUND SERVICES
@@ -173,14 +190,19 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
                 }
                 SignalingMessage::RegisterFailure { error, .. } => {
                     crate::elog!("NODE: Handshake rejected: {}", error);
+                    break; // Break the while loop to close the channel and trigger a reconnect
                 }
                 SignalingMessage::Offer { from, sdp, .. } => {
                     let sig = Arc::clone(&signaling_client);
                     let auth = Arc::clone(&auth_manager);
                     let pm = Arc::clone(&peer_map);
                     let llm = Arc::clone(&llm_manager);
+                    let im = input_manager.clone();
+                    let cfg = Arc::clone(&config);
                     tokio::spawn(async move {
-                        if let Err(e) = handle_new_connection(from, sdp, sig, auth, pm, llm).await {
+                        if let Err(e) =
+                            handle_new_connection(from, sdp, sig, auth, pm, llm, im, cfg).await
+                        {
                             crate::elog!("CORE: Handshake error: {e}");
                         }
                     });
@@ -220,6 +242,8 @@ async fn handle_new_connection(
     auth_manager: Arc<AuthManager>,
     peer_map: PeerMap,
     llm_manager: Arc<Mutex<LlmManager>>,
+    input_manager: Option<Arc<Mutex<crate::ops::input::InputManager>>>,
+    config: Arc<config::HostConfig>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rtc_conn = Arc::new(Mutex::new(RTCConn::new().await?));
 
@@ -264,6 +288,8 @@ async fn handle_new_connection(
     let peer_map_clone = Arc::clone(&peer_map);
     let client_id_clone = client_id.clone();
     let llm_manager_clone = Arc::clone(&llm_manager);
+    let input_manager_clone = input_manager.clone();
+    let config_clone = Arc::clone(&config);
 
     {
         let conn = rtc_conn.lock().await;
@@ -273,10 +299,27 @@ async fn handle_new_connection(
             let auth = Arc::clone(&auth_manager_clone);
             let cid = client_id_clone.clone();
             let llm = Arc::clone(&llm_manager_clone);
+            let im = input_manager_clone.clone();
+            let cfg = Arc::clone(&config_clone);
 
             match label.as_str() {
                 "frankn_ssh" => {
                     crate::log!("LINK: Data channel 'frankn_ssh' initialized.");
+                }
+                "frankn_input" => {
+                    let im_c = im.clone();
+                    dc.on_message(Box::new(move |msg| {
+                        let im_c2 = im_c.clone();
+                        Box::pin(async move {
+                            if let Ok(input_msg) =
+                                serde_json::from_slice::<crate::ops::input::InputMsg>(&msg.data)
+                                && let Some(manager) = im_c2
+                            {
+                                let mut m = manager.lock().await;
+                                m.handle_msg(input_msg);
+                            }
+                        })
+                    }));
                 }
                 "frankn_cmd" | "frankn_fs" | "frankn_media" | "dohee_x" => {
                     let channel_label = label.clone();
@@ -287,7 +330,10 @@ async fn handle_new_connection(
                         let l = channel_label.clone();
                         let c = cid.clone();
                         let llm_m = Arc::clone(&llm);
-                        Box::pin(async move { parse_dc_msg(&d, p, a, &c, &l, llm_m).await })
+                        let cfg_inner = Arc::clone(&cfg);
+                        Box::pin(
+                            async move { parse_dc_msg(&d, p, a, &c, &l, llm_m, cfg_inner).await },
+                        )
                     }));
                 }
                 _ => {}
@@ -327,10 +373,10 @@ async fn handle_new_connection(
 
     {
         let mut map = peer_map.lock().await;
-        if let Some(current) = map.get(&client_id) {
-            if Arc::ptr_eq(current, &rtc_conn) {
-                map.remove(&client_id);
-            }
+        if let Some(current) = map.get(&client_id)
+            && Arc::ptr_eq(current, &rtc_conn)
+        {
+            map.remove(&client_id);
         }
     }
 
@@ -350,6 +396,7 @@ async fn parse_dc_msg(
     client_id: &str,
     label: &str,
     llm_manager: Arc<Mutex<LlmManager>>,
+    config: Arc<config::HostConfig>,
 ) {
     let rtc_conn = {
         let map = peer_map.lock().await;
@@ -539,34 +586,26 @@ async fn parse_dc_msg(
                             let msg_id = id.clone();
 
                             // Retrieve model directory from config or default
-                            let config = config::HostConfig::load_or_init().await;
-                            let model_dir = config.llm_model_dir.unwrap_or_else(|| {
+                            let model_dir = config.llm_model_dir.clone().unwrap_or_else(|| {
                                 dirs::home_dir()
                                     .map(|mut p| {
                                         p.push("Models");
                                         p.to_string_lossy().to_string()
                                     })
-                                    .unwrap_or_else(|| {
-                                        "/home/scott/Projects/agi/models/".to_string()
-                                    })
+                                    .unwrap_or_else(|| "~/.config/frankn/llms/".to_string())
                             });
 
                             tokio::spawn(async move {
                                 let res = match crate::ops::llm::LlmManager::scan_models(&model_dir)
                                     .await
                                 {
-                                    Ok(models) => Status::Success,
+                                    Ok(_models) => Status::Success,
                                     Err(e) => Status::Error(e),
                                 };
 
-                                let data = match crate::ops::llm::LlmManager::scan_models(
-                                    &model_dir,
-                                )
-                                .await
-                                {
-                                    Ok(models) => Some(models),
-                                    Err(_) => None,
-                                };
+                                let data = crate::ops::llm::LlmManager::scan_models(&model_dir)
+                                    .await
+                                    .ok();
 
                                 let response = HostMessage::Response {
                                     id: msg_id,
@@ -586,8 +625,9 @@ async fn parse_dc_msg(
                             let rtc = Arc::clone(&rtc_conn);
                             let lbl = label.to_string();
                             let msg_id = id.clone();
+                            let cfg = Arc::clone(&config);
                             tokio::spawn(async move {
-                                let res = match llm.lock().await.start_server(&path).await {
+                                let res = match llm.lock().await.start_server(&path, &cfg).await {
                                     Ok(_) => Status::Success,
                                     Err(e) => Status::Error(e),
                                 };
@@ -603,7 +643,11 @@ async fn parse_dc_msg(
                                 }
                             });
                         }
-                        crate::ops::dc_message_parser::DcMsg::LlmChat { message, system_prompt, chat_id } => {
+                        crate::ops::dc_message_parser::DcMsg::LlmChat {
+                            message,
+                            system_prompt,
+                            chat_id,
+                        } => {
                             let msg = message.clone();
                             let sys_prompt = system_prompt.clone();
                             let cid = chat_id.clone();
@@ -618,8 +662,9 @@ async fn parse_dc_msg(
                                     (l.get_client(), l.get_chats())
                                 };
                                 crate::ops::llm::LlmManager::chat_stream_detached(
-                                    client, chats, msg, sys_prompt, cid, msg_id, rtc, lbl
-                                ).await;
+                                    client, chats, msg, sys_prompt, cid, msg_id, rtc, lbl,
+                                )
+                                .await;
                             });
                         }
                         crate::ops::dc_message_parser::DcMsg::LlmLoadChat { chat_id } => {
@@ -735,7 +780,6 @@ async fn parse_dc_msg(
         }
     }
 }
-
 async fn parse_binary_msg(data: &Vec<u8>, rtc_conn: Arc<Mutex<RTCConn>>, label: &str) {
     if label == "frankn_fs"
         && data.len() >= crate::fs_sync::transfer::FRAME_HEADER_SIZE

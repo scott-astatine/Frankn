@@ -51,7 +51,7 @@ async fn handle_signaling_message(
                 return send_signaling_msg(
                     tx,
                     SignalingMessage::RegisterFailure {
-                        error: format!("{:?} already registered!", peer_type),
+                        error: format!("{:?} already registered on this connection!", peer_type),
                         timestamp,
                     },
                 )
@@ -62,6 +62,19 @@ async fn handle_signaling_message(
             // Perform registration and store info needed for broadcast
             let (registration_id, registration_type) = {
                 let mut peers_map = peers.write().await;
+                
+                // Prevent identity hijacking: if ID is already registered and active, reject.
+                if peers_map.contains_key(&peer_id) {
+                    return send_signaling_msg(
+                        tx,
+                        SignalingMessage::RegisterFailure {
+                            error: format!("Peer ID '{}' is already in use.", peer_id),
+                            timestamp,
+                        },
+                    )
+                    .await
+                    .map_err(|e| e.to_string());
+                }
 
                 log!(
                     "Registering peer: ID '{:?}', Name: '{}', Type: {:?}, Public: {}",
@@ -147,7 +160,7 @@ async fn handle_signaling_message(
             send_signaling_msg(
                 tx,
                 SignalingMessage::HostList {
-                    hosts: hosts,
+                    hosts,
                     timestamp,
                 },
             )
@@ -234,11 +247,13 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap) {
 
     let mut peer_id: Option<String> = None;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+    let mut last_seen = std::time::Instant::now();
 
     loop {
         tokio::select! {
             // 1. Handle incoming messages
             msg_result = ws_read.next() => {
+                last_seen = std::time::Instant::now();
                 match msg_result {
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<SignalingMessage>(&text) {
@@ -298,8 +313,13 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap) {
 
             // 3. Heartbeat
             _ = interval.tick() => {
+                if last_seen.elapsed().as_secs() > 15 {
+                    elog!("Client timeout (no messages for 15s). Terminating connection.");
+                    break;
+                }
+
                 // Send a ping to check connection health
-                if let Err(_) = tx.send(Message::Ping(vec![].into())) {
+                if tx.send(Message::Ping(vec![].into())).is_err() {
                     break;
                 }
             }

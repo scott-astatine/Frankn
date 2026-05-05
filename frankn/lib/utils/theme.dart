@@ -41,6 +41,7 @@ class CyberTheme {
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.voidBlack,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
           color: Colors.white,

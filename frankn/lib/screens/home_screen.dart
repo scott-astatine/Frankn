@@ -5,6 +5,7 @@ import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/screens/frankn_dashboard.dart';
 import 'package:frankn/widgets/dohee_chat/model_selector_dialog.dart';
 import 'package:frankn/screens/settings_screen.dart';
+import 'package:frankn/screens/trackpad_screen.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/cyber_button.dart';
 import 'package:frankn/utils/cyber_card.dart';
@@ -68,32 +69,36 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       elevation: 0,
       title: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          isAuthenticated
-              ? IconButton(
-                  onPressed: () => _showNeuralChatDialog(context, client),
-                  icon: Icon(Icons.auto_awesome),
-                )
-              : SizedBox(),
           Text(
             l10n.appName,
             style: GoogleFonts.songMyung(
               color: AppColors.neonCyan,
               fontWeight: FontWeight.bold,
               letterSpacing: 2,
-              fontSize: 16,
+              fontSize: 18,
             ),
           ),
-          const Text(":", style: TextStyle(color: Colors.white24)),
           if (isAuthenticated) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text(":", style: TextStyle(color: Colors.white24)),
+            ),
             Text(
               client.currentHostName ?? "",
               style: GoogleFonts.songMyung(
                 color: AppColors.textWhite,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 2,
-                fontSize: 14,
+                fontSize: 16,
               ),
+            ),
+            const SizedBox(width: 12),
+            StreamBuilder<SignalConnectionState>(
+              stream: client.connectionStateStream,
+              initialData: client.sigState,
+              builder: (context, snapshot) => StatusBadge(state: snapshot.data!),
             ),
           ],
         ],
@@ -101,44 +106,33 @@ class HomeScreen extends StatelessWidget {
       actions: [
         if (isAuthenticated) ...[
           IconButton(
-            icon: const Icon(
-              Icons.power_settings_new,
-              color: AppColors.errorRed,
-              size: 22,
+            tooltip: 'Neural Chat',
+            icon: const Icon(Icons.auto_awesome, color: AppColors.neonPink, size: 20),
+            onPressed: () => _showNeuralChatDialog(context, client),
+          ),
+          IconButton(
+            tooltip: 'Trackpad',
+            icon: const Icon(Icons.mouse, color: AppColors.neonCyan, size: 20),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => TrackpadScreen(client: client)),
             ),
+          ),
+          IconButton(
+            tooltip: 'Admin Override',
+            icon: const Icon(Icons.power_settings_new, color: AppColors.errorRed, size: 20),
             onPressed: () => _showAdminOverride(context, client),
           ),
-          IconButton(
-            icon: const Icon(
-              Icons.settings_outlined,
-              color: AppColors.textGrey,
-              size: 20,
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
+        ],
+        IconButton(
+          tooltip: 'Settings',
+          icon: const Icon(Icons.settings_outlined, color: AppColors.textGrey, size: 20),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
           ),
-          StreamBuilder<SignalConnectionState>(
-            stream: client.connectionStateStream,
-            initialData: client.sigState,
-            builder: (context, snapshot) => Padding(
-              padding: const EdgeInsets.only(right: 16, left: 8),
-              child: Center(child: StatusBadge(state: snapshot.data!)),
-            ),
-          ),
-        ] else
-          IconButton(
-            icon: const Icon(
-              Icons.settings_outlined,
-              color: AppColors.textGrey,
-              size: 20,
-            ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
+        ),
+        const SizedBox(width: 8),
       ],
     );
   }

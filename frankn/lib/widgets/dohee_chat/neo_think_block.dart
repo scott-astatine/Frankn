@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:frankn/screens/dohee_chat_screen.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class NeoThinkBlock extends StatefulWidget {
   final String content;
   final bool isStreaming;
-  const NeoThinkBlock({required this.content, required this.isStreaming});
+  const NeoThinkBlock({super.key, required this.content, required this.isStreaming});
 
   @override
   State<NeoThinkBlock> createState() => _NeoThinkBlockState();

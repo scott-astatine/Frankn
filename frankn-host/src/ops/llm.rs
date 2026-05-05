@@ -53,12 +53,11 @@ impl LlmManager {
             return;
         }
         let path = Self::get_chats_path().await;
-        if let Ok(data) = tokio::fs::read_to_string(&path).await {
-            if let Ok(loaded) = serde_json::from_str::<HashMap<String, ChatSession>>(&data) {
+        if let Ok(data) = tokio::fs::read_to_string(&path).await
+            && let Ok(loaded) = serde_json::from_str::<HashMap<String, ChatSession>>(&data) {
                 let mut c = self.chats.lock().await;
                 *c = loaded;
             }
-        }
         self.chats_loaded = true;
     }
 
@@ -103,7 +102,7 @@ impl LlmManager {
         removed
     }
 
-    pub async fn start_server(&mut self, model_path: &str) -> Result<(), String> {
+    pub async fn start_server(&mut self, model_path: &str, config: &crate::config::HostConfig) -> Result<(), String> {
         if self.process.is_some() {
             return Ok(());
         }
@@ -115,8 +114,7 @@ impl LlmManager {
             path.to_path_buf()
         } else {
             // Join with the configured model directory
-            let config = crate::config::HostConfig::load_or_init().await;
-            let model_dir = config.llm_model_dir.unwrap_or_else(|| {
+            let model_dir = config.llm_model_dir.clone().unwrap_or_else(|| {
                 dirs::home_dir()
                     .map(|mut p| {
                         p.push(".config/frankn/models");
@@ -143,7 +141,7 @@ impl LlmManager {
         }
 
         let child = Command::new("llama-server")
-            .args(&[
+            .args([
                 "-m",
                 &final_path.to_string_lossy(),
                 "--port",
@@ -165,23 +163,21 @@ impl LlmManager {
         let mut is_ready = false;
         while retries < 15 {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            if let Ok(res) = self.client.get("http://localhost:8080/health").send().await {
-                if res.status().is_success() {
+            if let Ok(res) = self.client.get("http://localhost:8080/health").send().await
+                && res.status().is_success() {
                     is_ready = true;
                     break;
                 }
-            }
 
             // Check if it crashed while we were waiting
-            if let Some(child) = &mut self.process {
-                if let Ok(Some(status)) = child.try_wait() {
+            if let Some(child) = &mut self.process
+                && let Ok(Some(status)) = child.try_wait() {
                     self.process = None;
                     return Err(format!(
                         "llama-server crashed during startup with status: {}",
                         status
                     ));
                 }
-            }
             retries += 1;
         }
 
@@ -208,9 +204,9 @@ impl LlmManager {
         let mut models = Vec::new();
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path.is_file() {
-                if let Some(ext) = path.extension() {
-                    if ext == "gguf" || ext == "ggff" {
+            if path.is_file()
+                && let Some(ext) = path.extension()
+                    && (ext == "gguf" || ext == "ggff") {
                         let name = path
                             .file_name()
                             .unwrap_or_default()
@@ -226,8 +222,6 @@ impl LlmManager {
                             "size": size,
                         }));
                     }
-                }
-            }
         }
 
         Ok(serde_json::json!({ "models": models }))
@@ -334,12 +328,12 @@ impl LlmManager {
                         break;
                     }
 
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data) {
-                        if let Some(choices) = parsed.get("choices") {
-                            if let Some(first_choice) = choices.get(0) {
-                                if let Some(delta) = first_choice.get("delta") {
-                                    if let Some(content) = delta.get("content") {
-                                        if let Some(content_str) = content.as_str() {
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data)
+                        && let Some(choices) = parsed.get("choices")
+                            && let Some(first_choice) = choices.get(0)
+                                && let Some(delta) = first_choice.get("delta")
+                                    && let Some(content) = delta.get("content")
+                                        && let Some(content_str) = content.as_str() {
                                             assistant_content.push_str(content_str);
                                             let msg = HostMessage::LlmToken {
                                                 token: content_str.to_string(),
@@ -348,11 +342,6 @@ impl LlmManager {
                                             };
                                             Self::send_msg(msg, &rtc_conn, &label).await;
                                         }
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
                 Err(e) => {
                     crate::elog!("LLM ERROR: event stream error: {}", e);

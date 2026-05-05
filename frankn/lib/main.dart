@@ -157,28 +157,31 @@ class FranknTaskHandler extends TaskHandler {
         RtcThinClient().currentHostId = RtcClient().currentHostId;
         RtcThinClient().currentHostName = RtcClient().currentHostName;
 
-        if (state == HostConnectionState.disconnected && RtcClient().isAuthFailed) {
-          _broadcastToMain(IsolateMsg(
-            type: 'event',
-            action: 'auth_failed',
-            payload: {'error': 'AUTHENTICATION_REJECTED'},
-          ));
+        if (state == HostConnectionState.disconnected &&
+            RtcClient().isAuthFailed) {
+          _broadcastToMain(
+            IsolateMsg(
+              type: 'event',
+              action: 'auth_failed',
+              payload: {'error': 'AUTHENTICATION_REJECTED'},
+            ),
+          );
         } else if (state == HostConnectionState.failed) {
-          _broadcastToMain(IsolateMsg(
-            type: 'event',
-            action: 'auth_failed',
-            payload: {'error': 'CONNECTION_FAILED'},
-          ));
+          _broadcastToMain(
+            IsolateMsg(
+              type: 'event',
+              action: 'auth_failed',
+              payload: {'error': 'CONNECTION_FAILED'},
+            ),
+          );
         }
 
         if (state == HostConnectionState.authenticated) {
-          _broadcastToMain(IsolateMsg(
-            type: 'event',
-            action: 'auth_success',
-          ));
+          _broadcastToMain(IsolateMsg(type: 'event', action: 'auth_success'));
         }
 
-        _broadcastToMain(IsolateMsg(
+        _broadcastToMain(
+          IsolateMsg(
             type: 'state',
             action: 'host_state',
             payload: {
@@ -284,6 +287,9 @@ class FranknTaskHandler extends TaskHandler {
         break;
       case 'send_dc_msg':
         RtcClient().sendDcMsg(msg.payload);
+        break;
+      case 'send_input':
+        RtcClient().sendInputMsg(msg.payload);
         break;
       case 'download_init':
         RtcClient().downloadTargetDirs[msg.payload['id']] =
@@ -409,7 +415,7 @@ class FranknTaskHandler extends TaskHandler {
 
       try {
         final msg = IsolateMsg.fromJson(data);
-        print("Background Isolate: Received Intent: ${msg.action}");
+        // print("Background Isolate: Received Intent: ${msg.action}");
 
         if (msg.type == 'intent') {
           _handleIntent(msg);

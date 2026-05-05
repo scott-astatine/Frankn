@@ -173,7 +173,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
   Widget _buildLiveLog() {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      padding: const EdgeInsets.only(bottom: 16, top: 16),
+      padding: const EdgeInsets.only(bottom: 12, top: 10),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Colors.white10)),
       ),

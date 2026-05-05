@@ -7,19 +7,21 @@ The core philosophy here is **Intents over Pixels**. Instead of streaming a vide
 ## Architecture
 
 The system is split into three parts:
-- **Client (Flutter)**: My mobile interface. It's got an immersive terminal (Xterm), a reactive file browser, notification mirroring, and a QR-based pairing system.
+- **Client (Flutter)**: My mobile interface—immersive SSH (`xterm`), file browser & editor, notification mirroring, neural chat UI, remote trackpad/keyboard, and QR-based pairing.
 - **Host (Rust)**: The system-level service running on the PC. It talks to Linux APIs (systemd, D-Bus, MPRIS) and includes a CLI/TUI for configuration.
 - **Signaling Server (Rust)**: A lightweight middleman used only for the initial WebRTC handshake (SDP/ICE exchange). Once connected, the traffic is strictly P2P.
 
 ## Superpowers (Features)
 
-- **Immersive Terminal**: Full SSH access over WebRTC. Supports Nerd Fonts because life is too short for broken icons.
-- **Zero-Trust Security**: Uses Argon2id for challenge-response authentication. Passwords never leave your device.
-- **Config & Pairing**: 12-digit unique IDs and QR code pairing. No more manual IP typing.
+- **Immersive Terminal**: Full SSH access over WebRTC with session restoration. Supports Nerd Fonts and sticky modifier keys.
+- **Zero-Trust Security**: Uses Argon2id for challenge-response authentication. Signaling server hardened against hijacking and ghost connections.
+- **Config & Pairing**: 12-digit unique IDs and QR code pairing (including screenshot import).
 - **Host CLI/TUI**: A dedicated `frankn-host config` TUI for managing settings with Vim keybindings.
 - **Media Control**: Real-time sync of track info, album art, and volume. Control your PC's audio from your phone.
-- **File System**: Recursive browsing, chunked binary transfers with SHA-256 validation, and a built-in code editor for quick tweaks.
+- **File System**: Recursive browsing, chunked binary transfers with SHA-256 validation, and a built-in code editor.
 - **Notification Mirroring**: My PC's notifications show up on my phone in real-time via D-Bus integration.
+- **Neural Chat (Dohee)**: Integrated AI assistant powered by local LLM inferencing. Direct `llama-server` management with persistent session history and high-speed token streaming.
+- **Remote Trackpad**: High-performance pointer and scroll control with batched events and perfect Linux keycode mapping.
 
 ## Getting Started
 
@@ -51,15 +53,17 @@ flutter run
 
 ## Current Progress & End Goal
 
-**Status:** Phase 4 (Advanced Features)
+**Status:** Phase 5 (Advanced Features)
 - [x] P2P WebRTC Transport & Auth (Argon2id)
-- [x] Persistent Configuration Provider (TOML)
+- [x] Persistent Configuration Provider (TOML) with custom path support
 - [x] Host CLI tool & TUI Config Editor (Vim binds)
-- [x] QR Code & 12-digit ID Pairing
+- [x] QR Code & 12-digit ID Pairing (+ Screenshot Import)
 - [x] System Control (Power, Processes, Logs)
 - [x] Immersive Terminal & File Browser
 - [x] Integrated file viewer & editor with syntax highlighting
 - [x] Media Sync & Notification Mirroring
+- [x] Neural Chat & Local LLM Integration
+- [x] High-performance Remote Trackpad & Virtual Keyboard
 - [ ] Bidirectional Folder Sync
 - [ ] Mobile-as-Host (Control the phone from the PC)
 
@@ -67,8 +71,8 @@ flutter run
 
 ---
 
-### A Note on Contributions
-I'm sharing this publicly because I think it's useful, but right now I'm treating this as a solo mission. I'm **not accepting pull requests** at the moment while I'm still hammering out the core architecture. Feel free to fork it and play around, though!
+### Contributions
+I'm sharing this publicly because I think it's useful. While this is primarily a personal project, feel free to fork it, play around, and suggest improvements!
 
 ---
 *Built with Rust and Flutter. Cyberpunk aesthetic intended.*

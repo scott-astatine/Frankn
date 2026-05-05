@@ -17,6 +17,8 @@ pub struct HostConfig {
     pub is_public: bool,
     pub restricted_cmds: Vec<String>,
     pub llm_model_dir: Option<String>,
+    #[serde(skip)]
+    pub custom_config_path: Option<PathBuf>,
 }
 
 impl HostConfig {
@@ -32,13 +34,16 @@ impl HostConfig {
         path
     }
 
-    pub async fn load_or_init() -> Self {
-        let config_path = Self::config_file();
+    pub async fn load_or_init(custom_path: Option<PathBuf>) -> Self {
+        let config_path = custom_path.clone().unwrap_or_else(Self::config_file);
 
         if config_path.exists() {
             match fs::read_to_string(&config_path).await {
                 Ok(content) => match toml::from_str::<HostConfig>(&content) {
-                    Ok(config) => return config,
+                    Ok(mut config) => {
+                        config.custom_config_path = custom_path;
+                        return config;
+                    }
                     Err(e) => {
                         elog!("Failed to parse config: {}. Re-initializing...", e);
                     }
@@ -50,10 +55,10 @@ impl HostConfig {
         }
 
         // First run or corrupted config
-        Self::init_interactive().await
+        Self::init_interactive(custom_path).await
     }
 
-    async fn init_interactive() -> Self {
+    async fn init_interactive(custom_path: Option<PathBuf>) -> Self {
         // Check if we have a TTY before starting interactive setup
         if !atty::is(atty::Stream::Stdin) {
             elog!("ERROR: Configuration not found and no terminal detected.");
@@ -61,7 +66,8 @@ impl HostConfig {
             std::process::exit(1);
         }
 
-        let config = tokio::task::spawn_blocking(|| {
+        let custom_path_clone = custom_path.clone();
+        let config = tokio::task::spawn_blocking(move || {
             println!(
                 "
 ⚡ Welcome to Frankn Host Setup
@@ -122,6 +128,7 @@ impl HostConfig {
                 is_public,
                 restricted_cmds: Vec::new(),
                 llm_model_dir,
+                custom_config_path: custom_path_clone,
             }
         })
         .await
@@ -133,16 +140,17 @@ impl HostConfig {
     }
 
     pub async fn save(&self) {
-        let dir = Self::config_dir();
-        if !dir.exists() {
-            if let Err(e) = fs::create_dir_all(&dir).await {
-                elog!("Failed to create config directory: {}", e);
-            }
-        }
+        let file_path = self.custom_config_path.clone().unwrap_or_else(Self::config_file);
+        
+        if let Some(dir) = file_path.parent()
+            && !dir.exists()
+                && let Err(e) = fs::create_dir_all(dir).await {
+                    elog!("Failed to create config directory: {}", e);
+                }
 
         match toml::to_string_pretty(self) {
             Ok(content) => {
-                if let Err(e) = fs::write(Self::config_file(), content).await {
+                if let Err(e) = fs::write(&file_path, content).await {
                     elog!("Failed to write config file: {}", e);
                 }
             }

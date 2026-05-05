@@ -11,20 +11,28 @@ class RtcThinClient {
   factory RtcThinClient() => _instance;
   RtcThinClient._internal();
 
-  final _hostStateController = StreamController<HostConnectionState>.broadcast();
-  Stream<HostConnectionState> get hostStateStream => _hostStateController.stream;
+  final _hostStateController =
+      StreamController<HostConnectionState>.broadcast();
+  Stream<HostConnectionState> get hostStateStream =>
+      _hostStateController.stream;
 
-  final _commandResponseController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get commandResponseStream => _commandResponseController.stream;
+  final _commandResponseController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get commandResponseStream =>
+      _commandResponseController.stream;
 
-  final _peerStatusController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get peerStatusStream => _peerStatusController.stream;
+  final _peerStatusController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get peerStatusStream =>
+      _peerStatusController.stream;
 
   final _hostListController = StreamController<List<dynamic>>.broadcast();
   Stream<List<dynamic>> get hostListStream => _hostListController.stream;
 
-  final _connectionStateController = StreamController<SignalConnectionState>.broadcast();
-  Stream<SignalConnectionState> get connectionStateStream => _connectionStateController.stream;
+  final _connectionStateController =
+      StreamController<SignalConnectionState>.broadcast();
+  Stream<SignalConnectionState> get connectionStateStream =>
+      _connectionStateController.stream;
 
   final _logController = StreamController<String>.broadcast();
   Stream<String> get logStream => _logController.stream;
@@ -32,11 +40,15 @@ class RtcThinClient {
   final _mediaStatusController = StreamController<String>.broadcast();
   Stream<String> get mediaStatusStream => _mediaStatusController.stream;
 
-  final _notificationController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get notificationStream => _notificationController.stream;
+  final _notificationController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get notificationStream =>
+      _notificationController.stream;
 
-  final _transferProgressController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get transferProgressStream => _transferProgressController.stream;
+  final _transferProgressController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get transferProgressStream =>
+      _transferProgressController.stream;
 
   final _sshDataController = StreamController<Uint8List>.broadcast();
   Stream<Uint8List> get sshDataStream => _sshDataController.stream;
@@ -44,7 +56,8 @@ class RtcThinClient {
   final _authErrorController = StreamController<String>.broadcast();
   Stream<String> get authErrorStream => _authErrorController.stream;
 
-  final _aiStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _aiStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get aiStream => _aiStreamController.stream;
 
   HostConnectionState currentHostState = HostConnectionState.disconnected;
@@ -52,7 +65,11 @@ class RtcThinClient {
   String? currentHostId;
   String? currentHostName;
   String? currentPassword;
-  
+
+  // Temporary in-memory storage for SSH credentials
+  String? lastSshUsername;
+  String? lastSshPassword;
+
   Set<String> onlineHostIds = {};
   List<dynamic> currentHosts = [];
   List<String> logHistory = [];
@@ -72,7 +89,10 @@ class RtcThinClient {
   /// Callback to restart the foreground service from the UI Isolate.
   Future<void> Function()? onServiceRestartRequired;
 
-  void sendIntent(String action, [Map<String, dynamic> payload = const {}]) async {
+  void sendIntent(
+    String action, [
+    Map<String, dynamic> payload = const {},
+  ]) async {
     final msg = IsolateMsg(type: 'intent', action: action, payload: payload);
     if (_isBackground) {
       _localIntentController.add(msg);
@@ -82,10 +102,11 @@ class RtcThinClient {
         if (onServiceRestartRequired != null) {
           print("ThinClient: Restarting background service...");
           await onServiceRestartRequired!();
-          
+
           // Wait a bit for the isolate to boot
           int retries = 0;
-          while (!(await FlutterForegroundTask.isRunningService) && retries < 10) {
+          while (!(await FlutterForegroundTask.isRunningService) &&
+              retries < 10) {
             await Future.delayed(const Duration(milliseconds: 200));
             retries++;
           }
@@ -102,6 +123,11 @@ class RtcThinClient {
         if (msg.action == 'host_state') {
           final stateIndex = msg.payload['state'] as int;
           currentHostState = HostConnectionState.values[stateIndex];
+          if (currentHostState == HostConnectionState.disconnected ||
+              currentHostState == HostConnectionState.failed) {
+            lastSshUsername = null;
+            lastSshPassword = null;
+          }
           currentHostId = msg.payload['id'];
           currentHostName = msg.payload['name'];
           _hostStateController.add(currentHostState);
@@ -135,14 +161,16 @@ class RtcThinClient {
       } else if (msg.type == 'event') {
         if (msg.action == 'command_response') {
           _commandResponseController.add(msg.payload);
-          
-          if (msg.payload['type'] == DcMsg.LlmToken || msg.payload['type'] == 'llm_token') {
+
+          if (msg.payload['type'] == DcMsg.LlmToken ||
+              msg.payload['type'] == 'llm_token') {
             _aiStreamController.add(msg.payload);
           }
 
           // BRIDGE: If this is a stream_end, also notify the transfer progress stream
           // so that viewers (Editor/Image) know to stop loading.
-          if (msg.payload['type'] == DcMsg.StreamEnd || msg.payload['type'] == 'download_end') {
+          if (msg.payload['type'] == DcMsg.StreamEnd ||
+              msg.payload['type'] == 'download_end') {
             _transferProgressController.add({
               ...msg.payload,
               'type': 'complete',
@@ -179,34 +207,25 @@ class RtcThinClient {
         } else if (msg.action == 'transfer_progress') {
           _transferProgressController.add(msg.payload);
         } else if (msg.action == 'transfer_complete') {
-          _transferProgressController.add({
-            ...msg.payload,
-            'type': 'complete',
-          });
+          _transferProgressController.add({...msg.payload, 'type': 'complete'});
         } else if (msg.action == 'download_start') {
-          _transferProgressController.add({
-            ...msg.payload,
-            'type': 'start',
-          });
+          _transferProgressController.add({...msg.payload, 'type': 'start'});
         } else if (msg.action == 'download_end') {
-          _transferProgressController.add({
-            ...msg.payload,
-            'type': 'complete',
-          });
+          _transferProgressController.add({...msg.payload, 'type': 'complete'});
         } else if (msg.action == 'transfer_failed') {
-            _transferProgressController.add({
-              ...msg.payload,
-              'type': 'failed',
-            });
+          _transferProgressController.add({...msg.payload, 'type': 'failed'});
         } else if (msg.action == 'ssh_output') {
-            _sshDataController.add(base64Decode(msg.payload['data']));
+          _sshDataController.add(base64Decode(msg.payload['data']));
         } else if (msg.action == 'auth_failed') {
-            _authErrorController.add(msg.payload['error'] ?? 'AUTHENTICATION_FAILED');
+          _authErrorController.add(
+            msg.payload['error'] ?? 'AUTHENTICATION_FAILED',
+          );
         } else if (msg.action == 'auth_success') {
-            _authErrorController.add('SUCCESS');
+          _authErrorController.add('SUCCESS');
         }
-        }
-        } catch(e) {      print("ThinClient parse error: $e");
+      }
+    } catch (e) {
+      print("ThinClient parse error: $e");
     }
   }
 
@@ -229,6 +248,11 @@ class RtcThinClient {
   void disconnectFromHost() => sendIntent('disconnect_host');
 
   void sendDcMsg(Map<String, dynamic> cmd) => sendIntent('send_dc_msg', cmd);
+
+  void sendInputMsg(Map<String, dynamic> msg) {
+    if (currentHostState != HostConnectionState.authenticated) return;
+    sendIntent('send_input', msg);
+  }
 
   void sendDownloadInit({
     required String id,

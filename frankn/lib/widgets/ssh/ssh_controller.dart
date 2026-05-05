@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/utils/utils.dart';
 import 'package:xterm/xterm.dart';
 
 class SshController extends ChangeNotifier {
@@ -21,8 +22,8 @@ class SshController extends ChangeNotifier {
 
   bool get isConnected => _sshClient != null;
 
-  bool ctrlActive = false;
-  bool altActive = false;
+  ModState ctrlState = ModState.off;
+  ModState altState = ModState.off;
 
   bool _isDisposed = false;
 
@@ -35,15 +36,21 @@ class SshController extends ChangeNotifier {
 
   SshController(this.client);
 
+  ModState _nextModState(ModState current) {
+    if (current == ModState.off) return ModState.active;
+    if (current == ModState.active) return ModState.locked;
+    return ModState.off;
+  }
+
   void toggleCtrl() {
     if (_isDisposed) return;
-    ctrlActive = !ctrlActive;
+    ctrlState = _nextModState(ctrlState);
     notifyListeners();
   }
 
   void toggleAlt() {
     if (_isDisposed) return;
-    altActive = !altActive;
+    altState = _nextModState(altState);
     notifyListeners();
   }
 
@@ -241,7 +248,7 @@ class SshController extends ChangeNotifier {
   void _handleInput(String data) {
     if (_sshSession == null || _isDisposed) return;
 
-    if (ctrlActive) {
+    if (ctrlState != ModState.off) {
       if (data.length == 1) {
         final char = data.toUpperCase().codeUnitAt(0);
         if (char >= 64 && char <= 95) {
@@ -252,12 +259,16 @@ class SshController extends ChangeNotifier {
       } else {
         _sshSession!.write(utf8.encode(data));
       }
-      ctrlActive = false;
-      notifyListeners();
-    } else if (altActive) {
+      if (ctrlState == ModState.active) {
+        ctrlState = ModState.off;
+        notifyListeners();
+      }
+    } else if (altState != ModState.off) {
       _sshSession!.write(utf8.encode('\x1b$data'));
-      altActive = false;
-      notifyListeners();
+      if (altState == ModState.active) {
+        altState = ModState.off;
+        notifyListeners();
+      }
     } else {
       _sshSession!.write(utf8.encode(data));
     }
@@ -286,8 +297,8 @@ class SshController extends ChangeNotifier {
     _socketSubscription = null;
     _commandSubscription = null;
     _sshDataSub = null;
-    ctrlActive = false;
-    altActive = false;
+    ctrlState = ModState.off;
+    altState = ModState.off;
     notifyListeners();
   }
 
@@ -299,8 +310,8 @@ class SshController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _isDisposed = true;
     stopSession();
+    _isDisposed = true;
     super.dispose();
   }
 }

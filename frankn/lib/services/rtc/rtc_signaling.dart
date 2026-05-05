@@ -35,8 +35,9 @@ mixin RtcSignaling on RtcClientBase {
     log("Initializing Neural Link to ${SettingsService().signalingUrl}...");
 
     try {
-      signalingChannel = WebSocketChannel.connect(
+      signalingChannel = IOWebSocketChannel.connect(
         Uri.parse(SettingsService().signalingUrl),
+        pingInterval: const Duration(seconds: 10),
       );
 
       // Set up WebSocket message handling
@@ -206,6 +207,12 @@ mixin RtcSignaling on RtcClientBase {
         log("Identity Verified. Access Granted!");
         _updateSigState(SignalConnectionState.connected);
         requestHostList();
+        break;
+
+      case SignalingMessage.RegisterFailure:
+        final error = data['error'] ?? 'Unknown registration error';
+        log("Identity Verification Failed: $error");
+        _handleDisconnection();
         break;
 
       case SignalingMessage.PeerStatusUpdate:

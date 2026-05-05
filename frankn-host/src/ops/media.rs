@@ -130,15 +130,12 @@ where
     >,
 {
     let conn = Connection::session().await?;
-    if let Some(player) = find_active_player(&conn).await {
-        if let Ok(bus_name) = BusName::try_from(player.as_str()) {
-            if let Ok(builder) = MediaPlayerProxy::builder(&conn).destination(bus_name) {
-                if let Ok(proxy) = builder.build().await {
+    if let Some(player) = find_active_player(&conn).await
+        && let Ok(bus_name) = BusName::try_from(player.as_str())
+            && let Ok(builder) = MediaPlayerProxy::builder(&conn).destination(bus_name)
+                && let Ok(proxy) = builder.build().await {
                     f(&proxy).await?;
                 }
-            }
-        }
-    }
     Ok(())
 }
 
@@ -158,26 +155,21 @@ async fn find_active_player(conn: &Connection) -> Option<String> {
     }
 
     for player in &players {
-        if let Ok(bus_name) = BusName::try_from(player.as_str()) {
-            if let Ok(builder) = MediaPlayerProxy::builder(conn).destination(bus_name) {
-                if let Ok(proxy) = builder.build().await {
-                    if let Ok(status) = proxy.playback_status().await {
-                        if status == "Playing" {
+        if let Ok(bus_name) = BusName::try_from(player.as_str())
+            && let Ok(builder) = MediaPlayerProxy::builder(conn).destination(bus_name)
+                && let Ok(proxy) = builder.build().await
+                    && let Ok(status) = proxy.playback_status().await
+                        && status == "Playing" {
                             *LAST_ACTIVE_PLAYER.lock().await = Some(player.clone());
                             return Some(player.clone());
                         }
-                    }
-                }
-            }
-        }
     }
 
     let mut last_active = LAST_ACTIVE_PLAYER.lock().await;
-    if let Some(ref name) = *last_active {
-        if players.contains(name) {
+    if let Some(ref name) = *last_active
+        && players.contains(name) {
             return Some(name.clone());
         }
-    }
 
     let fallback = players.first().cloned();
     *last_active = fallback.clone();
@@ -188,17 +180,15 @@ pub async fn list_players(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessag
     let conn_res = Connection::session().await;
     let mut players_list = Vec::new();
 
-    if let Ok(conn) = conn_res {
-        if let Ok(dbus) = zbus::fdo::DBusProxy::new(&conn).await {
-            if let Ok(names) = dbus.list_names().await {
+    if let Ok(conn) = conn_res
+        && let Ok(dbus) = zbus::fdo::DBusProxy::new(&conn).await
+            && let Ok(names) = dbus.list_names().await {
                 for name in names {
                     if name.as_str().starts_with("org.mpris.MediaPlayer2.") {
                         players_list.push(name.to_string());
                     }
                 }
             }
-        }
-    }
 
     let current = LAST_ACTIVE_PLAYER.lock().await.clone();
 
@@ -303,7 +293,7 @@ async fn fetch_mpris_data_with_conn(conn: &Connection) -> zbus::Result<MprisData
         .ok_or_else(|| zbus::Error::Address("No player found".into()))?;
     let bus_name =
         BusName::try_from(player.as_str()).map_err(|e| zbus::Error::Address(e.to_string()))?;
-    let proxy = MediaPlayerProxy::builder(&conn)
+    let proxy = MediaPlayerProxy::builder(conn)
         .destination(bus_name)?
         .build()
         .await?;
@@ -380,8 +370,8 @@ async fn fetch_mpris_data_with_conn(conn: &Connection) -> zbus::Result<MprisData
         .get("mpris:artUrl")
         .or_else(|| metadata.get("xesam:artUrl"));
 
-    if let Some(v) = art_url_val {
-        if let Value::Str(url) = v.deref() {
+    if let Some(v) = art_url_val
+        && let Value::Str(url) = v.deref() {
             let url_str = url.as_str();
 
             // Log the URL we found to help debug
@@ -412,7 +402,6 @@ async fn fetch_mpris_data_with_conn(conn: &Connection) -> zbus::Result<MprisData
                 }
             }
         }
-    }
 
     Ok(MprisData {
         player_name: player,
@@ -551,8 +540,8 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                     continue;
                 }
 
-                if let Ok(d) = fetch_mpris_data_with_conn(&conn).await {
-                    if d.status.to_lowercase().contains("playing") {
+                if let Ok(d) = fetch_mpris_data_with_conn(&conn).await
+                    && d.status.to_lowercase().contains("playing") {
                         let msg = HostMessage::MediaPositionUpdate {
                             position: d.position,
                             length: Some(d.length),
@@ -569,7 +558,6 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                             }
                         }
                     }
-                }
                 tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
             }
         });
@@ -595,10 +583,9 @@ pub async fn get_all_audio_devices(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> H
             .args(["-f", "json", "list", "sinks"])
             .output()
             .await
-        {
-            if let Ok(json_str) = String::from_utf8(output.stdout) {
-                if let Ok(sinks) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                    if let Some(arr) = sinks.as_array() {
+            && let Ok(json_str) = String::from_utf8(output.stdout)
+                && let Ok(sinks) = serde_json::from_str::<serde_json::Value>(&json_str)
+                    && let Some(arr) = sinks.as_array() {
                         for sink in arr {
                             let id = sink["name"].as_str().unwrap_or("0").to_string();
                             let name = sink["description"]
@@ -623,9 +610,6 @@ pub async fn get_all_audio_devices(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> H
                             }));
                         }
                     }
-                }
-            }
-        }
         HostMessage::Response {
             id: req_id.to_string(),
             status: Status::Success,

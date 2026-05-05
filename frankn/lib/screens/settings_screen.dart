@@ -283,10 +283,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _editDefaultModel() async {
     final selectedModel = await showDialog<String>(
       context: context,
-      builder: (context) => ModelSelectorDialog(
-        client: _client,
-        isSettingsMode: true,
-      ),
+      builder: (context) =>
+          ModelSelectorDialog(client: _client, isSettingsMode: true),
     );
 
     if (selectedModel != null && mounted) {
@@ -322,7 +320,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.only(bottom: 12),
               child: _buildSettingCard(
                 title: "ACTIVE_HOST_ALIAS",
-                value: _client.currentHostName?.toUpperCase() ?? "UNKNOWN",
+                value: _client.currentHostName ?? "UNKNOWN",
                 icon: Icons.edit_note_outlined,
                 onTap: _renameHost,
                 accentColor: AppColors.neonCyan,
@@ -336,13 +334,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             accentColor: AppColors.neonPink,
           ),
           const SizedBox(height: 12),
-          _buildSettingCard(
-            title: "DEFAULT_LLM_MODEL",
-            value: _settings.llmDefaultModel.isEmpty ? "NOT_SET" : _settings.llmDefaultModel,
-            icon: Icons.memory_outlined,
-            onTap: _editDefaultModel,
-            accentColor: AppColors.neonCyan,
-          ),
+          if (_client.currentHostId != null)
+            _buildSettingCard(
+              title: "DEFAULT_LLM_MODEL",
+              value: _settings.llmDefaultModel.isEmpty
+                  ? "NOT_SET"
+                  : _settings.llmDefaultModel,
+              icon: Icons.memory_outlined,
+              onTap: _editDefaultModel,
+              accentColor: AppColors.neonCyan,
+            ),
 
           const SizedBox(height: 32),
           _buildSectionHeader(l10n.uiPreferences),

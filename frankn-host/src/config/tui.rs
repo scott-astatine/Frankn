@@ -172,10 +172,10 @@ pub async fn run_tui(config: HostConfig) -> Result<(), Box<dyn Error>> {
 
 async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<HostConfig> {
     loop {
-        terminal.draw(|f| ui(f, &mut app)).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        terminal.draw(|f| ui(f, &mut app)).map_err(|e| io::Error::other(e.to_string()))?;
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
+        if event::poll(std::time::Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()? {
                 match app.input_mode {
                     InputMode::Normal => match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => return Ok(app.config),
@@ -236,7 +236,6 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                     },
                 }
             }
-        }
     }
 }
 

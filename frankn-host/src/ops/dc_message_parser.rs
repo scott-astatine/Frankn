@@ -199,7 +199,7 @@ async fn _async_ls(
     show_hidden: &Option<bool>,
     _rtc: Arc<Mutex<RTCConn>>,
 ) -> HostMessage {
-    crate::fs_sync::ls(id, path, sort_by.clone(), show_hidden.clone())
+    crate::fs_sync::ls(id, path, sort_by.clone(), *show_hidden)
 }
 
 async fn _async_get_file(id: &str, path: &String, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
@@ -220,11 +220,10 @@ async fn _handle_system_log(
         use tokio::process::Command;
         let mut cmd = Command::new("journalctl");
         cmd.args(["--no-pager", "--since", "-1m"]);
-        if let Some(service) = args {
-            if !service.trim().is_empty() {
+        if let Some(service) = args
+            && !service.trim().is_empty() {
                 cmd.arg(service);
             }
-        }
         let result = cmd.output().await;
         _handle_cmd_output(id, result)
     }

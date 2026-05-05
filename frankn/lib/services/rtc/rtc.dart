@@ -31,6 +31,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 
 import 'package:frankn/main.dart';
 import 'package:frankn/utils/utils.dart';
@@ -69,6 +70,9 @@ abstract class RtcClientBase {
   /// Sends a data channel command to the host with proper authentication.
   /// Automatically routes to the appropriate WebRTC channel based on command type.
   void sendDcMsg(Map<String, dynamic> cmd);
+
+  /// Sends a raw input message over the frankn_input channel.
+  void sendInputMsg(Map<String, dynamic> msg);
 
   /// Sends a message to a specific WebRTC data channel with logging.
   /// Validates channel state before sending to prevent errors.
@@ -197,6 +201,10 @@ abstract class RtcClientBase {
   RTCDataChannel? get aiDC;
   set aiDC(RTCDataChannel? value);
 
+  /// Input channel for keyboard and mouse control (frankn_input, ID: 6).
+  RTCDataChannel? get inputDC;
+  set inputDC(RTCDataChannel? value);
+
   // ========== CLIENT IDENTITY ==========
 
   /// Unique identifier for this client instance.
@@ -297,6 +305,9 @@ class RtcClient extends RtcClientBase
 
   @override
   RTCDataChannel? aiDC;
+
+  @override
+  RTCDataChannel? inputDC;
 
   // ========== CLIENT IDENTITY ==========
 
@@ -459,10 +470,15 @@ class RtcClient extends RtcClientBase
   @override
   void sendToChannel(RTCDataChannel? channel, String msg, String label) {
     // Only log non-noisy messages (skip ping, telemetry, and file chunks)
-    if (!msg.contains('"dc_msg_type":"ping"') &&
-        !msg.contains('"dc_msg_type":"telemetry"') &&
-        !msg.contains('"type":"upload_chunk"') &&
-        !msg.contains('"type":"file_chunk"')) {
+    if (!msg.contains(DcMsg.Ping) &&
+        !msg.contains(DcMsg.Telemetry) &&
+        !msg.contains(DcMsg.UploadChunk) &&
+        !msg.contains(InputSig.MouseMove) &&
+        !msg.contains(InputSig.MouseClick) &&
+        !msg.contains(InputSig.Scroll) &&
+        !msg.contains(InputSig.Text) &&
+        !msg.contains(InputSig.KeyPress) &&
+        !msg.contains(DcMsg.FileChunk)) {
       log("TX [$label]: $msg");
     }
     if (channel?.state == RTCDataChannelState.RTCDataChannelOpen) {

@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:frankn/utils/utils.dart';
 
 class SshKeyBar extends StatelessWidget {
-  final bool ctrlActive;
-  final bool altActive;
+  final ModState ctrlState;
+  final ModState altState;
   final VoidCallback onToggleCtrl;
   final VoidCallback onToggleAlt;
   final Function(String) onSendRaw;
 
   const SshKeyBar({
     super.key,
-    required this.ctrlActive,
-    required this.altActive,
+    required this.ctrlState,
+    required this.altState,
     required this.onToggleCtrl,
     required this.onToggleAlt,
     required this.onSendRaw,
@@ -28,8 +28,8 @@ class SshKeyBar extends StatelessWidget {
         children: [
           _buildKeyBtn("TAB", "\t"),
           _buildKeyBtn("ESC", "\x1b"),
-          _buildModifierBtn("CTRL", ctrlActive, onToggleCtrl),
-          _buildModifierBtn("ALT", altActive, onToggleAlt),
+          _buildModifierBtn("CTRL", ctrlState, onToggleCtrl),
+          _buildModifierBtn("ALT", altState, onToggleAlt),
           _buildKeyBtn("INS", "\x1b[2~"),
           _buildKeyBtn("DEL", "\x1b[3~"),
           _buildKeyBtn("HOME", "\x1b[H"),
@@ -78,19 +78,32 @@ class SshKeyBar extends StatelessWidget {
     );
   }
 
-  Widget _buildModifierBtn(String label, bool isActive, VoidCallback onTap) {
+  Widget _buildModifierBtn(String label, ModState state, VoidCallback onTap) {
+    Color color = AppColors.neonCyan;
+    Color bgColor = AppColors.panelGrey;
+    Color borderColor = AppColors.neonCyan.withValues(alpha: 0.3);
+
+    if (state == ModState.active) {
+      color = Colors.black;
+      bgColor = AppColors.neonCyan;
+    } else if (state == ModState.locked) {
+      color = Colors.black;
+      bgColor = AppColors.neonPink;
+      borderColor = AppColors.neonPink;
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: isActive ? AppColors.neonCyan : AppColors.panelGrey,
-          foregroundColor: isActive ? Colors.black : AppColors.neonCyan,
+          backgroundColor: bgColor,
+          foregroundColor: color,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           minimumSize: const Size(0, 32),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(4),
             side: BorderSide(
-              color: AppColors.neonCyan.withValues(alpha: 0.3),
+              color: borderColor,
               width: 0.5,
             ),
           ),

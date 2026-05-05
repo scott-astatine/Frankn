@@ -13,6 +13,8 @@ enum HostConnectionState {
   authenticated,
 }
 
+enum ModState { off, active, locked }
+
 class NeoColors {
   static const background = Color(0xFF09090B);
   static const darkZinc = Color(0xFF18181B);
@@ -47,6 +49,14 @@ class AppConstants {
   // UI Constants
   static const double defaultPadding = 16.0;
   static const double borderRadius = 8.0; // Sharp corners for cyberpunk feel
+}
+
+class InputSig {
+  static const MouseClick = "mouse_click";
+  static const Text = "type_text";
+  static const MouseMove = "mouse_move";
+  static const KeyPress = "key_press";
+  static const Scroll = "scroll";
 }
 
 class SignalingMessage {

@@ -6,6 +6,7 @@ import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/cyber_card.dart';
 import 'package:frankn/utils/cyber_button.dart';
 import 'package:frankn/widgets/pairing_dialog.dart';
+import 'package:frankn/screens/log_terminal_screen.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class HostListPanel extends StatefulWidget {
@@ -19,15 +20,27 @@ class HostListPanel extends StatefulWidget {
 class _HostListPanelState extends State<HostListPanel> {
   StreamSubscription? _peerSub;
   StreamSubscription? _hostSub;
+  StreamSubscription? _logSub;
+  late final List<String> _logs;
 
   @override
   void initState() {
     super.initState();
+    _logs = List.from(widget.client.logHistory);
+
     _peerSub = widget.client.peerStatusStream.listen((_) {
       if (mounted) setState(() {});
     });
     _hostSub = widget.client.hostListStream.listen((_) {
       if (mounted) setState(() {});
+    });
+    _logSub = widget.client.logStream.listen((log) {
+      if (mounted) {
+        setState(() {
+          _logs.insert(0, log);
+          if (_logs.length > 50) _logs.removeLast();
+        });
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.client.requestHostList();
@@ -38,6 +51,7 @@ class _HostListPanelState extends State<HostListPanel> {
   void dispose() {
     _peerSub?.cancel();
     _hostSub?.cancel();
+    _logSub?.cancel();
     super.dispose();
   }
 
@@ -46,44 +60,54 @@ class _HostListPanelState extends State<HostListPanel> {
     final savedHosts = SettingsService().savedHosts;
     final l10n = AppLocalizations.of(context)!;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionHeader(l10n.neuralLinks.toUpperCase(), Icons.link),
-          const SizedBox(height: 16),
-          if (savedHosts.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text(
-                  l10n.noPersistentLinks.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white10,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionHeader(l10n.neuralLinks, Icons.link),
+                const SizedBox(height: 16),
+                if (savedHosts.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Text(
+                        l10n.noPersistentLinks.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white10,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ...savedHosts.map(
+                    (h) => _buildHostCard(
+                      context,
+                      h['id']!,
+                      h['name']!,
+                      isSaved: true,
+                      isOnline: widget.client.onlineHostIds.contains(h['id']),
+                    ),
                   ),
-                ),
-              ),
-            )
-          else
-            ...savedHosts.map(
-              (h) => _buildHostCard(
-                context,
-                h['id']!,
-                h['name']!,
-                isSaved: true,
-                isOnline: widget.client.onlineHostIds.contains(h['id']),
-              ),
+                const SizedBox(height: 32),
+                _buildSectionHeader(l10n.publicDiscovery, Icons.radar),
+                const SizedBox(height: 16),
+                _buildDiscoveryContent(savedHosts, l10n),
+              ],
             ),
-          const SizedBox(height: 32),
-          _buildSectionHeader(l10n.publicDiscovery.toUpperCase(), Icons.radar),
-          const SizedBox(height: 16),
-          _buildDiscoveryContent(savedHosts, l10n),
-        ],
-      ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: _buildLiveLog(l10n),
+        ),
+      ],
     );
   }
 
@@ -102,6 +126,87 @@ class _HostListPanelState extends State<HostListPanel> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLiveLog(AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.only(top: 16),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.liveLog.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.neonCyan,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(
+                  Icons.fullscreen_exit,
+                  size: 16,
+                  color: Colors.white24,
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LogTerminalScreen(client: widget.client),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF09090B),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
+            height: MediaQuery.of(context).size.height * 0.10,
+            child: _logs.isEmpty
+                ? Text(
+                    "> [IDLE] Listening for neural signals...",
+                    style: TextStyle(
+                      fontFamily: 'JetBrainsMonoNerdFont',
+                      fontSize: SettingsService().terminalFontSize,
+                      color: Colors.white38,
+                    ),
+                  )
+                : ListView.builder(
+                    reverse: true,
+                    itemCount: _logs.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          "> ${_logs[index]}",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'JetBrainsMonoNerdFont',
+                            fontSize: SettingsService().terminalFontSize,
+                            color: AppColors.matrixGreen.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -200,7 +305,7 @@ class _HostListPanelState extends State<HostListPanel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name.toUpperCase(),
+                      name,
                       style: TextStyle(
                         color: isOnline ? Colors.white : Colors.white24,
                         fontWeight: FontWeight.w900,

@@ -5,6 +5,22 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+configurations.all {
+    resolutionStrategy {
+        eachDependency {
+            if (requested.group == "androidx.core" && (requested.name == "core" || requested.name == "core-ktx")) {
+                useVersion("1.13.1")
+            }
+            if (requested.group == "androidx.activity" && (requested.name == "activity" || requested.name == "activity-ktx")) {
+                useVersion("1.9.3")
+            }
+            if (requested.group == "androidx.navigationevent" && requested.name == "navigationevent-android") {
+                useVersion("1.0.0")
+            }
+        }
+    }
+}
+
 android {
     namespace = "com.astatine.frankn.frankn"
     compileSdk = flutter.compileSdkVersion

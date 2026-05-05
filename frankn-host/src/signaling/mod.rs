@@ -86,6 +86,7 @@ impl SignalingClient {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+            let mut last_seen = std::time::Instant::now();
             loop {
                 tokio::select! {
                     // 1. Handle outgoing messages from the app
@@ -98,6 +99,7 @@ impl SignalingClient {
                     }
                     // 2. Handle incoming messages from the server
                     msg_result = read.next() => {
+                        last_seen = std::time::Instant::now();
                         match msg_result {
                             Some(Ok(Message::Text(text))) => {
                                 match serde_json::from_str::<SignalingMessage>(&text) {
@@ -134,6 +136,10 @@ impl SignalingClient {
                     }
                     // 3. Heartbeat
                     _ = interval.tick() => {
+                        if last_seen.elapsed().as_secs() > 30 {
+                            elog!("NODE: Signaling server timeout (no response). Terminating connection.");
+                            break;
+                        }
                         if write.send(Message::Ping(vec![].into())).await.is_err() {
                             elog!("NODE: Signaling heartbeat failed.");
                             break;

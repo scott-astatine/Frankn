@@ -152,6 +152,12 @@ mixin RtcConnection on RtcClientBase {
       aiDC!.onMessage = (msg) =>
           handleHostMessage(msg.isBinary ? msg.binary : msg.text);
 
+      inputDC = await peerConnection!.createDataChannel(
+        'frankn_input',
+        RTCDataChannelInit()..id = 6,
+      );
+      inputDC!.onMessage = (msg) => log("Input Channel: ${msg.text}");
+
       // Monitor data channel state for connection progress
       genDC!.onDataChannelState = (dcState) {
         log("DC State [frankn_cmd]: $dcState");
@@ -371,6 +377,16 @@ mixin RtcConnection on RtcClientBase {
       log("WARN: Error closing sshDC: $e");
     }
     try {
+      await aiDC?.close();
+    } catch (e) {
+      log("WARN: Error closing aiDC: $e");
+    }
+    try {
+      await inputDC?.close();
+    } catch (e) {
+      log("WARN: Error closing inputDC: $e");
+    }
+    try {
       await peerConnection?.dispose();
     } catch (e) {
       log("WARN: Error disposing peerConnection: $e");
@@ -380,6 +396,8 @@ mixin RtcConnection on RtcClientBase {
     fsDC = null;
     mediaDC = null;
     sshDC = null;
+    aiDC = null;
+    inputDC = null;
     peerConnection = null;
     // Reset SSH buffering state
     _sshEarlyBuffer.clear();

@@ -18,6 +18,7 @@ I'm not just building another remote desktop app. Frankn is designed around thre
 
 My architecture relies on **WebRTC** for direct, encrypted P2P communication, bypassing the need for port forwarding or VPNs.
 
+```
 ┌─────────────────────────┐         ┌────────────────────────────┐
 │     Flutter Mobile      │◄───────►│     Rust Backend           │
 │     App (Client)        │ WebRTC  │     (System Service)       │
@@ -27,15 +28,15 @@ My architecture relies on **WebRTC** for direct, encrypted P2P communication, by
           └───────►┌──────────────────────┐◄────────────┘
                    │    Rust Signaling    │
                    │        Server        │
-                   │                      │
                    │      (Discovery)     │
                    └──────────────────────┘
+```
 
 ### Comms
-* **Transport**: Multi-channel WebRTC Data Channels. Specialized lanes: `frankn_cmd` (general ops), `frankn_fs` (file transfers), `frankn_media` (sync), and `frankn_ssh` (terminal).
-* **Discovery**: A lightweight Rust Signaling Server facilitates initial handshakes (SDP/ICE exchange). Includes support for private/unlisted hosts.
+* **Transport**: Multi-channel WebRTC Data Channels. Specialized lanes: `frankn_cmd` (general ops), `frankn_fs` (file transfers), `frankn_media` (sync), `frankn_ssh` (terminal), **`dohee_x`** (LLM / neural chat streaming), and **`frankn_input`** (virtual keyboard & mouse events to the host).
+* **Discovery**: A lightweight Rust Signaling Server facilitates initial handshakes (SDP/ICE exchange). Includes support for private/unlisted hosts and guards against duplicate peer registrations on a connection.
 * **Config**: Host settings are managed via a persistent TOML provider and an interactive TUI.
-* **Background Ops**: The mobile app runs a persistent Foreground Service on Android to maintain the link.
+* **Background Ops**: The mobile app runs a persistent Foreground Service on Android to maintain the link; RTC-heavy work is isolated from the UI isolate for stability.
 
 ---
 
@@ -48,14 +49,30 @@ I've implemented a robust backend that interfaces directly with Linux system API
 - **Power Management**: Integrated with `systemctl`, `loginctl`, and `hyprlock`.
 - **Media & Audio**: Full audio mixer experience (`wpctl`/`pactl`) and track control (`mpris`).
 - **File System**: Recursive viewing, chunked transfers with SHA-256 validation, and integrated editor.
+- **Neural / LLM**: `LlmManager` handles chat sessions, streaming inference (including SSE-style upstream handling), and persistence; exposes commands over the `dohee_x` data channel inside the authenticated WebRTC session.
+- **Remote Input**: Optional `uinput`-based virtual mouse and keyboard; fails soft at startup if the kernel module or `/dev/uinput` permissions are missing, leaving other ops unaffected.
 
 ### B. The "interface" (Flutter Client)
 The UI is now highly functional and visually polished:
 - **Immersive Terminal**: Full-screen SSH via `dartssh2` and `xterm.dart` with Nerd Font support.
-- **Pairing System**: QR Code scanner and manual 12-digit ID entry for persistent "Hosts"
+- **SSH Session Restore**: Seamless, in-memory credential caching for instant terminal re-entry during the same host session.
+- **Pairing System**: QR Code scanner (including screenshot import) and manual 12-digit ID entry for persistent "Hosts"
 - **File Browser**: Refactored for speed with real-time progress bars and bulk actions.
 - **Notification Mirroring**: Linux D-Bus notifications pushed to mobile via `awesome_notifications`.
 - **Dynamic Settings**: Persistent app configuration (Signaling URL, font size, themes).
+- **Neural Deck (Dohee)**: In-app LLM chat with streaming markdown/LaTeX-style rendering; pairs with the host `dohee_x` channel and model selection.
+- **Remote Trackpad**: Redesigned full-screen touch trackpad with batched move/scroll, sticky modifiers, and a dynamic toolbar that appears only when typing—fixed Linux keycode mapping for perfect input accuracy.
+- **Shell UX**: SSH controller / key bar refinements and clearer connection status affordances.
+- **Live Log Deck**: A real-time, auto-scrolling log preview widget docked to the bottom of the host list for instant diagnostic visibility.
+
+### C. Recent milestones (early 2026)
+Shipped or in flight alongside the blueprint updates:
+- **Local LLM path on the host** (`LlmManager`): chat sessions persisted under `~/.config/frankn/chats.json`, streaming responses to the client (SSE-style consumption on the host, forwarded over WebRTC).
+- **Background isolate migration** for WebRTC: keeps the UI responsive and reduces link “zombie” races during reconnect.
+- **Signaling Security & Persistence**: Identity hijacking prevention and strict 15s/30s `last_seen` timeouts to purge ghost connections.
+- **Custom Configuration Paths**: Host-side support for specifying config files via the `-c` flag.
+- **Stable FS streaming**: Chunked transfer and media pipeline hardening on the host.
+- **Linux virtual input**: Corrected `uinput` keycode mappings and improved error diagnostics for system-level permission failures.
 
 ---
 
@@ -66,6 +83,7 @@ The UI is now highly functional and visually polished:
 - [x] Implemented the "Gatekeeper" pattern to enforce authenticated sessions.
 - [x] Added timestamp-based signaling to prevent replay attacks.
 - [x] Established robust mixin-based RTC client architecture.
+- [x] Hardened signaling server against identity hijacking and ghost connections.
 
 ### Phase 2: Core Control [COMPLETE]
 - [x] Real-world system calls for Power, Media, and Processes.
@@ -80,14 +98,17 @@ The UI is now highly functional and visually polished:
 - [x] Advanced Media Sync: HTTP remote album art support and immediate state synchronization.
 
 ### Phase 4: Configuration & Pairing [COMPLETE]
-- [x] **Config Provider**: Persistent TOML-based host settings.
+- [x] **Config Provider**: Persistent TOML-based host settings with custom path support.
 - [x] **Host TUI**: Cyberpunk-styled terminal UI for managing settings with Vim keybinds.
-- [x] **QR Pairing**: Automated pairing flow via QR scanning and 12-digit unique IDs.
+- [x] **QR Pairing**: Automated pairing flow via QR scanning, screenshot import, and 12-digit unique IDs.
 - [x] **Discovery Filtering**: Support for unlisted/private hosts.
 
 ### Phase 5: Advanced Features [IN PROGRESS]
 - [x] **Notification Mirroring**: PC notifications buzz on the phone.
-- [ ] **Zero-Trust Private API Gateway (LLM Proxy)**: Create a dedicated WebRTC data channel (`frankn_ollama`) to securely proxy localhost REST API calls (like Ollama) from the mobile client directly to the remote host without exposing ports to the internet.
+- [x] **Neural Chat & LLM over WebRTC**: Dedicated `dohee_x` data channel with host-side `LlmManager` (local inference / streaming, chat persistence)—same zero-trust session as the rest of Frankn; no need to expose model APIs publicly.
+- [x] **Remote Trackpad & Keyboard**: `frankn_input` channel + Linux `uinput` for pointer, scroll, keys, and typed text from the mobile client. Corrected Linux keycode translation logic.
+- [x] **SSH Session Restore**: Secure, in-memory credential restoration for seamless terminal entry.
+- [x] **Live Log Preview**: Docked scrolling widget for instant signaling and system diagnostic monitoring.
 - [ ] **Vice Versa**: PC controlling the phone (Mobile as the Host).
 - [ ] **Bidirectional Sync**: Folder-to-folder background synchronization.
 - [ ] **Process Manager Search**: Advanced filtering for the process list.
@@ -98,10 +119,10 @@ The UI is now highly functional and visually polished:
 * Aesthetic mobile-centric ROC for local & remote servers.
 *   **vs SSH/Termux**: Frankn provides a native GUI for quick tasks like volume control while keeping the power of a terminal.
 *   **vs Remote Desktop (RDP/VNC)**: Frankn works on poor connections because it streams metadata, not video buffers.
-*   **vs KDE Connect**: Frankn works over the global internet via WebRTC, not just local Wi-Fi.
+*   **vs KDE Connect**: Frankn works over the global internet via WebRTC, not just local Wi-Fi. And it's just better!
 
 ## 6. TODO
-### [ ] Fix Firefox MediaUpdate showing up even when other players (Spotify) are active.
+### [x] Fix Firefox MediaUpdate showing up even when other players (Spotify) are active.
 ### [ ] Implement host config CLI/GUI installer script.
 ### [x] Implement Host config TUI.
 ### [x] Fix Notification sync reliability.
@@ -111,4 +132,4 @@ The UI is now highly functional and visually polished:
 ### [ ] Make the quick functions/commands more modular (Plugin system?).
 
 ---
-*Last Updated: February 2026*
+*Last Updated: May 2026*

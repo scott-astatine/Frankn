@@ -36,6 +36,17 @@ mixin RtcCommands on RtcClientBase {
     sendDcMsg({DcMsg.Key: DcMsg.StopSsh});
   }
 
+  @override
+  void sendInputMsg(Map<String, dynamic> msg) {
+    final token = AuthService().sessionToken;
+    if (token == null) return;
+    
+    // For input we don't necessarily need the whole DcMsg envelope, 
+    // but looking at Rust backend, it expects raw `InputMsg` JSON directly on `frankn_input` channel.
+    final jsonMsg = jsonEncode(msg);
+    sendToChannel(inputDC, jsonMsg, "INPUT");
+  }
+
   /// Initiates a file upload session to the host.
   ///
   /// Parameters:

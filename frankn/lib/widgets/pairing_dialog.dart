@@ -3,6 +3,7 @@ import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/cyber_button.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class PairingDialog extends StatefulWidget {
@@ -15,19 +16,46 @@ class PairingDialog extends StatefulWidget {
 class _PairingDialogState extends State<PairingDialog> {
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _aliasController = TextEditingController();
+  final MobileScannerController _scannerController = MobileScannerController();
   bool _isScanning = false;
+
+  @override
+  void dispose() {
+    _idController.dispose();
+    _aliasController.dispose();
+    _scannerController.dispose();
+    super.dispose();
+  }
 
   void _onInitialize() async {
     final id = _idController.text.trim();
     final l10n = AppLocalizations.of(context)!;
     final alias = _aliasController.text.trim().isEmpty
-        ? l10n
-              .lastConnectedHost // Fallback alias
+        ? l10n.lastConnectedHost // Fallback alias
         : _aliasController.text.trim();
 
     if (id.length >= 10) {
       await SettingsService().saveHost(id, alias);
       if (mounted) Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      final capture = await _scannerController.analyzeImage(image.path);
+      if (capture != null && capture.barcodes.isNotEmpty) {
+        final code = capture.barcodes.first.rawValue;
+        if (code != null && code.contains('|')) {
+          final parts = code.split('|');
+          setState(() {
+            _idController.text = parts[0];
+            _aliasController.text = parts[1];
+            _isScanning = false;
+          });
+        }
+      }
     }
   }
 
@@ -40,9 +68,16 @@ class _PairingDialogState extends State<PairingDialog> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F0F0F),
-          border: Border.all(color: AppColors.neonPink, width: 1.5),
-          borderRadius: BorderRadius.circular(16),
+          color: AppColors.voidBlack,
+          border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.5), width: 1.5),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.neonCyan.withValues(alpha: 0.1),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -52,7 +87,7 @@ class _PairingDialogState extends State<PairingDialog> {
               Text(
                 l10n.newNeuralLink.toUpperCase(),
                 style: const TextStyle(
-                  color: AppColors.neonPink,
+                  color: AppColors.neonCyan,
                   fontWeight: FontWeight.w900,
                   fontSize: 16,
                   letterSpacing: 2,
@@ -119,20 +154,21 @@ class _PairingDialogState extends State<PairingDialog> {
 
   Widget _buildScannerSection(AppLocalizations l10n) {
     return Container(
-      height: 140,
+      height: 180,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: AppColors.panelGrey,
+        borderRadius: BorderRadius.circular(28), // Round squarish
+        border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.2), width: 1.5),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
           if (_isScanning)
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(28),
               child: MobileScanner(
+                controller: _scannerController,
                 onDetect: (capture) {
                   final List<Barcode> barcodes = capture.barcodes;
                   if (barcodes.isNotEmpty) {
@@ -155,8 +191,8 @@ class _PairingDialogState extends State<PairingDialog> {
               children: [
                 const Icon(
                   Icons.qr_code_scanner,
-                  color: Colors.white24,
-                  size: 32,
+                  color: AppColors.neonCyan,
+                  size: 40,
                 ),
                 const SizedBox(height: 12),
                 TextButton(
@@ -164,14 +200,36 @@ class _PairingDialogState extends State<PairingDialog> {
                   child: Text(
                     l10n.tapToScan.toUpperCase(),
                     style: const TextStyle(
-                      color: AppColors.textGrey,
-                      fontSize: 10,
+                      color: AppColors.textWhite,
+                      fontSize: 11,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1,
                     ),
                   ),
                 ),
+                TextButton.icon(
+                  onPressed: _pickImage,
+                  icon: const Icon(Icons.image_outlined, size: 16, color: AppColors.textGrey),
+                  label: const Text(
+                    "IMPORT FROM IMAGE",
+                    style: TextStyle(
+                      color: AppColors.textGrey,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
               ],
+            ),
+          
+          if (_isScanning)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white70),
+                onPressed: () => setState(() => _isScanning = false),
+              ),
             ),
         ],
       ),
@@ -184,7 +242,7 @@ class _PairingDialogState extends State<PairingDialog> {
         Expanded(
           child: Container(
             height: 1,
-            color: Colors.white.withValues(alpha: 0.05),
+            color: Colors.white.withValues(alpha: 0.1),
           ),
         ),
         Padding(
@@ -192,7 +250,7 @@ class _PairingDialogState extends State<PairingDialog> {
           child: Text(
             l10n.orManual.toUpperCase(),
             style: const TextStyle(
-              color: Colors.white10,
+              color: Colors.white30,
               fontSize: 9,
               fontWeight: FontWeight.w900,
             ),
@@ -201,7 +259,7 @@ class _PairingDialogState extends State<PairingDialog> {
         Expanded(
           child: Container(
             height: 1,
-            color: Colors.white.withValues(alpha: 0.05),
+            color: Colors.white.withValues(alpha: 0.1),
           ),
         ),
       ],
@@ -219,9 +277,10 @@ class _PairingDialogState extends State<PairingDialog> {
         Text(
           label,
           style: const TextStyle(
-            color: AppColors.textGrey,
+            color: AppColors.neonCyan,
             fontSize: 10,
             fontWeight: FontWeight.bold,
+            letterSpacing: 1,
           ),
         ),
         TextField(
@@ -229,15 +288,16 @@ class _PairingDialogState extends State<PairingDialog> {
           style: const TextStyle(
             fontFamily: 'JetBrainsMonoNerdFont',
             fontSize: 13,
+            color: AppColors.textWhite,
           ),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: Colors.white10),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white10),
+            hintStyle: const TextStyle(color: Colors.white24),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.neonCyan.withValues(alpha: 0.3)),
             ),
             focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.neonPink),
+              borderSide: BorderSide(color: AppColors.neonCyan),
             ),
           ),
         ),
