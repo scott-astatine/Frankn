@@ -121,15 +121,6 @@ Shipped or in flight alongside the blueprint updates:
 *   **vs Remote Desktop (RDP/VNC)**: Frankn works on poor connections because it streams metadata, not video buffers.
 *   **vs KDE Connect**: Frankn works over the global internet via WebRTC, not just local Wi-Fi. And it's just better!
 
-## 6. TODO
-### [x] Fix Firefox MediaUpdate showing up even when other players (Spotify) are active.
-### [ ] Implement host config CLI/GUI installer script.
-### [x] Implement Host config TUI.
-### [x] Fix Notification sync reliability.
-### [x] FIX Download notification showing up when opening files in the editor.
-### [x] FIX Download/Upload progress bar (accurate percentages).
-### [x] FIX Reconnection race conditions and "zombie" links.
-### [ ] Make the quick functions/commands more modular (Plugin system?).
 
 ---
 *Last Updated: May 2026*

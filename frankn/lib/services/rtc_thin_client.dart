@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:frankn/services/isolate_protocol.dart';
+import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/utils/utils.dart';
 
 class RtcThinClient {
@@ -161,6 +162,61 @@ class RtcThinClient {
       } else if (msg.type == 'event') {
         if (msg.action == 'command_response') {
           _commandResponseController.add(msg.payload);
+
+          // Handle UI isolate media sync to prevent background isolate crashes
+          final d = msg.payload;
+          if (d['media_status'] != null || d['metadata'] != null) {
+            String? status = d['media_status'] ?? d['status'];
+            String? metadata = d['metadata'];
+            String? playerName = d['player_name'];
+            double? volume = d['volume'] != null ? (d['volume'] as num).toDouble() : null;
+            Duration? position;
+            Duration? length;
+            Uri? artUri;
+
+            if (d['position'] != null) {
+              position = Duration(microseconds: (d['position'] as num).toInt());
+            }
+            if (d['length'] != null) {
+              length = Duration(microseconds: (d['length'] as num).toInt());
+            }
+            if (d['art_data'] != null) {
+              final artStr = d['art_data'] as String;
+              if (artStr.startsWith('http')) {
+                artUri = Uri.parse(artStr);
+              } else if (artStr.startsWith('file://')) {
+                artUri = Uri.parse(artStr);
+              }
+            }
+
+            String? title;
+            String? artist;
+            if (metadata != null && metadata.isNotEmpty) {
+              if (metadata.contains(" - ")) {
+                final parts = metadata.split(" - ");
+                title = parts[0];
+                artist = parts.length > 1 ? parts[1] : "Unknown Artist";
+              } else {
+                title = metadata;
+                artist = "Unknown Artist";
+              }
+            }
+
+            try {
+              (audioHandler as FranknAudioHandler).updateMediaState(
+                status: status,
+                title: title,
+                artist: artist,
+                playerName: playerName,
+                position: position,
+                duration: length,
+                artUri: artUri,
+                volume: volume,
+              );
+            } catch (_) {
+              // audioHandler might not be initialized yet
+            }
+          }
 
           if (msg.payload['type'] == DcMsg.LlmToken ||
               msg.payload['type'] == 'llm_token') {

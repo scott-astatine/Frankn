@@ -35,7 +35,6 @@ import 'package:web_socket_channel/io.dart';
 
 import 'package:frankn/main.dart';
 import 'package:frankn/utils/utils.dart';
-import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/auth_service.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/settings_service.dart';

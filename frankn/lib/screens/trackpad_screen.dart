@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 
 class TrackpadScreen extends StatefulWidget {
@@ -265,8 +266,9 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
               },
               onPointerSignal: (e) {
                 if (e is PointerScrollEvent) {
-                  _scrollX += e.scrollDelta.dx;
-                  _scrollY += e.scrollDelta.dy;
+                  final sens = SettingsService().trackpadSensitivity;
+                  _scrollX += e.scrollDelta.dx * sens;
+                  _scrollY += e.scrollDelta.dy * sens;
                 }
               },
               child: GestureDetector(
@@ -274,12 +276,13 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
                 onTap: _handleTap,
                 onLongPress: () => _sendClick(3),
                 onPanUpdate: (d) {
+                  final sens = SettingsService().trackpadSensitivity;
                   if (_pointerCount <= 1) {
-                    _dx += d.delta.dx;
-                    _dy += d.delta.dy;
+                    _dx += d.delta.dx * sens;
+                    _dy += d.delta.dy * sens;
                   } else if (_pointerCount == 2) {
-                    _scrollX += d.delta.dx;
-                    _scrollY += d.delta.dy;
+                    _scrollX += d.delta.dx * sens;
+                    _scrollY += d.delta.dy * sens;
                   }
                 },
                 child: Container(

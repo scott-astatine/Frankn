@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
@@ -108,6 +109,13 @@ class _QuickFunctionState extends State<QuickFunction> {
     if (data.startsWith('http')) {
       return Image.network(
         data,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image),
+      );
+    } else if (data.startsWith('file://')) {
+      return Image.file(
+        File(data.replaceFirst('file://', '')),
         fit: fit,
         errorBuilder: (context, error, stackTrace) =>
             const Icon(Icons.broken_image),

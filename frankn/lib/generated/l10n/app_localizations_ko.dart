@@ -9,7 +9,7 @@ class AppLocalizationsKo extends AppLocalizations {
   AppLocalizationsKo([String locale = 'ko']) : super(locale);
 
   @override
-  String get appName => '도히';
+  String get appName => '도회';
 
   @override
   String get neuralDeck => '신경 데크';

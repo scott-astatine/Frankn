@@ -16,6 +16,7 @@ class SettingsService {
   static const String _keySignalingUrl = 'signaling_url';
   static const String _keyLastHostId = 'last_host_id';
   static const String _keyTerminalFontSize = 'terminal_font_size';
+  static const String _keyTrackpadSensitivity = 'trackpad_sensitivity';
   static const String _keyColorScheme = 'color_scheme';
   static const String _keySavedHosts = 'saved_hosts';
   static const String _keyLocale = 'selected_locale';
@@ -88,6 +89,13 @@ class SettingsService {
   /// Persists a new terminal font size preference.
   Future<bool> setTerminalFontSize(double value) async =>
       await _prefs.setDouble(_keyTerminalFontSize, value);
+
+  /// Returns the trackpad sensitivity multiplier.
+  double get trackpadSensitivity => _prefs.getDouble(_keyTrackpadSensitivity) ?? 1.0;
+
+  /// Persists a new trackpad sensitivity multiplier.
+  Future<bool> setTrackpadSensitivity(double value) async =>
+      await _prefs.setDouble(_keyTrackpadSensitivity, value);
 
   /// Returns the selected color scheme name.
   String get colorScheme =>

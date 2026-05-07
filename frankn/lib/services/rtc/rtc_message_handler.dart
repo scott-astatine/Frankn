@@ -374,80 +374,30 @@ mixin RtcMessageHandler on RtcClientBase {
     }
   }
 
-  bool _isAudioHandlerInitialized() {
-    try {
-      // Accessing a late variable before initialization throws LateInitializationError
-      // ignore: unnecessary_null_comparison
-      return audioHandler != null;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  void _handleMediaUpdate(Map<String, dynamic> data) {
+  void _handleMediaUpdate(Map<String, dynamic> data) async {
     String? status = data['media_status'] ?? data['status'];
-    String? metadata = data['metadata'];
-    String? playerName = data['player_name'];
-    double? volume = data['volume'] != null
-        ? (data['volume'] as num).toDouble()
-        : null;
-    Duration? position;
-    Duration? length;
-    Uri? artUri;
 
     if (status != null) {
       mediaStatusController.add(status);
     }
 
-    if (data['position'] != null) {
-      position = Duration(microseconds: (data['position'] as num).toInt());
-    }
-
-    if (data['length'] != null) {
-      length = Duration(microseconds: (data['length'] as num).toInt());
-    }
-
     if (data['art_data'] != null) {
       final artStr = data['art_data'] as String;
-      if (artStr.startsWith('http')) {
-        artUri = Uri.parse(artStr);
-      } else {
-        compute(base64Decode, artStr).then((bytes) async {
+      if (!artStr.startsWith('http')) {
+        try {
           final tempDir = globalTempDir;
           final file = File('${tempDir.path}/album_art.jpg');
-          // Delete any previous cached album art before writing the new one
           if (await file.exists()) await file.delete();
-          await file.writeAsBytes(bytes);
-        });
+          await file.writeAsBytes(base64Decode(artStr));
+          // Replace large base64 string with local file path to avoid IPC crash
+          data['art_data'] = 'file://${file.path}';
+        } catch (e) {
+          log("Failed to parse album art in background isolate: $e");
+          data.remove('art_data');
+        }
       }
     }
 
     commandResponseController.add(data);
-
-    String? title;
-    String? artist;
-    if (metadata != null && metadata.isNotEmpty) {
-      if (metadata.contains(" - ")) {
-        final parts = metadata.split(" - ");
-        title = parts[0];
-        artist = parts.length > 1 ? parts[1] : "Unknown Artist";
-      } else {
-        title = metadata;
-        artist = "Unknown Artist";
-      }
-    }
-
-    if (_isAudioHandlerInitialized() && audioHandler is FranknAudioHandler) {
-      (audioHandler as FranknAudioHandler).updateMediaState(
-        status: status,
-        title: title,
-        artist: artist,
-        playerName: playerName,
-        position: position,
-        duration: length,
-        artUri: artUri,
-        volume: volume,
-      );
-    }
   }
 }

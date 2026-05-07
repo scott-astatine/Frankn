@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -48,9 +50,22 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.create("release")
+            val keystoreProperties = Properties()
+            val keystorePropertiesFile = rootProject.file("key.properties")
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(keystorePropertiesFile.inputStream())
+                signingConfig?.keyAlias = keystoreProperties.getProperty("keyAlias")
+                signingConfig?.keyPassword = keystoreProperties.getProperty("keyPassword")
+                signingConfig?.storeFile = file(keystoreProperties.getProperty("storeFile"))
+                signingConfig?.storePassword = keystoreProperties.getProperty("storePassword")
+            }
         }
     }
 }

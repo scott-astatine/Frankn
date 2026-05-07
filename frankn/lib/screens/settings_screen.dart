@@ -123,6 +123,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showTrackpadSensitivitySelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: const BoxDecoration(
+          color: Color(0xFF0F0F0F),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+          border: Border(
+            top: BorderSide(color: AppColors.neonCyan, width: 1.5),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
+              .map(
+                (size) => ListTile(
+                  title: Text(
+                    "${size}X MULTIPLIER",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'JetBrainsMonoNerdFont',
+                    ),
+                  ),
+                  trailing: _settings.trackpadSensitivity == size
+                      ? const Icon(Icons.check, color: AppColors.neonCyan)
+                      : null,
+                  onTap: () async {
+                    await _settings.setTrackpadSensitivity(size);
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                    setState(() {});
+                  },
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+
   void _renameHost() {
     final hostId = _client.currentHostId;
     if (hostId == null) return;
@@ -367,6 +412,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 "${_settings.terminalFontSize.toInt()} PX",
                 Icons.format_size,
                 _showFontSizeSelector,
+              ),
+              _buildOpSettingCard(
+                "TRACKPAD SENS",
+                "${_settings.trackpadSensitivity}X",
+                Icons.mouse,
+                _showTrackpadSensitivitySelector,
               ),
             ],
           ),
