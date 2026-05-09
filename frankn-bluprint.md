@@ -111,7 +111,7 @@ Shipped or in flight alongside the blueprint updates:
 - [x] **Live Log Preview**: Docked scrolling widget for instant signaling and system diagnostic monitoring.
 - [ ] **Vice Versa**: PC controlling the phone (Mobile as the Host).
 - [ ] **Bidirectional Sync**: Folder-to-folder background synchronization.
-- [ ] **Process Manager Search**: Advanced filtering for the process list.
+- [x] **Process Manager Search**: Advanced filtering for the process list.
 
 ---
 

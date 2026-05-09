@@ -338,7 +338,9 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
             AnimatedContainer(
               duration: const Duration(milliseconds: 500),
               height: 4,
-              width: MediaQuery.of(context).size.width * (progress.clamp(0.0, 1.0)),
+              width:
+                  MediaQuery.of(context).size.width *
+                  (progress.clamp(0.0, 1.0)),
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: BorderRadius.circular(2),
@@ -429,10 +431,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
                         valueColor: AppColors.matrixGreen,
                       ),
                       const SizedBox(width: 48),
-                      _buildDetailItem(
-                        "USER",
-                        proc['user']?.toString() ?? "scott",
-                      ),
+                      _buildDetailItem("USER", proc['user'].toString()),
                     ],
                   ),
                   const SizedBox(height: 20),

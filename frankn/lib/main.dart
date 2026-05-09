@@ -146,8 +146,7 @@ class FranknTaskHandler extends TaskHandler {
           ? SettingsService().savedHosts.first['name']
           : null;
 
-      await NotificationService().initialize();
-      await initAudioService();
+      await NotificationService().initialize(requestPermissions: false);
 
       print("Background Isolate: SERVICES_READY");
 

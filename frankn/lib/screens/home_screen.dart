@@ -45,10 +45,7 @@ class HomeScreen extends StatelessWidget {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ChatScreen(
-            client: client,
-            modelPath: defaultModel,
-          ),
+          builder: (_) => ChatScreen(client: client, modelPath: defaultModel),
         ),
       );
     } else {
@@ -98,7 +95,8 @@ class HomeScreen extends StatelessWidget {
             StreamBuilder<SignalConnectionState>(
               stream: client.connectionStateStream,
               initialData: client.sigState,
-              builder: (context, snapshot) => StatusBadge(state: snapshot.data!),
+              builder: (context, snapshot) =>
+                  StatusBadge(state: snapshot.data!),
             ),
           ],
         ],
@@ -107,7 +105,11 @@ class HomeScreen extends StatelessWidget {
         if (isAuthenticated) ...[
           IconButton(
             tooltip: 'Neural Chat',
-            icon: const Icon(Icons.auto_awesome, color: AppColors.neonPink, size: 20),
+            icon: const Icon(
+              Icons.auto_awesome,
+              color: AppColors.neonPink,
+              size: 20,
+            ),
             onPressed: () => _showNeuralChatDialog(context, client),
           ),
           IconButton(
@@ -119,14 +121,22 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Admin Override',
-            icon: const Icon(Icons.power_settings_new, color: AppColors.errorRed, size: 20),
-            onPressed: () => _showAdminOverride(context, client),
+            tooltip: 'System Tray',
+            icon: const Icon(
+              Icons.power_settings_new,
+              color: AppColors.errorRed,
+              size: 20,
+            ),
+            onPressed: () => _showSystemTray(context, client),
           ),
         ],
         IconButton(
           tooltip: 'Settings',
-          icon: const Icon(Icons.settings_outlined, color: AppColors.textGrey, size: 20),
+          icon: const Icon(
+            Icons.settings_outlined,
+            color: AppColors.textGrey,
+            size: 20,
+          ),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const SettingsScreen()),
@@ -243,7 +253,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _showAdminOverride(BuildContext context, RtcThinClient client) {
+  void _showSystemTray(BuildContext context, RtcThinClient client) {
     final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
@@ -277,7 +287,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      l10n.adminOverride.toUpperCase(),
+                      l10n.adminOverride,
                       style: const TextStyle(
                         color: AppColors.errorRed,
                         fontWeight: FontWeight.w900,

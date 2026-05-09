@@ -165,7 +165,7 @@ class RtcThinClient {
 
           // Handle UI isolate media sync to prevent background isolate crashes
           final d = msg.payload;
-          if (d['media_status'] != null || d['metadata'] != null) {
+          if (d['type'] == 'media_update' || d['media_status'] != null || d['metadata'] != null) {
             String? status = d['media_status'] ?? d['status'];
             String? metadata = d['metadata'];
             String? playerName = d['player_name'];
@@ -203,7 +203,7 @@ class RtcThinClient {
             }
 
             try {
-              (audioHandler as FranknAudioHandler).updateMediaState(
+              franknAudioHandler.updateMediaState(
                 status: status,
                 title: title,
                 artist: artist,
@@ -213,8 +213,8 @@ class RtcThinClient {
                 artUri: artUri,
                 volume: volume,
               );
-            } catch (_) {
-              // audioHandler might not be initialized yet
+            } catch (e) {
+              print("AUDIO ERROR IN UI ISOLATE: $e");
             }
           }
 

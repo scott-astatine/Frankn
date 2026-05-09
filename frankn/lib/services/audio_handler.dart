@@ -4,10 +4,14 @@ import 'package:frankn/utils/utils.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 late AudioHandler audioHandler;
+late FranknAudioHandler franknAudioHandler;
 
 Future<void> initAudioService() async {
   audioHandler = await AudioService.init(
-    builder: () => FranknAudioHandler(),
+    builder: () {
+      franknAudioHandler = FranknAudioHandler();
+      return franknAudioHandler;
+    },
     config: AudioServiceConfig(
       androidNotificationChannelId: 'com.astatine.frankn.channel.audio',
       androidNotificationChannelName: 'Frankn Media',
@@ -38,6 +42,11 @@ class FranknAudioHandler extends BaseAudioHandler {
           MediaAction.seek,
           MediaAction.fastForward,
           MediaAction.rewind,
+          MediaAction.play,
+          MediaAction.pause,
+          MediaAction.playPause,
+          MediaAction.skipToNext,
+          MediaAction.skipToPrevious,
         },
         processingState: AudioProcessingState.ready,
         playing: false,

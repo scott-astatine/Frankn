@@ -18,7 +18,7 @@ class NotificationService {
   ///
   /// Sets up the notification channels, groups, and action listeners.
   /// Requests permission if not already granted.
-  Future<void> initialize() async {
+  Future<void> initialize({bool requestPermissions = true}) async {
     await AwesomeNotifications().initialize(
       'resource://mipmap/ic_notification',
       [
@@ -46,11 +46,13 @@ class NotificationService {
       onActionReceivedMethod: onActionReceivedMethod,
     );
 
-    await AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
-      if (!isAllowed) {
-        AwesomeNotifications().requestPermissionToSendNotifications();
-      }
-    });
+    if (requestPermissions) {
+      await AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
+        if (!isAllowed) {
+          AwesomeNotifications().requestPermissionToSendNotifications();
+        }
+      });
+    }
   }
 
   /// Displays a notification mirrored from the host PC.

@@ -11,6 +11,7 @@ class FileBrowserAppBar {
     required VoidCallback onSearch,
     required VoidCallback onNavigateUp,
     required Function(String) onSort,
+    VoidCallback? onUpload,
     int selectedCount = 0,
     VoidCallback? onDeleteSelected,
     VoidCallback? onDownloadSelected,
@@ -96,38 +97,80 @@ class FileBrowserAppBar {
           onPressed: onSearch,
         ),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.sort, color: AppColors.neonCyan, size: 20),
-          onSelected: onSort,
+          icon: const Icon(Icons.more_vert, color: AppColors.neonCyan, size: 20),
+          onSelected: (val) {
+            if (val == "upload") {
+              onUpload?.call();
+            } else {
+              onSort(val);
+            }
+          },
           color: const Color(0xFF0F0F0F),
           itemBuilder: (context) => [
             PopupMenuItem(
               value: "name",
-              child: Text(
-                l10n.sortByName.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Row(
+                children: [
+                  const Icon(Icons.sort_by_alpha, color: AppColors.textGrey, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.sortByName.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
             PopupMenuItem(
               value: "size",
-              child: Text(
-                l10n.sortBySize.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Row(
+                children: [
+                  const Icon(Icons.format_size, color: AppColors.textGrey, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.sortBySize.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
             PopupMenuItem(
               value: "modified",
-              child: Text(
-                l10n.sortByDate.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Row(
+                children: [
+                  const Icon(Icons.date_range, color: AppColors.textGrey, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.sortByDate.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: "upload",
+              child: Row(
+                children: [
+                  const Icon(Icons.upload_file, color: AppColors.neonCyan, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    "UPLOAD FILE",
+                    style: const TextStyle(
+                      color: AppColors.neonCyan,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

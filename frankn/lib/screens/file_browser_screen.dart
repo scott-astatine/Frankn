@@ -84,16 +84,12 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
         searchController: _browserState.searchController,
         onSearchChanged: (val) => _browserState.setSearchQuery(val),
         onExitSearch: () => _browserState.exitSearch(),
+        onUpload: () => uploadFile(_browserState.currentPath),
         onSort: (val) {
           if (val == "name") _browserState.setSortBy(SortOption.name);
           if (val == "size") _browserState.setSortBy(SortOption.size);
           if (val == "modified") _browserState.setSortBy(SortOption.modified);
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => uploadFile(_browserState.currentPath),
-        backgroundColor: AppColors.neonCyan,
-        child: const Icon(Icons.upload_file, color: AppColors.voidBlack),
       ),
       body: Column(
         children: [
