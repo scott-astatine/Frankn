@@ -192,7 +192,6 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
                 style: GoogleFonts.nanumMyeongjo(
                   color: AppColors.neonCyan,
                   fontWeight: FontWeight.w900,
-                  fontSize: 22,
                   letterSpacing: 2,
                 ),
               ),

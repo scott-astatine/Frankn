@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class CyberCard extends StatelessWidget {
   final Widget child;
   final Color? borderColor;
+  final Color? bgColor;
   final String? label;
 
   const CyberCard({
@@ -10,6 +11,7 @@ class CyberCard extends StatelessWidget {
     required this.child,
     this.borderColor,
     this.label,
+    this.bgColor,
   });
 
   @override
@@ -17,7 +19,7 @@ class CyberCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF121212), // Deep deck grey
+        color: bgColor ?? const Color(0xFF121212), // Deep deck grey
         border: Border.all(
           color: borderColor ?? Colors.white.withValues(alpha: 0.05),
           width: 1,

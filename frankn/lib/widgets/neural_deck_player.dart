@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/volume_mixer_dialog.dart';
+import 'package:frankn/widgets/player_selector_dialog.dart';
 
 class NeuralDeckPlayer extends StatefulWidget {
   final RtcThinClient client;
@@ -250,8 +251,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                 icon: Icons.monitor_outlined,
                                 color: AppColors.neonPink,
                                 size: 18,
-                                onTap:
-                                    () {}, // List available media players on Host
+                                onTap: () => showPlayerSelectorDialog(context, widget.client),
                               ),
                               const SizedBox(width: 20),
                               AnimatedIconButton(

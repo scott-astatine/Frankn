@@ -17,6 +17,8 @@ cargo build --release
 echo "Stripping binary..."
 strip target/release/frankn-host
 
+systemctl --user stop frankn-host
+
 echo "Installing binary globally to /usr/bin/frankn-host (requires sudo)..."
 sudo cp target/release/frankn-host /usr/bin/frankn-host
 
