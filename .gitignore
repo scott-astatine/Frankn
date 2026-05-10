@@ -30,3 +30,7 @@ temp/
 notes.md
 GEMINI.md
 scp.go
+
+# Git Worktrees
+.worktrees/
+
