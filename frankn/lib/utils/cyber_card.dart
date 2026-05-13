@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frankn/utils/utils.dart';
 
 class CyberCard extends StatelessWidget {
   final Widget child;
@@ -19,7 +20,9 @@ class CyberCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: bgColor ?? const Color(0xFF121212), // Deep deck grey
+        color:
+            bgColor ??
+            AppColors.deepSpace.withValues(alpha: 0.3), // Deep deck grey
         border: Border.all(
           color: borderColor ?? Colors.white.withValues(alpha: 0.05),
           width: 1,

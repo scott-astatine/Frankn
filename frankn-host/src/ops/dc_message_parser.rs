@@ -101,6 +101,20 @@ pub enum DcMsg {
     StartSsh,
     #[serde(rename = "stop_ssh")]
     StopSsh,
+
+    // --- Network ---
+    #[serde(rename = "get_network_status")]
+    GetNetworkStatus,
+    #[serde(rename = "toggle_radio")]
+    ToggleRadio { radio: String, state: bool },
+    #[serde(rename = "list_wifi_networks")]
+    ListWifiNetworks,
+    #[serde(rename = "connect_wifi")]
+    ConnectWifi { ssid: String, password: Option<String> },
+    #[serde(rename = "list_bluetooth_devices")]
+    ListBluetoothDevices,
+    #[serde(rename = "connect_bluetooth")]
+    ConnectBluetooth { mac: String },
 }
 
 macro_rules! dispatch {
@@ -186,6 +200,14 @@ impl DcMsg {
             // SSH
             StartSsh => ops::ssh::start_ssh_tunnel,
             StopSsh => ops::ssh::stop_ssh_tunnel,
+
+            // Network
+            GetNetworkStatus => ops::network::get_network_status,
+            ToggleRadio { radio, state } => _async_toggle_radio,
+            ListWifiNetworks => ops::network::list_wifi_networks,
+            ConnectWifi { ssid, password } => _async_connect_wifi,
+            ListBluetoothDevices => ops::network::list_bluetooth_devices,
+            ConnectBluetooth { mac } => _async_connect_bluetooth,
         })
     }
 }
@@ -258,4 +280,16 @@ fn _handle_cmd_output(id: &str, result: std::io::Result<std::process::Output>) -
             timestamp: crate::utils::get_timestamp(),
         },
     }
+}
+
+async fn _async_toggle_radio(id: &str, radio: &String, state: &bool, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+    ops::network::toggle_radio(id, radio, *state, rtc).await
+}
+
+async fn _async_connect_wifi(id: &str, ssid: &String, password: &Option<String>, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+    ops::network::connect_wifi(id, ssid, password, rtc).await
+}
+
+async fn _async_connect_bluetooth(id: &str, mac: &String, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+    ops::network::connect_bluetooth(id, mac, rtc).await
 }

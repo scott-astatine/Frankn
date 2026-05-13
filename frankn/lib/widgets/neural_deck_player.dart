@@ -9,7 +9,7 @@ import 'package:frankn/widgets/player_selector_dialog.dart';
 
 class NeuralDeckPlayer extends StatefulWidget {
   final RtcThinClient client;
-  final String mediaStatus;
+  final bool mediaIsPlaying;
   final String mediaMetadata;
   final String mediaArtist;
   final double mediaPosition;
@@ -20,7 +20,7 @@ class NeuralDeckPlayer extends StatefulWidget {
   const NeuralDeckPlayer({
     super.key,
     required this.client,
-    required this.mediaStatus,
+    required this.mediaIsPlaying,
     required this.mediaMetadata,
     required this.mediaArtist,
     required this.mediaPosition,
@@ -95,7 +95,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isPlaying = widget.mediaStatus.toLowerCase().contains("playing");
+    widget.client.log("$widget.mediaIsPlaying");
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHoveringCard = true),
@@ -244,6 +244,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          // Player selector & seek 10sec btn...
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -251,7 +252,10 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                 icon: Icons.monitor_outlined,
                                 color: AppColors.neonPink,
                                 size: 18,
-                                onTap: () => showPlayerSelectorDialog(context, widget.client),
+                                onTap: () => showPlayerSelectorDialog(
+                                  context,
+                                  widget.client,
+                                ),
                               ),
                               const SizedBox(width: 20),
                               AnimatedIconButton(
@@ -263,6 +267,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                             ],
                           ),
 
+                          // Play toggle btn
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -312,7 +317,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                                 .withValues(alpha: 0.2),
                                             width: 1,
                                           ),
-                                          boxShadow: isPlaying
+                                          boxShadow: widget.mediaIsPlaying
                                               ? [
                                                   BoxShadow(
                                                     color: AppColors.neonPink
@@ -324,7 +329,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                               : [],
                                         ),
                                         child: Icon(
-                                          isPlaying
+                                          widget.mediaIsPlaying
                                               ? Icons.pause_rounded
                                               : Icons.play_arrow_rounded,
                                           color: Colors.white,
@@ -522,4 +527,3 @@ class _AnimatedIconButtonState extends State<AnimatedIconButton> {
     );
   }
 }
-

@@ -81,6 +81,7 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
 
   // --- KEYBOARD LOGIC ---
 
+  void _lockMod(String mod) {}
   void _toggleMod(String mod) {
     setState(() {
       switch (mod) {
@@ -104,7 +105,8 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
     });
   }
 
-  ModState _nextModState(ModState current) {
+  ModState _nextModState(ModState current, {bool lock = false}) {
+    if (lock) return ModState.locked;
     if (current == ModState.off) return ModState.active;
     if (current == ModState.active) return ModState.locked;
     return ModState.off;
@@ -422,6 +424,7 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 3),
         child: InkWell(
           onTap: () => _toggleMod(label),
+          onDoubleTap: () => _lockMod(label),
           borderRadius: BorderRadius.circular(6),
           child: Container(
             height: 36,

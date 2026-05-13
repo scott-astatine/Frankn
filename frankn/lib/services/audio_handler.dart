@@ -25,6 +25,8 @@ Future<void> initAudioService() async {
 
 class FranknAudioHandler extends BaseAudioHandler {
   final RtcThinClient _client = RtcThinClient();
+  double _currentHostVolume = 0.5;
+  double _lastPhoneVolume = 0.0;
 
   FranknAudioHandler() {
     _initVolumeListener();
@@ -56,12 +58,21 @@ class FranknAudioHandler extends BaseAudioHandler {
 
   void _initVolumeListener() {
     VolumeController.instance.showSystemUI = true;
-    VolumeController.instance.addListener((volume) {
-      // ONLY send if we are actually connected and authenticated
-      // This prevents the "Not authenticated" error on startup
-      if (_client.currentHostState == HostConnectionState.authenticated) {
-        _client.sendDcMsg({DcMsg.Key: DcMsg.SetVolume, "level": volume});
+    VolumeController.instance.getVolume().then((v) => _lastPhoneVolume = v);
+
+    VolumeController.instance.addListener((newPhoneVolume) {
+      if (_client.currentHostState != HostConnectionState.authenticated) return;
+
+      if (newPhoneVolume > _lastPhoneVolume) {
+        // Volume Up knob
+        _currentHostVolume = (_currentHostVolume + 0.05).clamp(0.0, 1.5);
+        _client.sendDcMsg({DcMsg.Key: DcMsg.SetVolume, "level": _currentHostVolume});
+      } else if (newPhoneVolume < _lastPhoneVolume) {
+        // Volume Down knob
+        _currentHostVolume = (_currentHostVolume - 0.05).clamp(0.0, 1.5);
+        _client.sendDcMsg({DcMsg.Key: DcMsg.SetVolume, "level": _currentHostVolume});
       }
+      _lastPhoneVolume = newPhoneVolume;
     });
   }
 
@@ -75,6 +86,9 @@ class FranknAudioHandler extends BaseAudioHandler {
     Uri? artUri,
     double? volume,
   }) {
+    if (volume != null) {
+      _currentHostVolume = volume;
+    }
     final currentItem = mediaItem.value;
 
     if (title != null ||

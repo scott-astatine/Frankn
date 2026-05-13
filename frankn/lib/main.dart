@@ -230,16 +230,6 @@ class FranknTaskHandler extends TaskHandler {
         );
       });
 
-      RtcClient().mediaStatusStream.listen((status) {
-        _broadcastToMain(
-          IsolateMsg(
-            type: 'event',
-            action: 'media_status',
-            payload: {'status': status},
-          ),
-        );
-      });
-
       RtcClient().notificationStream.listen((data) {
         _broadcastToMain(
           IsolateMsg(type: 'event', action: 'notification', payload: data),

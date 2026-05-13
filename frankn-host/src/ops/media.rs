@@ -132,10 +132,11 @@ where
     let conn = Connection::session().await?;
     if let Some(player) = find_active_player(&conn).await
         && let Ok(bus_name) = BusName::try_from(player.as_str())
-            && let Ok(builder) = MediaPlayerProxy::builder(&conn).destination(bus_name)
-                && let Ok(proxy) = builder.build().await {
-                    f(&proxy).await?;
-                }
+        && let Ok(builder) = MediaPlayerProxy::builder(&conn).destination(bus_name)
+        && let Ok(proxy) = builder.build().await
+    {
+        f(&proxy).await?;
+    }
     Ok(())
 }
 
@@ -157,19 +158,21 @@ async fn find_active_player(conn: &Connection) -> Option<String> {
     for player in &players {
         if let Ok(bus_name) = BusName::try_from(player.as_str())
             && let Ok(builder) = MediaPlayerProxy::builder(conn).destination(bus_name)
-                && let Ok(proxy) = builder.build().await
-                    && let Ok(status) = proxy.playback_status().await
-                        && status == "Playing" {
-                            *LAST_ACTIVE_PLAYER.lock().await = Some(player.clone());
-                            return Some(player.clone());
-                        }
+            && let Ok(proxy) = builder.build().await
+            && let Ok(status) = proxy.playback_status().await
+            && status == "Playing"
+        {
+            *LAST_ACTIVE_PLAYER.lock().await = Some(player.clone());
+            return Some(player.clone());
+        }
     }
 
     let mut last_active = LAST_ACTIVE_PLAYER.lock().await;
     if let Some(ref name) = *last_active
-        && players.contains(name) {
-            return Some(name.clone());
-        }
+        && players.contains(name)
+    {
+        return Some(name.clone());
+    }
 
     let fallback = players.first().cloned();
     *last_active = fallback.clone();
@@ -182,13 +185,14 @@ pub async fn list_players(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessag
 
     if let Ok(conn) = conn_res
         && let Ok(dbus) = zbus::fdo::DBusProxy::new(&conn).await
-            && let Ok(names) = dbus.list_names().await {
-                for name in names {
-                    if name.as_str().starts_with("org.mpris.MediaPlayer2.") {
-                        players_list.push(name.to_string());
-                    }
-                }
+        && let Ok(names) = dbus.list_names().await
+    {
+        for name in names {
+            if name.as_str().starts_with("org.mpris.MediaPlayer2.") {
+                players_list.push(name.to_string());
             }
+        }
+    }
 
     let current = LAST_ACTIVE_PLAYER.lock().await.clone();
 
@@ -371,37 +375,38 @@ async fn fetch_mpris_data_with_conn(conn: &Connection) -> zbus::Result<MprisData
         .or_else(|| metadata.get("xesam:artUrl"));
 
     if let Some(v) = art_url_val
-        && let Value::Str(url) = v.deref() {
-            let url_str = url.as_str();
+        && let Value::Str(url) = v.deref()
+    {
+        let url_str = url.as_str();
 
-            // Log the URL we found to help debug
-            // log!("MEDIA: Found art URL: {}", url_str);
+        // Log the URL we found to help debug
+        // log!("MEDIA: Found art URL: {}", url_str);
 
-            if url_str.starts_with("file://") {
-                let path = url_str.trim_start_matches("file://");
-                // Use tokio::fs for non-blocking read
-                if let Ok(bytes) = tokio::fs::read(path).await {
-                    use base64::Engine;
-                    art_data = Some(base64::prelude::BASE64_STANDARD.encode(bytes));
-                } else {
-                    elog!("MEDIA: Failed to read local art file: {}", path);
-                }
-            } else if url_str.starts_with("http") {
-                // Pass the HTTP URL directly to the client.
-                // The client (Flutter) has built-in image caching and networking logic.
-                // Sending the URL instead of the base64 data:
-                // 1. Saves host bandwidth (sending small string vs large encoded blob).
-                // 2. Removes the runtime dependency on 'curl'.
-                // 3. Reduces latency for the metadata update.
-                art_data = Some(url_str.to_string());
-            } else if url_str.starts_with('/') {
-                // Raw absolute path
-                if let Ok(bytes) = tokio::fs::read(url_str).await {
-                    use base64::Engine;
-                    art_data = Some(base64::prelude::BASE64_STANDARD.encode(bytes));
-                }
+        if url_str.starts_with("file://") {
+            let path = url_str.trim_start_matches("file://");
+            // Use tokio::fs for non-blocking read
+            if let Ok(bytes) = tokio::fs::read(path).await {
+                use base64::Engine;
+                art_data = Some(base64::prelude::BASE64_STANDARD.encode(bytes));
+            } else {
+                elog!("MEDIA: Failed to read local art file: {}", path);
+            }
+        } else if url_str.starts_with("http") {
+            // Pass the HTTP URL directly to the client.
+            // The client (Flutter) has built-in image caching and networking logic.
+            // Sending the URL instead of the base64 data:
+            // 1. Saves host bandwidth (sending small string vs large encoded blob).
+            // 2. Removes the runtime dependency on 'curl'.
+            // 3. Reduces latency for the metadata update.
+            art_data = Some(url_str.to_string());
+        } else if url_str.starts_with('/') {
+            // Raw absolute path
+            if let Ok(bytes) = tokio::fs::read(url_str).await {
+                use base64::Engine;
+                art_data = Some(base64::prelude::BASE64_STANDARD.encode(bytes));
             }
         }
+    }
 
     Ok(MprisData {
         player_name: player,
@@ -473,12 +478,17 @@ pub async fn start_media_sync(peer_map: PeerMap) {
 
                             let msg = HostMessage::MediaUpdate {
                                 player_name: Some(d.player_name.clone()),
-                                status: d.status,
+                                playing: if d.status.to_lowercase().contains("playing") {
+                                    true
+                                } else {
+                                    false
+                                },
                                 metadata: Some(format!("{} - {}", d.title, d.artist)),
                                 art_data: d.art_data,
                                 position: Some(d.position),
                                 length: Some(d.length),
                                 timestamp: crate::utils::get_timestamp(),
+                                volume: Some(d.volume),
                             };
 
                             if let Ok(json) = serde_json::to_string(&msg) {
@@ -490,7 +500,7 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                                         .await;
                                 }
                                 for c in map.keys() {
-                                    log!("Media Update sent to Client({c}): {:?}", sig);
+                                    log!("Media Update sent to Client({c}): {:?}", msg);
                                 }
                             }
                         }
@@ -500,11 +510,12 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                             last_metadata_sig = String::new();
                             let msg = HostMessage::MediaUpdate {
                                 player_name: None,
-                                status: "Stopped".into(),
+                                playing: false,
                                 metadata: Some("No Media".into()),
                                 art_data: None,
                                 position: None,
                                 length: None,
+                                volume: None,
                                 timestamp: crate::utils::get_timestamp(),
                             };
                             if let Ok(json) = serde_json::to_string(&msg) {
@@ -541,23 +552,24 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                 }
 
                 if let Ok(d) = fetch_mpris_data_with_conn(&conn).await
-                    && d.status.to_lowercase().contains("playing") {
-                        let msg = HostMessage::MediaPositionUpdate {
-                            position: d.position,
-                            length: Some(d.length),
-                            timestamp: crate::utils::get_timestamp(),
-                        };
+                    && d.status.to_lowercase().contains("playing")
+                {
+                    let msg = HostMessage::MediaPositionUpdate {
+                        position: d.position,
+                        length: Some(d.length),
+                        timestamp: crate::utils::get_timestamp(),
+                    };
 
-                        if let Ok(json) = serde_json::to_string(&msg) {
-                            let map = pm_position.lock().await;
-                            for conn in map.values() {
-                                let r_conn = conn.lock().await;
-                                let _ = r_conn
-                                    .send_message("frankn_media", &Bytes::from(json.clone()))
-                                    .await;
-                            }
+                    if let Ok(json) = serde_json::to_string(&msg) {
+                        let map = pm_position.lock().await;
+                        for conn in map.values() {
+                            let r_conn = conn.lock().await;
+                            let _ = r_conn
+                                .send_message("frankn_media", &Bytes::from(json.clone()))
+                                .await;
                         }
                     }
+                }
                 tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
             }
         });
@@ -584,32 +596,33 @@ pub async fn get_all_audio_devices(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> H
             .output()
             .await
             && let Ok(json_str) = String::from_utf8(output.stdout)
-                && let Ok(sinks) = serde_json::from_str::<serde_json::Value>(&json_str)
-                    && let Some(arr) = sinks.as_array() {
-                        for sink in arr {
-                            let id = sink["name"].as_str().unwrap_or("0").to_string();
-                            let name = sink["description"]
-                                .as_str()
-                                .unwrap_or("Unknown Output")
-                                .to_string();
-                            let is_default = id == default_sink;
+            && let Ok(sinks) = serde_json::from_str::<serde_json::Value>(&json_str)
+            && let Some(arr) = sinks.as_array()
+        {
+            for sink in arr {
+                let id = sink["name"].as_str().unwrap_or("0").to_string();
+                let name = sink["description"]
+                    .as_str()
+                    .unwrap_or("Unknown Output")
+                    .to_string();
+                let is_default = id == default_sink;
 
-                            let vol = sink["volume"]["front-left"]["value_percent"]
-                                .as_str()
-                                .unwrap_or("0%")
-                                .trim_end_matches('%')
-                                .parse::<f64>()
-                                .unwrap_or(0.0)
-                                / 100.0;
-                            devices.push(serde_json::json!({
-                                "id": id,
-                                "name": name,
-                                "type": "sink",
-                                "volume": vol,
-                                "is_active": is_default
-                            }));
-                        }
-                    }
+                let vol = sink["volume"]["front-left"]["value_percent"]
+                    .as_str()
+                    .unwrap_or("0%")
+                    .trim_end_matches('%')
+                    .parse::<f64>()
+                    .unwrap_or(0.0)
+                    / 100.0;
+                devices.push(serde_json::json!({
+                    "id": id,
+                    "name": name,
+                    "type": "sink",
+                    "volume": vol,
+                    "is_active": is_default
+                }));
+            }
+        }
         HostMessage::Response {
             id: req_id.to_string(),
             status: Status::Success,

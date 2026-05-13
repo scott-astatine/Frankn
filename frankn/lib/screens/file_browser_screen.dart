@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
+import 'package:frankn/screens/code_editor_screen.dart';
+import 'package:frankn/screens/image_viewer_screen.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/file_browser/file_browser_state.dart';
@@ -6,9 +9,6 @@ import 'package:frankn/utils/file_browser/file_browser_ui.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/file_browser_item.dart';
-import 'package:frankn/screens/code_editor_screen.dart';
-import 'package:frankn/screens/image_viewer_screen.dart';
-import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class FileBrowserScreen extends StatefulWidget {
   final RtcThinClient client;
@@ -20,49 +20,10 @@ class FileBrowserScreen extends StatefulWidget {
 
 class _FileBrowserScreenState extends State<FileBrowserScreen>
     with FileTransferMixin {
-  @override
-  RtcThinClient get client => widget.client;
   late final FileBrowserState _browserState;
   bool _isGridView = false;
-
   @override
-  void initState() {
-    super.initState();
-    _browserState = FileBrowserState(widget.client);
-    _browserState.addListener(_onStateChanged);
-    _browserState.refreshDirectory();
-    setupTransferListener();
-  }
-
-  void _onStateChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _browserState.removeListener(_onStateChanged);
-    super.dispose();
-  }
-
-  @override
-  void refreshDirectory() => _browserState.refreshDirectory();
-
-  void _handleBulkDelete() {
-    final paths = _browserState.selectedPaths.toList();
-    for (var path in paths) {
-      widget.client.sendDcMsg({DcMsg.Key: DcMsg.DeleteFile, "path": path});
-    }
-    _browserState.clearSelection();
-    _browserState.refreshDirectory();
-  }
-
-  void _handleBulkDownload() {
-    final paths = _browserState.selectedPaths.toList();
-    for (var path in paths) {
-      downloadFile(path);
-    }
-    _browserState.clearSelection();
-  }
+  RtcThinClient get client => widget.client;
 
   @override
   Widget build(BuildContext context) {
@@ -134,40 +95,23 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
     );
   }
 
-  Widget _buildMainContent(AppLocalizations l10n) {
-    final entries = _browserState.getFilteredEntries();
-    if (entries.isEmpty && !_browserState.isLoading) {
-      return Center(
-        child: Text(
-          l10n.noDataFound.toUpperCase().replaceAll(" ", "_"),
-          style: const TextStyle(
-            fontFamily: 'JetBrainsMonoNerdFont',
-            color: Colors.white24,
-          ),
-        ),
-      );
-    }
-
-    if (_isGridView) {
-      return GridView.builder(
-        padding: const EdgeInsets.all(10),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 5,
-          mainAxisSpacing: 2,
-          childAspectRatio: 0.75,
-        ),
-        itemCount: entries.length,
-        itemBuilder: (context, index) => _buildItem(entries[index], true),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: entries.length,
-      itemBuilder: (context, index) => _buildItem(entries[index], false),
-    );
+  @override
+  void dispose() {
+    _browserState.removeListener(_onStateChanged);
+    super.dispose();
   }
+
+  @override
+  void initState() {
+    super.initState();
+    _browserState = FileBrowserState(widget.client);
+    _browserState.addListener(_onStateChanged);
+    _browserState.refreshDirectory();
+    setupTransferListener();
+  }
+
+  @override
+  void refreshDirectory() => _browserState.refreshDirectory();
 
   Widget _buildItem(dynamic entry, bool isGrid) {
     final fullPath = PathHelper.join(
@@ -201,7 +145,9 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
                 ),
               ),
             );
-          } else if (icon == Icons.code || icon == Icons.article_outlined || name.endsWith('.txt')) {
+          } else if (icon == Icons.code ||
+              icon == Icons.article_outlined ||
+              name.endsWith('.txt')) {
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -243,5 +189,61 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildMainContent(AppLocalizations l10n) {
+    final entries = _browserState.getFilteredEntries();
+    if (entries.isEmpty && !_browserState.isLoading) {
+      return Center(
+        child: Text(
+          l10n.noDataFound.toUpperCase().replaceAll(" ", "_"),
+          style: const TextStyle(
+            fontFamily: 'JetBrainsMonoNerdFont',
+            color: Colors.white24,
+          ),
+        ),
+      );
+    }
+
+    if (_isGridView) {
+      return GridView.builder(
+        padding: const EdgeInsets.all(10),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 5,
+          mainAxisSpacing: 2,
+          childAspectRatio: 0.75,
+        ),
+        itemCount: entries.length,
+        itemBuilder: (context, index) => _buildItem(entries[index], true),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: entries.length,
+      itemBuilder: (context, index) => _buildItem(entries[index], false),
+    );
+  }
+
+  void _handleBulkDelete() {
+    final paths = _browserState.selectedPaths.toList();
+    for (var path in paths) {
+      widget.client.sendDcMsg({DcMsg.Key: DcMsg.DeleteFile, "path": path});
+    }
+    _browserState.clearSelection();
+    _browserState.refreshDirectory();
+  }
+
+  void _handleBulkDownload() {
+    final paths = _browserState.selectedPaths.toList();
+    for (var path in paths) {
+      downloadFile(path);
+    }
+    _browserState.clearSelection();
+  }
+
+  void _onStateChanged() {
+    if (mounted) setState(() {});
   }
 }

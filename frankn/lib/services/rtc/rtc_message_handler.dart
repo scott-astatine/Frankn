@@ -163,8 +163,9 @@ mixin RtcMessageHandler on RtcClientBase {
         if (expectedHash != null) {
           // Verify hash without loading full file into RAM
           final stream = file.openRead();
-          final actualHash =
-              (await sha256.bind(stream).single).toString().toLowerCase();
+          final actualHash = (await sha256.bind(stream).single)
+              .toString()
+              .toLowerCase();
 
           if (actualHash != expectedHash.toLowerCase()) {
             log(
@@ -253,8 +254,6 @@ mixin RtcMessageHandler on RtcClientBase {
         final cpu = data['cpu_load']?.toStringAsFixed(1);
         final usedMem = ((data['used_mem'] ?? 0) / 1024 / 1024 / 1024)
             .toStringAsFixed(1);
-        final totalMem = ((data['total_mem'] ?? 0) / 1024 / 1024 / 1024)
-            .toStringAsFixed(1);
         final cpuTemp = data['cpu_temp']?.toStringAsFixed(1) ?? '0.0';
 
         // Use standard Unicode emojis for the notification body
@@ -262,7 +261,7 @@ mixin RtcMessageHandler on RtcClientBase {
         final statusIcon = cpuVal > 80 ? '🔥' : '🟢';
 
         updateBackgroundService(
-          text: "$statusIcon CPU: $cpu% | 💾 RAM: $usedMem/$totalMem GB | 🌡️ $cpuTemp°C",
+          text: "$statusIcon: $cpu% | 💾 : $usedMem GB | 🌡️ $cpuTemp°C",
         );
         commandResponseController.add(data);
         break;
@@ -339,10 +338,7 @@ mixin RtcMessageHandler on RtcClientBase {
       );
       final response = AuthService().computeResponse(argon2Hash, challenge);
 
-      sendHostMessage({
-        'type': 'auth_response',
-        'response': response,
-      });
+      sendHostMessage({'type': 'auth_response', 'response': response});
     }
   }
 
@@ -365,36 +361,27 @@ mixin RtcMessageHandler on RtcClientBase {
 
     if (data['data'] != null) {
       if (data['data']['response'] != DcMsg.Pong) {
-        log("CMD RESPONSE: $data");
-      }
-      final d = data['data'];
-      if (d['media_status'] != null || d['metadata'] != null) {
-        _handleMediaUpdate(d);
+        log("Host Response: $data");
       }
     }
   }
 
   void _handleMediaUpdate(Map<String, dynamic> data) async {
-    String? status = data['media_status'] ?? data['status'];
+    MediaUpdate media = MediaUpdate.fromJson(data);
+    log("Loggggginnnnnnnnnnnnnnnnnnnnnnnnnnnnnn MediaUpdate: IsPlaying: $data");
 
-    if (status != null) {
-      mediaStatusController.add(status);
-    }
-
-    if (data['art_data'] != null) {
-      final artStr = data['art_data'] as String;
-      if (!artStr.startsWith('http')) {
-        try {
-          final tempDir = globalTempDir;
-          final file = File('${tempDir.path}/album_art.jpg');
-          if (await file.exists()) await file.delete();
-          await file.writeAsBytes(base64Decode(artStr));
-          // Replace large base64 string with local file path to avoid IPC crash
-          data['art_data'] = 'file://${file.path}';
-        } catch (e) {
-          log("Failed to parse album art in background isolate: $e");
-          data.remove('art_data');
-        }
+    final artStr = media.artData;
+    if (artStr != null && !artStr.startsWith('http')) {
+      try {
+        final tempDir = globalTempDir;
+        final file = File('${tempDir.path}/album_art.jpg');
+        if (await file.exists()) await file.delete();
+        await file.writeAsBytes(base64Decode(artStr));
+        // Replace large base64 string with local file path to avoid IPC crash
+        data['art_data'] = 'file://${file.path}';
+      } catch (e) {
+        log("Failed to parse album art in background isolate: $e");
+        data.remove('art_data');
       }
     }
 

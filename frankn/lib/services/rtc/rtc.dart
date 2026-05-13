@@ -240,10 +240,6 @@ abstract class RtcClientBase {
   /// Used to correlate transfer completion with file metadata.
   Map<String, String> get activeFileNames;
 
-  /// Controller for media player status updates from host.
-  /// Streams play/pause/stop states as strings.
-  StreamController<String> get mediaStatusController;
-
   /// Controller for command responses from host.
   /// Streams JSON responses to command executions.
   StreamController<Map<String, dynamic>> get commandResponseController;
@@ -394,13 +390,6 @@ class RtcClient extends RtcClientBase
 
   final List<String> _logHistory = [];
   List<String> get logHistory => List.unmodifiable(_logHistory);
-
-  /// Broadcast controller for media player status updates.
-  /// Streams play/pause/stop states from the host's media player.
-  @override
-  final StreamController<String> mediaStatusController =
-      StreamController<String>.broadcast();
-  Stream<String> get mediaStatusStream => mediaStatusController.stream;
 
   /// Broadcast controller for responses to commands sent to the host.
   /// Includes file operations, system commands, and media controls.

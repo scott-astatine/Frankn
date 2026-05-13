@@ -119,11 +119,12 @@ pub enum HostMessage {
     #[serde(rename = "media_update")]
     MediaUpdate {
         player_name: Option<String>,
-        status: String,
+        playing: bool,
         metadata: Option<String>,
         art_data: Option<String>,
         position: Option<u64>,
         length: Option<u64>,
+        volume: Option<f64>,
         timestamp: u64,
     },
 

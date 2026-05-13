@@ -13,6 +13,51 @@ enum HostConnectionState {
   authenticated,
 }
 
+class MediaUpdate {
+  final bool playing;
+  final String metadata;
+  final String? artData;
+  final double position; // u64 in Rust translates to int in Dart
+  final double length;
+  final double volume; // f64 in Rust translates to double in Dart
+  final int timestamp;
+
+  final String playerName;
+  final String trackId;
+
+  MediaUpdate({
+    required this.playing,
+    required this.metadata,
+    this.artData,
+    required this.position,
+    required this.length,
+    required this.volume,
+    required this.timestamp,
+    required this.playerName,
+    required this.trackId,
+  });
+
+  // The factory constructor acts as your JSON parser
+  factory MediaUpdate.fromJson(Map<String, dynamic> json) {
+    return MediaUpdate(
+      playerName: json['player_name'].toString().replaceAll(
+        "org.mpris.MediaPlayer2.",
+        "",
+      ),
+      playing: json['playing'] as bool,
+      metadata: json['metadata'],
+      artData: json['art_data'],
+      position: (json['position'] as num).toDouble(),
+      length: (json['length'] as num).toDouble(),
+      volume: (json['volume'] as num).toDouble(),
+      timestamp: json['timestamp'] != null
+          ? (json['timestamp'] as num).toInt()
+          : 0,
+      trackId: json['track_id'].toString(),
+    );
+  }
+}
+
 enum ModState { off, active, locked }
 
 class NeoColors {
@@ -134,6 +179,14 @@ class DcMsg {
   static const ListPlayers = "list_players";
   static const SetActivePlayer = "set_active_player";
   static const Seek = "seek";
+
+  // Network
+  static const GetNetworkStatus = "get_network_status";
+  static const ToggleRadio = "toggle_radio";
+  static const ListWifiNetworks = "list_wifi_networks";
+  static const ConnectWifi = "connect_wifi";
+  static const ListBluetoothDevices = "list_bluetooth_devices";
+  static const ConnectBluetooth = "connect_bluetooth";
 
   // LLM
   static const LlmStart = "llm_start";

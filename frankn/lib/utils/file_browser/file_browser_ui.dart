@@ -97,7 +97,11 @@ class FileBrowserAppBar {
           onPressed: onSearch,
         ),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, color: AppColors.neonCyan, size: 20),
+          icon: const Icon(
+            Icons.more_vert,
+            color: AppColors.neonCyan,
+            size: 20,
+          ),
           onSelected: (val) {
             if (val == "upload") {
               onUpload?.call();
@@ -105,13 +109,17 @@ class FileBrowserAppBar {
               onSort(val);
             }
           },
-          color: const Color(0xFF0F0F0F),
+          color: AppColors.voidBlack,
           itemBuilder: (context) => [
             PopupMenuItem(
               value: "name",
               child: Row(
                 children: [
-                  const Icon(Icons.sort_by_alpha, color: AppColors.textGrey, size: 16),
+                  const Icon(
+                    Icons.sort_by_alpha,
+                    color: AppColors.textGrey,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     l10n.sortByName.toUpperCase(),
@@ -127,7 +135,11 @@ class FileBrowserAppBar {
               value: "size",
               child: Row(
                 children: [
-                  const Icon(Icons.format_size, color: AppColors.textGrey, size: 16),
+                  const Icon(
+                    Icons.format_size,
+                    color: AppColors.textGrey,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     l10n.sortBySize.toUpperCase(),
@@ -143,7 +155,11 @@ class FileBrowserAppBar {
               value: "modified",
               child: Row(
                 children: [
-                  const Icon(Icons.date_range, color: AppColors.textGrey, size: 16),
+                  const Icon(
+                    Icons.date_range,
+                    color: AppColors.textGrey,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     l10n.sortByDate.toUpperCase(),
@@ -160,7 +176,11 @@ class FileBrowserAppBar {
               value: "upload",
               child: Row(
                 children: [
-                  const Icon(Icons.upload_file, color: AppColors.neonCyan, size: 16),
+                  const Icon(
+                    Icons.upload_file,
+                    color: AppColors.neonCyan,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     "UPLOAD FILE",
@@ -199,7 +219,7 @@ class FileBrowserAppBar {
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
-        color: Colors.black,
+        color: AppColors.voidBlack,
         border: Border(bottom: BorderSide(color: Colors.white10)),
       ),
       child: ListView.separated(

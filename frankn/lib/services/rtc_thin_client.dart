@@ -38,28 +38,24 @@ class RtcThinClient {
   final _logController = StreamController<String>.broadcast();
   Stream<String> get logStream => _logController.stream;
 
-  final _mediaStatusController = StreamController<String>.broadcast();
-  Stream<String> get mediaStatusStream => _mediaStatusController.stream;
-
   final _notificationController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get notificationStream =>
       _notificationController.stream;
-
   final _transferProgressController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get transferProgressStream =>
       _transferProgressController.stream;
+
+  final _aiStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get aiStream => _aiStreamController.stream;
 
   final _sshDataController = StreamController<Uint8List>.broadcast();
   Stream<Uint8List> get sshDataStream => _sshDataController.stream;
 
   final _authErrorController = StreamController<String>.broadcast();
   Stream<String> get authErrorStream => _authErrorController.stream;
-
-  final _aiStreamController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get aiStream => _aiStreamController.stream;
 
   HostConnectionState currentHostState = HostConnectionState.disconnected;
   SignalConnectionState sigState = SignalConnectionState.disconnected;
@@ -165,11 +161,15 @@ class RtcThinClient {
 
           // Handle UI isolate media sync to prevent background isolate crashes
           final d = msg.payload;
-          if (d['type'] == 'media_update' || d['media_status'] != null || d['metadata'] != null) {
+          if (d['type'] == 'media_update' ||
+              d['media_status'] != null ||
+              d['metadata'] != null) {
             String? status = d['media_status'] ?? d['status'];
             String? metadata = d['metadata'];
             String? playerName = d['player_name'];
-            double? volume = d['volume'] != null ? (d['volume'] as num).toDouble() : null;
+            double? volume = d['volume'] != null
+                ? (d['volume'] as num).toDouble()
+                : null;
             Duration? position;
             Duration? length;
             Uri? artUri;
@@ -203,6 +203,9 @@ class RtcThinClient {
             }
 
             try {
+              if (volume != null) {
+                _volumeController.add(volume);
+              }
               franknAudioHandler.updateMediaState(
                 status: status,
                 title: title,
@@ -256,8 +259,6 @@ class RtcThinClient {
           logHistory.add(logMsg);
           if (logHistory.length > 1000) logHistory.removeAt(0);
           _logController.add(logMsg);
-        } else if (msg.action == 'media_status') {
-          _mediaStatusController.add(msg.payload['status']);
         } else if (msg.action == 'notification') {
           _notificationController.add(msg.payload);
         } else if (msg.action == 'transfer_progress') {
