@@ -60,15 +60,6 @@ struct MprisData {
     track_id: String,
 }
 
-pub async fn handle_start_media_sync(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
-    HostMessage::Response {
-        id: id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({ "message": "Neural link synchronized with Media Core." })),
-        timestamp: crate::utils::get_timestamp(),
-    }
-}
-
 pub async fn toggle_play_pause(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     let _ = call_mpris(|p| Box::pin(async move { p.play_pause().await })).await;
     get_media_status(id, _rtc).await
@@ -379,32 +370,16 @@ async fn fetch_mpris_data_with_conn(conn: &Connection) -> zbus::Result<MprisData
     {
         let url_str = url.as_str();
 
-        // Log the URL we found to help debug
-        // log!("MEDIA: Found art URL: {}", url_str);
+        // log!("MEDIA: art_data: {}", url_str);
 
         if url_str.starts_with("file://") {
             let path = url_str.trim_start_matches("file://");
-            // Use tokio::fs for non-blocking read
-            if let Ok(bytes) = tokio::fs::read(path).await {
-                use base64::Engine;
-                art_data = Some(base64::prelude::BASE64_STANDARD.encode(bytes));
-            } else {
-                elog!("MEDIA: Failed to read local art file: {}", path);
-            }
+            art_data = Some(format!("frankn-fs://{}", path));
         } else if url_str.starts_with("http") {
-            // Pass the HTTP URL directly to the client.
-            // The client (Flutter) has built-in image caching and networking logic.
-            // Sending the URL instead of the base64 data:
-            // 1. Saves host bandwidth (sending small string vs large encoded blob).
-            // 2. Removes the runtime dependency on 'curl'.
-            // 3. Reduces latency for the metadata update.
             art_data = Some(url_str.to_string());
         } else if url_str.starts_with('/') {
             // Raw absolute path
-            if let Ok(bytes) = tokio::fs::read(url_str).await {
-                use base64::Engine;
-                art_data = Some(base64::prelude::BASE64_STANDARD.encode(bytes));
-            }
+            art_data = Some(format!("frankn-fs://{}", url_str));
         }
     }
 
@@ -425,7 +400,6 @@ pub async fn start_media_sync(peer_map: PeerMap) {
     #[cfg(target_os = "linux")]
     {
         let pm_metadata = Arc::clone(&peer_map);
-        let pm_position = Arc::clone(&peer_map);
 
         tokio::spawn(async move {
             log!("Neural Media Engine: Initializing event loop...");
@@ -466,8 +440,14 @@ pub async fn start_media_sync(peer_map: PeerMap) {
 
                         let art_len = d.art_data.as_ref().map(|s| s.len()).unwrap_or(0);
                         let sig = format!(
-                            "{} {} {} {} {} art_len: {}",
-                            d.player_name, d.status, d.title, d.length, d.volume, art_len
+                            "{} {} {} {} {} pos: {} art_len: {}",
+                            d.player_name,
+                            d.status,
+                            d.title,
+                            d.length,
+                            d.volume,
+                            d.position,
+                            art_len
                         );
 
                         let force_update = current_clients > last_client_count;
@@ -527,46 +507,6 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                                         .await;
                                 }
                             }
-                        }
-                    }
-                }
-                tokio::time::sleep(tokio::time::Duration::from_millis(700)).await;
-            }
-        });
-
-        tokio::spawn(async move {
-            let conn = match Connection::session().await {
-                Ok(c) => c,
-                Err(_) => return,
-            };
-
-            loop {
-                let has_clients = {
-                    let map = pm_position.lock().await;
-                    !map.is_empty()
-                };
-
-                if !has_clients {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                    continue;
-                }
-
-                if let Ok(d) = fetch_mpris_data_with_conn(&conn).await
-                    && d.status.to_lowercase().contains("playing")
-                {
-                    let msg = HostMessage::MediaPositionUpdate {
-                        position: d.position,
-                        length: Some(d.length),
-                        timestamp: crate::utils::get_timestamp(),
-                    };
-
-                    if let Ok(json) = serde_json::to_string(&msg) {
-                        let map = pm_position.lock().await;
-                        for conn in map.values() {
-                            let r_conn = conn.lock().await;
-                            let _ = r_conn
-                                .send_message("frankn_media", &Bytes::from(json.clone()))
-                                .await;
                         }
                     }
                 }

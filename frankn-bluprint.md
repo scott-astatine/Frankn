@@ -44,13 +44,17 @@ My architecture relies on **WebRTC** for direct, encrypted P2P communication, by
 
 ### A. Frankn-Host Server
 I've implemented a robust backend that interfaces directly with Linux system APIs:
-- **Security**: Argon2id challenge-response. Host generates session challenges; client proves knowledge without sending passwords.
-- **CLI/TUI**: A dedicated tool for configuration management (`frankn-host config`) and pairing (`frankn-host pair`) with QR code generation.
+- **Security**: Argon2id challenge-response. Host generates session challenges; 
+  client proves knowledge without sending passwords.
+- **CLI/TUI**: A dedicated tool for configuration management (`frankn-host config`) and
+  pairing (`frankn-host pair`) with QR code generation.
 - **Power Management**: Integrated with `systemctl`, `loginctl`, and `hyprlock`.
 - **Media & Audio**: Full audio mixer experience (`wpctl`/`pactl`) and track control (`mpris`).
 - **File System**: Recursive viewing, chunked transfers with SHA-256 validation, and integrated editor.
-- **Neural / LLM**: `LlmManager` handles chat sessions, streaming inference (including SSE-style upstream handling), and persistence; exposes commands over the `dohee_x` data channel inside the authenticated WebRTC session.
-- **Remote Input**: Optional `uinput`-based virtual mouse and keyboard; fails soft at startup if the kernel module or `/dev/uinput` permissions are missing, leaving other ops unaffected.
+- **Neural / LLM**: `LlmManager` handles chat sessions, streaming inference (including SSE-style upstream handling),
+  and persistence; exposes commands over the `dohee_x` data channel inside the authenticated WebRTC session.
+- **Remote Input**: Optional `uinput`-based virtual mouse and keyboard;
+  fails soft at startup if the kernel module or `/dev/uinput` permissions are missing, leaving other ops unaffected.
 
 ### B. The "interface" (Flutter Client)
 The UI is now highly functional and visually polished:
@@ -121,6 +125,9 @@ Shipped or in flight alongside the blueprint updates:
 *   **vs Remote Desktop (RDP/VNC)**: Frankn works on poor connections because it streams metadata, not video buffers.
 *   **vs KDE Connect**: Frankn works over the global internet via WebRTC, not just local Wi-Fi. And it's just better!
 
+## TODO
+- [ ] Update initial host connection req to the signaling server to include a list of known hosts.
+- [ ] Update the signaling server to read the know_hosts for and to only send Host online status for the respective Client IDs
 
 ---
 *Last Updated: May 2026*

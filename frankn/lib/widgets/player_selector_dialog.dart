@@ -28,7 +28,7 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
   @override
   void initState() {
     super.initState();
-    _sub = widget.client.commandResponseStream.listen((resp) {
+    _sub = widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final data = resp['type'] == 'response' ? resp['data'] : resp;
       if (data != null && data is Map && data.containsKey('players')) {
@@ -121,7 +121,10 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                       onTap: () => _selectPlayer(p),
                       borderRadius: BorderRadius.circular(8),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: isActive
                               ? AppColors.neonPink.withValues(alpha: 0.1)
@@ -139,13 +142,21 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                             Text(
                               _cleanName(p),
                               style: TextStyle(
-                                color: isActive ? AppColors.neonPink : Colors.white,
-                                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                color: isActive
+                                    ? AppColors.neonPink
+                                    : Colors.white,
+                                fontWeight: isActive
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                                 fontSize: 13,
                               ),
                             ),
                             if (isActive)
-                              const Icon(Icons.check, color: AppColors.neonPink, size: 16),
+                              const Icon(
+                                Icons.check,
+                                color: AppColors.neonPink,
+                                size: 16,
+                              ),
                           ],
                         ),
                       ),
@@ -157,7 +168,10 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("CANCEL", style: TextStyle(color: AppColors.textGrey)),
+                  child: const Text(
+                    "CANCEL",
+                    style: TextStyle(color: AppColors.textGrey),
+                  ),
                 ),
               ),
             ],
@@ -167,3 +181,4 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
     );
   }
 }
+

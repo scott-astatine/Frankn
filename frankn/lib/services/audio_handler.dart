@@ -10,6 +10,7 @@ Future<void> initAudioService() async {
   audioHandler = await AudioService.init(
     builder: () {
       franknAudioHandler = FranknAudioHandler();
+      print("Initializing Audio Service.");
       return franknAudioHandler;
     },
     config: AudioServiceConfig(
@@ -66,18 +67,24 @@ class FranknAudioHandler extends BaseAudioHandler {
       if (newPhoneVolume > _lastPhoneVolume) {
         // Volume Up knob
         _currentHostVolume = (_currentHostVolume + 0.05).clamp(0.0, 1.5);
-        _client.sendDcMsg({DcMsg.Key: DcMsg.SetVolume, "level": _currentHostVolume});
+        _client.sendDcMsg({
+          DcMsg.Key: DcMsg.SetVolume,
+          "level": _currentHostVolume,
+        });
       } else if (newPhoneVolume < _lastPhoneVolume) {
         // Volume Down knob
         _currentHostVolume = (_currentHostVolume - 0.05).clamp(0.0, 1.5);
-        _client.sendDcMsg({DcMsg.Key: DcMsg.SetVolume, "level": _currentHostVolume});
+        _client.sendDcMsg({
+          DcMsg.Key: DcMsg.SetVolume,
+          "level": _currentHostVolume,
+        });
       }
       _lastPhoneVolume = newPhoneVolume;
     });
   }
 
   void updateMediaState({
-    String? status,
+    required bool isPlaying,
     String? title,
     String? artist,
     String? playerName,
@@ -109,26 +116,20 @@ class FranknAudioHandler extends BaseAudioHandler {
       );
     }
 
-    if (status != null || position != null) {
-      bool isPlaying =
-          (status ?? "").toLowerCase().contains("playing") ||
-          (status == null && playbackState.value.playing);
-
-      playbackState.add(
-        playbackState.value.copyWith(
-          playing: isPlaying,
-          updatePosition: position ?? playbackState.value.position,
-          bufferedPosition: position ?? Duration.zero,
-          controls: [
-            MediaControl.skipToPrevious,
-            MediaControl.rewind,
-            isPlaying ? MediaControl.pause : MediaControl.play,
-            MediaControl.fastForward,
-            MediaControl.skipToNext,
-          ],
-        ),
-      );
-    }
+    playbackState.add(
+      playbackState.value.copyWith(
+        playing: isPlaying,
+        updatePosition: position ?? playbackState.value.position,
+        bufferedPosition: position ?? Duration.zero,
+        controls: [
+          MediaControl.skipToPrevious,
+          MediaControl.rewind,
+          isPlaying ? MediaControl.pause : MediaControl.play,
+          MediaControl.fastForward,
+          MediaControl.skipToNext,
+        ],
+      ),
+    );
   }
 
   @override

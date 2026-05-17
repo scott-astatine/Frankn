@@ -189,7 +189,7 @@ class FileBrowserState with ChangeNotifier {
   /// Listens to the global [RtcThinClient] response stream.
   /// This connects the UI state to the networking layer.
   void _listenForResponses() {
-    _responseSub = client.commandResponseStream.listen((resp) {
+    _responseSub = client.genDcMsgStream.listen((resp) {
       final data = _extractResponseData(resp);
       final type = resp['type'];
 
@@ -198,16 +198,14 @@ class FileBrowserState with ChangeNotifier {
         setEntries(data['entries']);
       }
       // Handle file transfer completion (from FileTransferMixin)
-      else if (type == DcMsg.StreamEnd) {
+      else if (type == FsMsg.DownloadEnd) {
         setTransferMessage("");
         setTransferProgress(0.0);
         setIsLoading(false);
-      } else if (type == DcMsg.StreamStart) {
+      } else if (type == FsMsg.DownloadStart) {
         setTransferMessage("DOWNLOADING: ${resp['file_name']}");
         setTransferProgress(0.0);
         setIsLoading(true);
-      } else if (type == DcMsg.FileChunk) {
-        notifyListeners();
       }
     });
   }

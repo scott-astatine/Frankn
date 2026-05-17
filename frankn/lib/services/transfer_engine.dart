@@ -16,7 +16,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-import 'package:frankn/services/rtc/rtc.dart';
+import 'package:frankn/services/client_rtc/rtc.dart';
 import 'package:frankn/utils/utils.dart';
 
 /// Binary frame constants — must match host-side definitions.
@@ -52,7 +52,7 @@ class TransferEngine {
   StreamSubscription<Map<String, dynamic>>? _messageSub;
 
   TransferEngine(this.client) {
-    _messageSub = client.commandResponseStream.listen(_onMessage);
+    _messageSub = client.genDcMsgStream.listen(_onMessage);
   }
 
   void dispose() {
@@ -63,7 +63,7 @@ class TransferEngine {
   /// Cancel an in-progress transfer.
   Future<void> cancel(String id) async {
     _activeTransfers.remove(id);
-    client.sendDcMsg({DcMsg.Key: DcMsg.TransferCancel, "id": id});
+    client.sendDcMsg({DcMsg.Key: FsMsg.TransferCancel, "id": id});
   }
 
   /// Upload a file to the host with resume support.
@@ -93,7 +93,7 @@ class TransferEngine {
 
     // Initialize transfer on host
     final initCompleter = Completer<void>();
-    final initSub = client.commandResponseStream.listen((data) {
+    final initSub = client.genDcMsgStream.listen((data) {
       if (data['type'] == 'response' && data['id'] == id) {
         initCompleter.complete();
       } else if (data['type'] == 'transfer_complete' && data['id'] == id) {
@@ -165,7 +165,7 @@ class TransferEngine {
     }
 
     // Wait for host ACK of completion
-    final completeSub = client.commandResponseStream.listen((data) {
+    final completeSub = client.genDcMsgStream.listen((data) {
       if (data['type'] == 'transfer_complete' && data['id'] == id) {
         final state = _activeTransfers[id];
         state?.isComplete = true;
@@ -189,8 +189,6 @@ class TransferEngine {
   /// Returns the downloaded file. The file is saved to a temp location
   /// and the path is returned via the callback or the returned Future.
   ///
-  /// Note: Currently uses the legacy stream_start/stream_end path.
-  /// TODO: integrate with new binary frame protocol.
   Future<File> download({
     required String id,
     required String remotePath,
@@ -200,15 +198,14 @@ class TransferEngine {
   }) async {
     final completer = Completer<File>();
 
-    final sub = client.commandResponseStream.listen((data) {
+    final sub = client.genDcMsgStream.listen((data) {
       if (data['type'] == 'download_end' && data['id'] == id) {
-        // Legacy path completion — handled by FileTransferMixin instead.
         // This engine is primarily for the new resume-aware upload protocol.
       }
     });
 
     client.sendDcMsg({
-      DcMsg.Key: DcMsg.DownloadInit,
+      DcMsg.Key: FsMsg.DownloadInit,
       "id": id,
       "path": remotePath,
       "resume_offset": resumeOffset,

@@ -242,7 +242,7 @@ abstract class RtcClientBase {
 
   /// Controller for command responses from host.
   /// Streams JSON responses to command executions.
-  StreamController<Map<String, dynamic>> get commandResponseController;
+  StreamController<Map<String, dynamic>> get genDcMsgController;
 
   /// Controller for system notifications from host.
   /// Receives D-Bus notifications that are displayed on the mobile device.
@@ -394,10 +394,9 @@ class RtcClient extends RtcClientBase
   /// Broadcast controller for responses to commands sent to the host.
   /// Includes file operations, system commands, and media controls.
   @override
-  final StreamController<Map<String, dynamic>> commandResponseController =
+  final StreamController<Map<String, dynamic>> genDcMsgController =
       StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get commandResponseStream =>
-      commandResponseController.stream;
+  Stream<Map<String, dynamic>> get genDcMsgStream => genDcMsgController.stream;
 
   /// Broadcast controller for system notifications from the host.
   /// Receives D-Bus notifications that are displayed on the mobile device.
@@ -460,13 +459,11 @@ class RtcClient extends RtcClientBase
     // Only log non-noisy messages (skip ping, telemetry, and file chunks)
     if (!msg.contains(DcMsg.Ping) &&
         !msg.contains(DcMsg.Telemetry) &&
-        !msg.contains(DcMsg.UploadChunk) &&
         !msg.contains(InputSig.MouseMove) &&
         !msg.contains(InputSig.MouseClick) &&
         !msg.contains(InputSig.Scroll) &&
         !msg.contains(InputSig.Text) &&
-        !msg.contains(InputSig.KeyPress) &&
-        !msg.contains(DcMsg.FileChunk)) {
+        !msg.contains(InputSig.KeyPress)) {
       log("TX [$label]: $msg");
     }
     if (channel?.state == RTCDataChannelState.RTCDataChannelOpen) {

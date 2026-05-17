@@ -7,7 +7,6 @@ use crate::signaling::SignalingClient;
 use crate::utils::{ClientMessage, get_cpu_temp};
 use crate::utils::{HostMessage, Status, get_timestamp};
 use auth::AuthManager;
-use base64::Engine;
 use clap::{Parser, Subcommand};
 use ops::rtc::{PeerMap, RTCConn};
 use signaling::SignalingMessage;
@@ -428,7 +427,7 @@ async fn parse_dc_msg(
 
     match serde_json::from_str::<ClientMessage>(&text) {
         Ok(msg) => match msg {
-            ClientMessage::AuthRequest { .. } => {
+            ClientMessage::AuthRequest => {
                 crate::log!("CHALLENGE: Generating for client...");
                 let challenge = auth_manager.generate_challenge();
                 {
@@ -479,38 +478,6 @@ async fn parse_dc_msg(
                             let _ = conn.send_message(label, &Bytes::from(json)).await;
                         }
                     }
-                }
-            }
-            ClientMessage::UploadStart {
-                id,
-                path,
-                hash,
-                total_size,
-                ..
-            } => {
-                crate::log!("FS: Upload session {} initialized.", id);
-                let response =
-                    crate::fs_sync::handle_upload_start(&id, &path, hash, total_size).await;
-                if let Ok(json) = serde_json::to_string(&response) {
-                    let conn = rtc_conn.lock().await;
-                    let _ = conn.send_message(label, &Bytes::from(json)).await;
-                }
-            }
-            ClientMessage::UploadChunk { id, data, .. } => {
-                crate::fs_sync::handle_upload_chunk_raw(
-                    &id,
-                    &base64::prelude::BASE64_STANDARD
-                        .decode(&data)
-                        .unwrap_or_default(),
-                )
-                .await;
-            }
-            ClientMessage::UploadEnd { id, hash, .. } => {
-                crate::log!("FS: Upload session {} finalized.", id);
-                let response = crate::fs_sync::handle_upload_end(&id, hash).await;
-                if let Ok(json) = serde_json::to_string(&response) {
-                    let conn = rtc_conn.lock().await;
-                    let _ = conn.send_message(label, &Bytes::from(json)).await;
                 }
             }
 

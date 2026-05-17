@@ -162,7 +162,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
   @override
   void initState() {
     super.initState();
-    _sub = widget.client.commandResponseStream.listen((resp) {
+    _sub = widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final data = resp['type'] == 'response' ? resp['data'] : resp;
       if (data != null && data is Map && data.containsKey('networks')) {
@@ -268,4 +268,3 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
     widget.client.sendDcMsg({DcMsg.Key: DcMsg.ListWifiNetworks});
   }
 }
-

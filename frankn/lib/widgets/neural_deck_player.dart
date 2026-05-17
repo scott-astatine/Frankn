@@ -93,6 +93,56 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
     }
   }
 
+  Widget _playBtn() {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPlayPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPlayPressed = false);
+        widget.client.sendDcMsg({DcMsg.Key: DcMsg.TogglePlayPause});
+      },
+      onTapCancel: () => setState(() => _isPlayPressed = false),
+      child: AnimatedScale(
+        scale: _isPlayPressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutBack,
+        child: ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.neonPink.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.neonPink.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+                boxShadow: widget.mediaIsPlaying
+                    ? [
+                        BoxShadow(
+                          color: AppColors.neonPink.withValues(alpha: 0.1),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : [],
+              ),
+              child: Icon(
+                widget.mediaIsPlaying
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 60,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     widget.client.log("$widget.mediaIsPlaying");
@@ -258,6 +308,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                 ),
                               ),
                               const SizedBox(width: 20),
+                              // Seek back
                               AnimatedIconButton(
                                 icon: Icons.replay_10_rounded,
                                 size: 24,
@@ -280,66 +331,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                 }),
                               ),
                               const SizedBox(width: 16),
-                              GestureDetector(
-                                onTapDown: (_) =>
-                                    setState(() => _isPlayPressed = true),
-                                onTapUp: (_) {
-                                  setState(() => _isPlayPressed = false);
-                                  widget.client.sendDcMsg({
-                                    DcMsg.Key: DcMsg.TogglePlayPause,
-                                  });
-                                },
-                                onTapCancel: () =>
-                                    setState(() => _isPlayPressed = false),
-                                child: AnimatedScale(
-                                  scale: _isPlayPressed ? 0.9 : 1.0,
-                                  duration: const Duration(milliseconds: 150),
-                                  curve: Curves.easeOutBack,
-                                  child: ClipOval(
-                                    child: BackdropFilter(
-                                      filter: ImageFilter.blur(
-                                        sigmaX: 4,
-                                        sigmaY: 4,
-                                      ),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 150,
-                                        ),
-                                        width: 64,
-                                        height: 64,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.neonPink.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: AppColors.neonPink
-                                                .withValues(alpha: 0.2),
-                                            width: 1,
-                                          ),
-                                          boxShadow: widget.mediaIsPlaying
-                                              ? [
-                                                  BoxShadow(
-                                                    color: AppColors.neonPink
-                                                        .withValues(alpha: 0.1),
-                                                    blurRadius: 15,
-                                                    spreadRadius: 2,
-                                                  ),
-                                                ]
-                                              : [],
-                                        ),
-                                        child: Icon(
-                                          widget.mediaIsPlaying
-                                              ? Icons.pause_rounded
-                                              : Icons.play_arrow_rounded,
-                                          color: Colors.white,
-                                          size: 60,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                              _playBtn(),
                               const SizedBox(width: 16),
                               AnimatedIconButton(
                                 icon: Icons.skip_next,
@@ -355,6 +347,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // Seek forward
                               AnimatedIconButton(
                                 icon: Icons.forward_10_rounded,
                                 size: 24,

@@ -47,49 +47,6 @@ mixin RtcCommands on RtcClientBase {
     sendToChannel(inputDC, jsonMsg, "INPUT");
   }
 
-  /// Initiates a file upload session to the host.
-  ///
-  /// Parameters:
-  /// - id: Unique identifier for this upload session
-  /// - path: Target path on the host filesystem
-  /// - totalSize: Total size of the file in bytes
-  /// - hash: Optional SHA256 hash for integrity verification
-  ///
-  /// The host will prepare to receive chunks and validate the upload.
-  void sendUploadStart({
-    required String id,
-    required String path,
-    required int totalSize,
-    String? hash,
-  }) {
-    final msg = {
-      'type': DcMsg.UploadStart,
-      'id': id,
-      'path': path,
-      'total_size': totalSize,
-      'hash': hash,
-      'timestamp': getTimestamp(),
-    };
-    sendToChannel(fsDC, jsonEncode(msg), "FS");
-  }
-
-  /// Sends a chunk of file data as part of an active upload session.
-  ///
-  /// Parameters:
-  /// - id: Upload session identifier
-  /// - data: Base64-encoded chunk of file data
-  ///
-  /// Chunks are assembled on the host in the correct order.
-  void sendUploadChunk({required String id, required String data}) {
-    final msg = {
-      'type': DcMsg.UploadChunk,
-      'id': id,
-      'data': data,
-      'timestamp': getTimestamp(),
-    };
-    sendToChannel(fsDC, jsonEncode(msg), "FS");
-  }
-
   /// Sends a raw binary chunk of file data with the resume-aware frame format.
   ///
   /// Frame: [0x01][36-byte ID][8-byte offset][4-byte seq][1-byte flags][data]
@@ -139,7 +96,7 @@ mixin RtcCommands on RtcClientBase {
     sendToChannel(
       fsDC,
       jsonEncode({
-        'type': DcMsg.TransferInit,
+        'type': FsMsg.TransferInit,
         'id': id,
         'path': path,
         'total_size': totalSize,
@@ -154,7 +111,7 @@ mixin RtcCommands on RtcClientBase {
   void sendTransferCancel(String id) {
     sendToChannel(
       fsDC,
-      jsonEncode({'type': DcMsg.TransferCancel, 'id': id}),
+      jsonEncode({'type': FsMsg.TransferCancel, 'id': id}),
       "FS",
     );
   }
@@ -168,31 +125,13 @@ mixin RtcCommands on RtcClientBase {
     sendToChannel(
       fsDC,
       jsonEncode({
-        'type': DcMsg.DownloadInit,
+        'type': FsMsg.DownloadInit,
         'id': id,
         'path': path,
         'resume_offset': resumeOffset,
       }),
       "FS",
     );
-  }
-
-  /// Completes an active file upload session.
-  ///
-  /// Parameters:
-  /// - id: Upload session identifier
-  /// - hash: Optional SHA256 hash for verification
-  ///
-  /// The host will finalize the file, validate integrity if hash provided,
-  /// and clean up the upload session resources.
-  void sendUploadEnd({required String id, String? hash}) {
-    final msg = {
-      'type': DcMsg.UploadEnd,
-      'id': id,
-      'hash': hash,
-      'timestamp': getTimestamp(),
-    };
-    sendToChannel(fsDC, jsonEncode(msg), "FS");
   }
 
   /// Sends a data channel command to the host with authentication.
@@ -235,11 +174,10 @@ mixin RtcCommands on RtcClientBase {
     switch (type) {
       // File system operations routed to dedicated FS channel
       case DcMsg.Ls:
-      case DcMsg.GetFile:
       case DcMsg.DeleteFile:
-      case DcMsg.TransferInit:
-      case DcMsg.TransferCancel:
-      case DcMsg.DownloadInit:
+      case FsMsg.TransferInit:
+      case FsMsg.TransferCancel:
+      case FsMsg.DownloadInit:
         sendToChannel(fsDC, jsonMsg, "FS");
         break;
 
@@ -249,7 +187,6 @@ mixin RtcCommands on RtcClientBase {
       case DcMsg.TogglePlayPause:
       case DcMsg.PlayNextTrack:
       case DcMsg.PlayPreviousTrack:
-      case DcMsg.StartMediaSync:
       case DcMsg.GetMediaStatus:
       case DcMsg.Seek:
         sendToChannel(mediaDC, jsonMsg, "MEDIA");

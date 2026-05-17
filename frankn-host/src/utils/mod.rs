@@ -1,4 +1,3 @@
-pub mod stream;
 use std::io::Error;
 
 pub use crate::ops::dc_message_parser::DcMsg;
@@ -28,17 +27,10 @@ pub enum Status {
 #[serde(tag = "type")]
 pub enum ClientMessage {
     #[serde(rename = "auth_request")]
-    AuthRequest {
-        #[serde(default)]
-        timestamp: u64,
-    },
+    AuthRequest,
 
     #[serde(rename = "auth_response")]
-    AuthResponse {
-        response: String,
-        #[serde(default)]
-        timestamp: u64,
-    },
+    AuthResponse { response: String },
 
     #[serde(rename = "dc_msg")]
     XDcMsg {
@@ -47,23 +39,7 @@ pub enum ClientMessage {
         command: DcMsg,
         params: Option<serde_json::Value>,
         auth_token: String,
-        #[serde(default)]
-        timestamp: u64,
     },
-
-    #[serde(rename = "upload_start")]
-    UploadStart {
-        id: String,
-        path: String,
-        total_size: u64,
-        hash: Option<String>,
-    },
-
-    #[serde(rename = "upload_chunk")]
-    UploadChunk { id: String, data: String },
-
-    #[serde(rename = "upload_end")]
-    UploadEnd { id: String, hash: Option<String> },
 
     // ── New resume-aware transfer protocol ──
     /// Initialize a transfer (upload from client → host).
@@ -128,13 +104,6 @@ pub enum HostMessage {
         timestamp: u64,
     },
 
-    #[serde(rename = "media_position_update")]
-    MediaPositionUpdate {
-        position: u64,
-        length: Option<u64>,
-        timestamp: u64,
-    },
-
     #[serde(rename = "response")]
     Response {
         id: String,
@@ -150,22 +119,6 @@ pub enum HostMessage {
         title: String,
         body: String,
         timestamp: u64,
-    },
-
-    #[serde(rename = "stream_start")]
-    StreamStart {
-        id: String,
-        file_name: String,
-        total_size: u64,
-        timestamp: u64,
-    },
-
-    #[serde(rename = "stream_end")]
-    StreamEnd {
-        id: String,
-        timestamp: u64,
-
-        hash: Option<String>,
     },
 
     #[serde(rename = "telemetry")]

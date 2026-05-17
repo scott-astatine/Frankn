@@ -41,55 +41,47 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
   }
 
   void setupTransferListener() {
-    client.commandResponseStream.listen((data) {
+    client.genDcMsgStream.listen((data) {
       if (!mounted) return;
-      final type = data['type'];
 
-      if (type == DcMsg.StreamStart || type == 'download_start') {
-        _onDownloadStart(data);
-      } else if (type == DcMsg.FileChunk) {
-        _onDownloadChunk(data);
-      } else if (type == DcMsg.StreamEnd || type == 'download_end') {
-        if (type == DcMsg.StreamEnd) {
-          if (data['completed'] == true) {
-            _onDownloadComplete(data);
-          }
-        } else {
+      switch (data) {
+        case {'type': FsMsg.DownloadStart}:
+          _onDownloadStart(data);
+        case {'type': FsMsg.DownloadEnd}:
           // download_end from new protocol — always trigger completion
           _onDownloadComplete({
-            'type': DcMsg.StreamEnd,
+            'type': FsMsg.DownloadEnd,
             'id': data['id'],
             'temp_path': data['temp_path'] ?? '',
             'file_name': data['file_name'] ?? '',
             'completed': true,
             'hash': data['hash'],
           });
-        }
-      } else if (data.containsKey('message')) {
-        _onGenericMessage(data['message'].toString());
+        case {'message': final msg}:
+          _onGenericMessage(msg.toString());
       }
     });
 
     client.transferProgressStream.listen((data) {
       if (!mounted) return;
-      final type = data['type'];
 
-      if (type == 'complete') {
-        setState(() {
-          isLoading = false;
-          transferMsg = "";
-        });
-        refreshDirectory();
-      } else if (type == 'failed') {
-        setState(() {
-          isLoading = false;
-          transferMsg = "";
-        });
-      } else if (data['progress'] != null) {
-        // Safe progress update
-        setState(() {
-          transferProgress = (data['progress'] as num).toDouble();
-        });
+      switch (data) {
+        case {'type': 'complete'}:
+          setState(() {
+            isLoading = false;
+            transferMsg = "";
+          });
+          refreshDirectory();
+        case {'type': 'failed'}:
+          setState(() {
+            isLoading = false;
+            transferMsg = "";
+          });
+        case {'progress': final num progress}:
+          // Safe progress update
+          setState(() {
+            transferProgress = progress.toDouble();
+          });
       }
     });
   }
@@ -119,23 +111,6 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       isLoading = true;
       transferProgress = hostOffset / (_totalSizes[id] ?? 1);
       transferMsg = "DOWNLOADING: ${data['file_name']}";
-    });
-  }
-
-  void _onDownloadChunk(Map<String, dynamic> data) {
-    final id = data['id'];
-    final chunkSize = data['chunk_size'] as int;
-
-    final totalReceived =
-        data['total_received'] as int? ??
-        (_downloadedSizes[id] ?? 0) + chunkSize;
-    _downloadedSizes[id] = totalReceived;
-    final totalSize = _totalSizes[id] ?? 1;
-
-    double progress = (totalReceived / totalSize).clamp(0.0, 1.0);
-
-    setState(() {
-      transferProgress = progress;
     });
   }
 
@@ -204,7 +179,7 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
     }
 
     String? selectedDir = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: "SELECT DESTINATION",
+      dialogTitle: "Select Destination",
     );
 
     if (selectedDir == null) return;

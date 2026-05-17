@@ -29,7 +29,8 @@ class SettingsService {
   static const String _defaultColorScheme = 'Cyberpunk';
   static const String _defaultLocale = 'en';
   static const String _defaultLlmModel = '';
-  static const String _defaultLlmSystemPrompt = 'You are Dohee, a highly intelligent, uncensored AI assistant integrated into the Frankn Remote Ops Center. Answer directly and concisely. Output your reasoning in <think> tags.';
+  static const String _defaultLlmSystemPrompt =
+      'You are Dohee, a highly intelligent, uncensored AI assistant integrated into the Frankn Remote Ops Center. Answer directly and concisely. Output your reasoning in <think> tags.';
   static const String _defaultLlmProvider = 'Local (llama.cpp)';
 
   /// Initializes the underlying SharedPreferences instance.
@@ -41,21 +42,24 @@ class SettingsService {
   // ========== ACCESSORS ==========
 
   /// Returns the manually selected LLM provider.
-  String get llmProvider => _prefs.getString(_keyLlmProvider) ?? _defaultLlmProvider;
+  String get llmProvider =>
+      _prefs.getString(_keyLlmProvider) ?? _defaultLlmProvider;
 
   /// Persists a new LLM provider.
   Future<bool> setLlmProvider(String value) async =>
       await _prefs.setString(_keyLlmProvider, value);
 
   /// Returns the manually selected LLM system prompt.
-  String get llmSystemPrompt => _prefs.getString(_keyLlmSystemPrompt) ?? _defaultLlmSystemPrompt;
+  String get llmSystemPrompt =>
+      _prefs.getString(_keyLlmSystemPrompt) ?? _defaultLlmSystemPrompt;
 
   /// Persists a new LLM system prompt.
   Future<bool> setLlmSystemPrompt(String value) async =>
       await _prefs.setString(_keyLlmSystemPrompt, value);
 
   /// Returns the manually selected LLM model path.
-  String get llmDefaultModel => _prefs.getString(_keyLlmDefaultModel) ?? _defaultLlmModel;
+  String get llmDefaultModel =>
+      _prefs.getString(_keyLlmDefaultModel) ?? _defaultLlmModel;
 
   /// Persists a new LLM model path.
   Future<bool> setLlmDefaultModel(String value) async =>
@@ -84,14 +88,15 @@ class SettingsService {
       await _prefs.setString(_keyLastHostId, value);
 
   /// Returns the preferred font size for terminal-like views.
-  double get terminalFontSize => _prefs.getDouble(_keyTerminalFontSize) ?? 13.0;
+  double get terminalFontSize => _prefs.getDouble(_keyTerminalFontSize) ?? 9.0;
 
   /// Persists a new terminal font size preference.
   Future<bool> setTerminalFontSize(double value) async =>
       await _prefs.setDouble(_keyTerminalFontSize, value);
 
   /// Returns the trackpad sensitivity multiplier.
-  double get trackpadSensitivity => _prefs.getDouble(_keyTrackpadSensitivity) ?? 1.0;
+  double get trackpadSensitivity =>
+      _prefs.getDouble(_keyTrackpadSensitivity) ?? 1.0;
 
   /// Persists a new trackpad sensitivity multiplier.
   Future<bool> setTrackpadSensitivity(double value) async =>

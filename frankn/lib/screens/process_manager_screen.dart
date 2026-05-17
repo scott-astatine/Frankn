@@ -33,7 +33,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
     _fetchProcesses();
 
     // 1. Listen for process list responses
-    widget.client.commandResponseStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final data = resp['type'] == 'response' ? resp['data'] : resp;
       if (data != null && data is Map && data.containsKey('processes')) {
@@ -47,7 +47,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
     });
 
     // 2. Hook into LIVE telemetry heartbeat for the top bars
-    _telemetrySub = widget.client.commandResponseStream.listen((resp) {
+    _telemetrySub = widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       if (resp['type'] == 'telemetry') {
         setState(() {

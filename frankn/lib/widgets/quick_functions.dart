@@ -79,33 +79,37 @@ class _QuickFunctionState extends State<QuickFunction> {
     super.initState();
     widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetMediaStatus});
     widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetMediaStatus});
-    widget.client.commandResponseStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final mediamsg = resp['type'] == MediaDCMessage.MediaUpdate
           ? MediaUpdate.fromJson(resp)
           : null;
-      if (mediamsg == null) return;
-
-      setState(() {
-        final rawMetadata = mediamsg.metadata;
-        if (rawMetadata.contains(" - ")) {
-          final parts = rawMetadata.split(" - ");
-          _mediaMetadata = parts[0];
-          _mediaArtist = parts.sublist(1).join(" - ");
-        } else {
-          _mediaMetadata = rawMetadata;
-          _mediaArtist = "Unknown Artist";
-        }
-        _playerName = mediamsg.playerName;
-        if (_mediaArtist == "Unknown Artist") {
-          _mediaArtist = _playerName.split('.').last;
-        }
-        _artData = mediamsg.artData;
-        _mediaPosition = mediamsg.position;
-        _mediaLength = mediamsg.length;
-        _mediaIsPlaying = mediamsg.playing;
-        if (_mediaLength <= 0) _mediaLength = 1.0;
-      });
+      final initMU = resp['type'];
+      widget.client.log(initMU);
+      if (mediamsg == null) {
+        return;
+      } else {
+        setState(() {
+          final rawMetadata = mediamsg.metadata;
+          if (rawMetadata.contains(" - ")) {
+            final parts = rawMetadata.split(" - ");
+            _mediaMetadata = parts[0];
+            _mediaArtist = parts.sublist(1).join(" - ");
+          } else {
+            _mediaMetadata = rawMetadata;
+            _mediaArtist = "Unknown Artist";
+          }
+          _playerName = mediamsg.playerName;
+          if (_mediaArtist == "Unknown Artist") {
+            _mediaArtist = _playerName.split('.').last;
+          }
+          _artData = mediamsg.artData;
+          _mediaPosition = mediamsg.position;
+          _mediaLength = mediamsg.length;
+          _mediaIsPlaying = mediamsg.playing;
+          if (_mediaLength <= 0) _mediaLength = 1.0;
+        });
+      }
     });
   }
 

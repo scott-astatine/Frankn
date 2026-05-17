@@ -25,7 +25,7 @@ class _SyslogScreenState extends State<SyslogScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _fetchLogs();
 
-    widget.client.commandResponseStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final Map<String, dynamic> data =
           (resp['type'] == 'response' && resp.containsKey('data'))

@@ -302,7 +302,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
   @override
   void initState() {
     super.initState();
-    _sub = widget.client.commandResponseStream.listen(_handleResponse);
+    _sub = widget.client.genDcMsgStream.listen(_handleResponse);
     widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetAudioDevices});
     widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetNetworkStatus});
     widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetMediaStatus});

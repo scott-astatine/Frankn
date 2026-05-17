@@ -123,9 +123,6 @@ class DcMsg {
   static const AuthFailed = "auth_failed";
   static const Notification = "notification";
   static const HostResponse = "response";
-  static const StreamStart = "stream_start";
-  static const FileChunk = "file_chunk";
-  static const StreamEnd = "stream_end";
   static const Telemetry = "telemetry";
 
   static const Key = "dc_msg_type";
@@ -148,21 +145,9 @@ class DcMsg {
   static const StartSsh = "start_ssh";
   static const StopSsh = "stop_ssh";
 
-  // File System (legacy — kept for backward compat)
+  // File System (basic operations)
   static const Ls = "ls";
-  static const GetFile = "get_file";
   static const DeleteFile = "delete_file";
-  static const UploadStart = "upload_start";
-  static const UploadChunk = "upload_chunk";
-  static const UploadEnd = "upload_end";
-
-  // File Transfer (new resume-aware protocol)
-  static const TransferInit = "transfer_init";
-  static const TransferAck = "transfer_ack";
-  static const TransferComplete = "transfer_complete";
-  static const TransferCancel = "transfer_cancel";
-  static const DownloadInit = "download_init";
-  static const DownloadComplete = "download_complete";
 
   // Audio Mixer
   static const GetAudioDevices = "get_audio_devices";
@@ -174,7 +159,6 @@ class DcMsg {
   static const PlayNextTrack = "play_next_track";
   static const PlayPreviousTrack = "play_previous_track";
   static const SetVolume = "set_volume";
-  static const StartMediaSync = "start_media_sync";
   static const GetMediaStatus = "get_media_status";
   static const ListPlayers = "list_players";
   static const SetActivePlayer = "set_active_player";
@@ -198,9 +182,19 @@ class DcMsg {
   static const LlmToken = "llm_token";
 }
 
+class FsMsg {
+  // File Transfer (resume-aware binary protocol)
+  static const TransferInit = "transfer_init";
+  static const TransferAck = "transfer_ack";
+  static const TransferComplete = "transfer_complete";
+  static const TransferCancel = "transfer_cancel";
+  static const DownloadInit = "download_init";
+  static const DownloadStart = "download_start";
+  static const DownloadEnd = "download_end";
+}
+
 class MediaDCMessage {
   static const MediaUpdate = "media_update";
-  static const MediaPositionUpdate = "media_position_update";
 }
 
 class FileUtils {

@@ -131,17 +131,14 @@ class LogTerminal extends StatelessWidget {
 
   Widget _buildRichLogLine(String log) {
     log = log.toLowerCase();
-    Color textColor = AppColors.matrixGreen;
-
-    if (log.contains("error") || log.contains("failed")) {
-      textColor = AppColors.errorRed;
-    } else if (log.contains("warn") || log.contains("debug")) {
-      textColor = AppColors.cyberYellow;
-    } else if (log.contains("host")) {
-      textColor = AppColors.neonPink;
-    } else if (log.contains("success") || log.contains("granted")) {
-      textColor = AppColors.neonCyan;
-    }
+    
+    Color textColor = switch (log) {
+      final l when l.contains("error") || l.contains("failed") => AppColors.errorRed,
+      final l when l.contains("warn") || l.contains("debug") => AppColors.cyberYellow,
+      final l when l.contains("host") => AppColors.neonPink,
+      final l when l.contains("success") || l.contains("granted") => AppColors.neonCyan,
+      _ => AppColors.matrixGreen,
+    };
 
     return Text.rich(
       TextSpan(

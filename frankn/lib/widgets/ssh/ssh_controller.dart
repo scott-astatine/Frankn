@@ -81,9 +81,9 @@ class SshController extends ChangeNotifier {
       bool hostReady = false;
       final completer = Completer<bool>();
 
-      _commandSubscription = client.commandResponseStream.listen((resp) {
+      _commandSubscription = client.genDcMsgStream.listen((resp) {
         if (_isDisposed) return;
-        
+
         final Map<String, dynamic> data;
         if (resp['type'] == 'response' && resp.containsKey('data')) {
           data = (resp['data'] as Map<String, dynamic>?) ?? {};

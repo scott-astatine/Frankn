@@ -24,7 +24,7 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
     super.initState();
     _refresh();
 
-    widget.client.commandResponseStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final Map<String, dynamic> data;
       if (resp['type'] == 'response' && resp.containsKey('data')) {

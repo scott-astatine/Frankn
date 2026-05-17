@@ -37,7 +37,7 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
       _error = null;
     });
 
-    _responseSub = widget.client.commandResponseStream.listen((resp) {
+    _responseSub = widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final type = resp['type'];
       if (type == 'response') {

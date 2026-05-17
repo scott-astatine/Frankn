@@ -28,7 +28,7 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
   @override
   void initState() {
     super.initState();
-    _sub = widget.client.commandResponseStream.listen((resp) {
+    _sub = widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final data = resp['type'] == 'response' ? resp['data'] : resp;
       if (data != null && data is Map && data.containsKey('devices')) {
@@ -40,7 +40,10 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
     });
 
     _fetchDevices();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchDevices());
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _fetchDevices(),
+    );
   }
 
   void _fetchDevices() {
@@ -55,10 +58,7 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
   }
 
   void _connect(String mac) {
-    widget.client.sendDcMsg({
-      DcMsg.Key: DcMsg.ConnectBluetooth,
-      "mac": mac,
-    });
+    widget.client.sendDcMsg({DcMsg.Key: DcMsg.ConnectBluetooth, "mac": mac});
     Navigator.pop(context);
   }
 
@@ -120,11 +120,40 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
                       final bool isConnected = dev['connected'] == true;
                       return ListTile(
                         leading: Icon(
-                          isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
-                          color: isConnected ? AppColors.neonPink : Colors.white38,
+                          isConnected
+                              ? Icons.bluetooth_connected
+                              : Icons.bluetooth,
+                          color: isConnected
+                              ? AppColors.neonPink
+                              : Colors.white38,
                         ),
-                        title: Text(dev['name'] ?? 'Unknown', style: TextStyle(color: isConnected ? AppColors.neonPink : Colors.white, fontSize: 13, fontWeight: isConnected ? FontWeight.bold : FontWeight.normal)),
-                        subtitle: isConnected ? const Text("Connected", style: TextStyle(color: AppColors.neonPink, fontSize: 10)) : Text(dev['mac'] ?? '', style: const TextStyle(color: AppColors.textGrey, fontSize: 10)),
+                        title: Text(
+                          dev['name'] ?? 'Unknown',
+                          style: TextStyle(
+                            color: isConnected
+                                ? AppColors.neonPink
+                                : Colors.white,
+                            fontSize: 13,
+                            fontWeight: isConnected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                        subtitle: isConnected
+                            ? const Text(
+                                "Connected",
+                                style: TextStyle(
+                                  color: AppColors.neonPink,
+                                  fontSize: 10,
+                                ),
+                              )
+                            : Text(
+                                dev['mac'] ?? '',
+                                style: const TextStyle(
+                                  color: AppColors.textGrey,
+                                  fontSize: 10,
+                                ),
+                              ),
                         onTap: () => _connect(dev['mac'] ?? ""),
                       );
                     },
@@ -135,7 +164,10 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("CLOSE", style: TextStyle(color: AppColors.textGrey)),
+                  child: const Text(
+                    "CLOSE",
+                    style: TextStyle(color: AppColors.textGrey),
+                  ),
                 ),
               ),
             ],
@@ -145,3 +177,4 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
     );
   }
 }
+

@@ -10,6 +10,10 @@ mixin RtcMessageHandler on RtcClientBase {
   final Map<String, int> _receivedSizes = {};
   final Map<String, bool> _showNotificationMap = {};
 
+  String? _lastArtSig;
+  String? _lastArtLocalPath;
+  String? _currentArtTransferId;
+
   Future<void> _moveFile(File source, String destPath) async {
     try {
       await source.rename(destPath);
@@ -52,19 +56,6 @@ mixin RtcMessageHandler on RtcClientBase {
           }
           // If sink not ready yet, chunk will be dropped (shouldn't happen with ordered DCs)
           return;
-        } else if (rawData.length >= 37 && rawData[0] == 0x01) {
-          // Legacy format: [magic][36-byte ID][data]
-          final idBytes = rawData.sublist(1, 37);
-          final id = utf8.decode(
-            idBytes.where((b) => b != 0).toList(),
-            allowMalformed: true,
-          );
-
-          if (_activeSinks.containsKey(id)) {
-            _handleBinaryChunkLegacy(id, rawData.sublist(37));
-            return;
-          }
-          return;
         }
 
         // If not a binary chunk, attempt JSON decode
@@ -87,8 +78,7 @@ mixin RtcMessageHandler on RtcClientBase {
     final type = data['type'];
 
     switch (type) {
-      case DcMsg.StreamStart:
-      case 'download_start':
+      case FsMsg.DownloadStart:
         final String transferId = data['id'];
         final fileName = data['file_name'];
         final tempDir = globalTempDir;
@@ -126,11 +116,10 @@ mixin RtcMessageHandler on RtcClientBase {
         if (data.containsKey('hash') && data['hash'] != null) {
           _expectedHashes[transferId] = data['hash'];
         }
-        commandResponseController.add(data);
+        genDcMsgController.add(data);
         break;
 
-      case DcMsg.StreamEnd:
-      case 'download_end':
+      case FsMsg.DownloadEnd:
         final String transferId = data['id'];
         final sink = _activeSinks.remove(transferId);
         final tempPath = _tempPaths.remove(transferId);
@@ -140,7 +129,7 @@ mixin RtcMessageHandler on RtcClientBase {
 
         if (sink == null || tempPath == null) {
           log(
-            "WARN: StreamEnd for unknown transfer ID $transferId — ignoring.",
+            "WARN: DownloadEnd for unknown transfer ID $transferId — ignoring.",
           );
           break;
         }
@@ -150,7 +139,7 @@ mixin RtcMessageHandler on RtcClientBase {
 
         final fileName = activeFileNames.remove(transferId);
         if (fileName == null) {
-          log("WARN: StreamEnd for $transferId has no registered file name.");
+          log("WARN: DownloadEnd for $transferId has no registered file name.");
           break;
         }
         final file = File(tempPath);
@@ -176,7 +165,7 @@ mixin RtcMessageHandler on RtcClientBase {
           }
         } else {
           log(
-            "WARN: StreamEnd for $fileName has no hash — skipping integrity check.",
+            "WARN: DownloadEnd for $fileName has no hash — skipping integrity check.",
           );
         }
 
@@ -208,8 +197,17 @@ mixin RtcMessageHandler on RtcClientBase {
           );
         }
 
-        commandResponseController.add({
-          'type': DcMsg.StreamEnd,
+        if (transferId == _currentArtTransferId && finalPath != null) {
+          // The album art download just finished!
+          _lastArtLocalPath = 'file://$finalPath';
+
+          // We don't need to force a sync! The Host's media loop polls every 1
+          // second and broadcasts a MediaUpdate whenever the position changes.
+          // The next natural update will pick up `_lastArtLocalPath` and send it to the UI.
+        }
+
+        genDcMsgController.add({
+          'type': FsMsg.DownloadEnd,
           'file_name': fileName,
           'temp_path': tempPath,
           'final_path': finalPath,
@@ -234,10 +232,6 @@ mixin RtcMessageHandler on RtcClientBase {
         _handleMediaUpdate(data);
         break;
 
-      case MediaDCMessage.MediaPositionUpdate:
-        commandResponseController.add(data);
-        break;
-
       case DcMsg.Notification:
         notificationController.add(data);
         break;
@@ -247,7 +241,7 @@ mixin RtcMessageHandler on RtcClientBase {
         break;
 
       case DcMsg.LlmToken:
-        commandResponseController.add(data);
+        genDcMsgController.add(data);
         break;
 
       case DcMsg.Telemetry:
@@ -263,7 +257,7 @@ mixin RtcMessageHandler on RtcClientBase {
         updateBackgroundService(
           text: "$statusIcon: $cpu% | 💾 : $usedMem GB | 🌡️ $cpuTemp°C",
         );
-        commandResponseController.add(data);
+        genDcMsgController.add(data);
         break;
 
       default:
@@ -301,29 +295,6 @@ mixin RtcMessageHandler on RtcClientBase {
           progress * 100,
         );
       }
-
-      commandResponseController.add({
-        'type': DcMsg.FileChunk,
-        'id': id,
-        'chunk_size': chunk.length,
-        'offset': offset,
-        'seq': seq,
-        'total_received': currentTotal,
-        'is_final': (flags & 0x02) != 0,
-      });
-    }
-  }
-
-  void _handleBinaryChunkLegacy(String id, Uint8List chunk) {
-    final sink = _activeSinks[id];
-    if (sink != null) {
-      sink.add(chunk);
-      // Notifications handled by FileTransferMixin via current_total tracking
-      commandResponseController.add({
-        'type': DcMsg.FileChunk,
-        'id': id,
-        'chunk_size': chunk.length,
-      });
     }
   }
 
@@ -347,7 +318,6 @@ mixin RtcMessageHandler on RtcClientBase {
     AuthService().setToken(token);
     log("AUTH SUCCESS. Session Token acquired.");
     updateHostState(HostConnectionState.authenticated);
-    sendDcMsg({DcMsg.Key: DcMsg.StartMediaSync});
   }
 
   void _handleAuthFailed(Map<String, dynamic> data) {
@@ -357,7 +327,7 @@ mixin RtcMessageHandler on RtcClientBase {
   }
 
   void _handleHostResponse(Map<String, dynamic> data) {
-    commandResponseController.add(data);
+    genDcMsgController.add(data);
 
     if (data['data'] != null) {
       if (data['data']['response'] != DcMsg.Pong) {
@@ -368,23 +338,64 @@ mixin RtcMessageHandler on RtcClientBase {
 
   void _handleMediaUpdate(Map<String, dynamic> data) async {
     MediaUpdate media = MediaUpdate.fromJson(data);
-    log("Loggggginnnnnnnnnnnnnnnnnnnnnnnnnnnnnn MediaUpdate: IsPlaying: $data");
 
     final artStr = media.artData;
-    if (artStr != null && !artStr.startsWith('http')) {
-      try {
-        final tempDir = globalTempDir;
-        final file = File('${tempDir.path}/album_art.jpg');
-        if (await file.exists()) await file.delete();
-        await file.writeAsBytes(base64Decode(artStr));
-        // Replace large base64 string with local file path to avoid IPC crash
-        data['art_data'] = 'file://${file.path}';
-      } catch (e) {
-        log("Failed to parse album art in background isolate: $e");
-        data.remove('art_data');
+    if (artStr != null && artStr.startsWith('frankn-fs://')) {
+      if (artStr == _lastArtSig) {
+        // Signature matches. It's the same song.
+        if (_lastArtLocalPath != null) {
+          // Download finished previously, inject the local path for AudioService
+          data['art_data'] = _lastArtLocalPath;
+        } else {
+          // It's still downloading right now. Hide the path so AudioService doesn't crash.
+          data.remove('art_data');
+        }
+      } else {
+        // New signature detected (song changed).
+
+        // 1. Delete the previous album art file from the cache
+        if (_lastArtLocalPath != null) {
+          try {
+            final oldPath = _lastArtLocalPath!.replaceAll('file://', '');
+            final oldFile = File(oldPath);
+            if (oldFile.existsSync()) oldFile.deleteSync();
+          } catch (e) {
+            log("FS: Failed to delete old album art: $e");
+          }
+        }
+
+        // 2. Update state
+        _lastArtSig = artStr;
+        _lastArtLocalPath = null;
+
+        final remotePath = artStr.replaceAll('frankn-fs://', '');
+        final uuid = const Uuid().v4();
+        _currentArtTransferId = uuid;
+
+        // 3. Setup the Transfer Engine mapping
+        // We pass the actual cache directory so DownloadEnd relocates it properly
+        _downloadTargetDirs[uuid] = globalTempDir.path;
+        _expectedHashes[uuid] = ''; // Ignore hash verification
+        _showNotificationMap[uuid] = false; // Silent download
+
+        data.remove('art_data'); // Hide from UI until download completes
+
+        // 4. Initiate download
+        sendToChannel(
+          fsDC,
+          jsonEncode({
+            'type': FsMsg.DownloadInit,
+            'id': uuid,
+            'path': remotePath,
+            'resume_offset': 0,
+          }),
+          "FS",
+        );
       }
+    } else if (artStr != null && !artStr.startsWith('http')) {
+      data.remove('art_data'); // Fallback for legacy host messages
     }
 
-    commandResponseController.add(data);
+    genDcMsgController.add(data);
   }
 }

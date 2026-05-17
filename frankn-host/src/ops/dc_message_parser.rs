@@ -43,8 +43,6 @@ pub enum DcMsg {
         sort_by: Option<String>,
         show_hidden: Option<bool>,
     },
-    #[serde(rename = "get_file")]
-    GetFile { path: String },
     #[serde(rename = "delete_file")]
     DeleteFile { path: String },
 
@@ -78,8 +76,6 @@ pub enum DcMsg {
 
     // --- Media Control ---
     #[serde(rename = "start_media_sync")]
-    StartMediaSync,
-    #[serde(rename = "toggle_play_pause")]
     TogglePlayPause,
     #[serde(rename = "play_next_track")]
     PlayNextTrack,
@@ -110,7 +106,10 @@ pub enum DcMsg {
     #[serde(rename = "list_wifi_networks")]
     ListWifiNetworks,
     #[serde(rename = "connect_wifi")]
-    ConnectWifi { ssid: String, password: Option<String> },
+    ConnectWifi {
+        ssid: String,
+        password: Option<String>,
+    },
     #[serde(rename = "list_bluetooth_devices")]
     ListBluetoothDevices,
     #[serde(rename = "connect_bluetooth")]
@@ -170,7 +169,6 @@ impl DcMsg {
             RestartHostServer => ops::system::restart_host,
 
             // Media
-            StartMediaSync => ops::media::handle_start_media_sync,
             TogglePlayPause => ops::media::toggle_play_pause,
             PlayNextTrack => ops::media::next_track,
             PlayPreviousTrack => ops::media::previous_track,
@@ -191,7 +189,6 @@ impl DcMsg {
 
             // File System
             Ls { path, sort_by, show_hidden } => _async_ls,
-            GetFile { path } => _async_get_file,
             DeleteFile { path } => _async_delete_file,
 
             // System Logs
@@ -224,10 +221,6 @@ async fn _async_ls(
     crate::fs_sync::ls(id, path, sort_by.clone(), *show_hidden)
 }
 
-async fn _async_get_file(id: &str, path: &String, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
-    crate::fs_sync::get_file(id, path, rtc).await
-}
-
 async fn _async_delete_file(id: &str, path: &String, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     crate::fs_sync::delete_file(id, path)
 }
@@ -243,9 +236,10 @@ async fn _handle_system_log(
         let mut cmd = Command::new("journalctl");
         cmd.args(["--no-pager", "--since", "-1m"]);
         if let Some(service) = args
-            && !service.trim().is_empty() {
-                cmd.arg(service);
-            }
+            && !service.trim().is_empty()
+        {
+            cmd.arg(service);
+        }
         let result = cmd.output().await;
         _handle_cmd_output(id, result)
     }
@@ -282,11 +276,21 @@ fn _handle_cmd_output(id: &str, result: std::io::Result<std::process::Output>) -
     }
 }
 
-async fn _async_toggle_radio(id: &str, radio: &String, state: &bool, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+async fn _async_toggle_radio(
+    id: &str,
+    radio: &String,
+    state: &bool,
+    rtc: Arc<Mutex<RTCConn>>,
+) -> HostMessage {
     ops::network::toggle_radio(id, radio, *state, rtc).await
 }
 
-async fn _async_connect_wifi(id: &str, ssid: &String, password: &Option<String>, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+async fn _async_connect_wifi(
+    id: &str,
+    ssid: &String,
+    password: &Option<String>,
+    rtc: Arc<Mutex<RTCConn>>,
+) -> HostMessage {
     ops::network::connect_wifi(id, ssid, password, rtc).await
 }
 

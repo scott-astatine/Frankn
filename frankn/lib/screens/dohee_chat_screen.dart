@@ -139,7 +139,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
 
-    _cmdSub = widget.client.commandResponseStream.listen((resp) {
+    _cmdSub = widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       if (resp['type'] == 'response') {
         final data = resp['data'];
@@ -709,7 +709,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   });
                   await SettingsService().setLlmSystemPrompt(tempPrompt);
                   await SettingsService().setLlmProvider(tempProvider);
-                  
+
                   if (tempModel != _currentModel && tempModel.isNotEmpty) {
                     await SettingsService().setLlmDefaultModel(tempModel);
                     _switchModel(tempModel);

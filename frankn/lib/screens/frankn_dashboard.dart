@@ -40,7 +40,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
     });
 
     // 2. Listen for host responses (Telemetry + Pongs)
-    widget.client.commandResponseStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
 
       // Handle Telemetry Broadcast

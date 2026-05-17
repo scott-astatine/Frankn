@@ -3,13 +3,13 @@ use crate::ops::rtc::RTCConn;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Bytes;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChatMessage {
@@ -54,10 +54,11 @@ impl LlmManager {
         }
         let path = Self::get_chats_path().await;
         if let Ok(data) = tokio::fs::read_to_string(&path).await
-            && let Ok(loaded) = serde_json::from_str::<HashMap<String, ChatSession>>(&data) {
-                let mut c = self.chats.lock().await;
-                *c = loaded;
-            }
+            && let Ok(loaded) = serde_json::from_str::<HashMap<String, ChatSession>>(&data)
+        {
+            let mut c = self.chats.lock().await;
+            *c = loaded;
+        }
         self.chats_loaded = true;
     }
 
@@ -71,13 +72,16 @@ impl LlmManager {
     pub async fn list_chats(&mut self) -> serde_json::Value {
         self.ensure_chats_loaded().await;
         let c = self.chats.lock().await;
-        let mut list: Vec<serde_json::Value> = c.values().map(|s| {
-            serde_json::json!({
-                "id": s.id,
-                "title": s.title,
-                "updated_at": s.updated_at
+        let mut list: Vec<serde_json::Value> = c
+            .values()
+            .map(|s| {
+                serde_json::json!({
+                    "id": s.id,
+                    "title": s.title,
+                    "updated_at": s.updated_at
+                })
             })
-        }).collect();
+            .collect();
         list.sort_by(|a, b| {
             let t_a = a["updated_at"].as_u64().unwrap_or(0);
             let t_b = b["updated_at"].as_u64().unwrap_or(0);
@@ -102,7 +106,11 @@ impl LlmManager {
         removed
     }
 
-    pub async fn start_server(&mut self, model_path: &str, config: &crate::config::HostConfig) -> Result<(), String> {
+    pub async fn start_server(
+        &mut self,
+        model_path: &str,
+        config: &crate::config::HostConfig,
+    ) -> Result<(), String> {
         if self.process.is_some() {
             return Ok(());
         }
@@ -164,20 +172,22 @@ impl LlmManager {
         while retries < 15 {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             if let Ok(res) = self.client.get("http://localhost:8080/health").send().await
-                && res.status().is_success() {
-                    is_ready = true;
-                    break;
-                }
+                && res.status().is_success()
+            {
+                is_ready = true;
+                break;
+            }
 
             // Check if it crashed while we were waiting
             if let Some(child) = &mut self.process
-                && let Ok(Some(status)) = child.try_wait() {
-                    self.process = None;
-                    return Err(format!(
-                        "llama-server crashed during startup with status: {}",
-                        status
-                    ));
-                }
+                && let Ok(Some(status)) = child.try_wait()
+            {
+                self.process = None;
+                return Err(format!(
+                    "llama-server crashed during startup with status: {}",
+                    status
+                ));
+            }
             retries += 1;
         }
 
@@ -206,22 +216,23 @@ impl LlmManager {
             let path = entry.path();
             if path.is_file()
                 && let Some(ext) = path.extension()
-                    && (ext == "gguf" || ext == "ggff") {
-                        let name = path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .into_owned();
-                        let size = match entry.metadata().await {
-                            Ok(meta) => meta.len(),
-                            Err(_) => 0,
-                        };
+                && (ext == "gguf" || ext == "ggff")
+            {
+                let name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
+                let size = match entry.metadata().await {
+                    Ok(meta) => meta.len(),
+                    Err(_) => 0,
+                };
 
-                        models.push(serde_json::json!({
-                            "name": name,
-                            "size": size,
-                        }));
-                    }
+                models.push(serde_json::json!({
+                    "name": name,
+                    "size": size,
+                }));
+            }
         }
 
         Ok(serde_json::json!({ "models": models }))
@@ -256,7 +267,7 @@ impl LlmManager {
 
         let cid = chat_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let mut req_messages = Vec::new();
-        
+
         {
             let mut c = chats.lock().await;
             let session = c.entry(cid.clone()).or_insert_with(|| ChatSession {
@@ -265,31 +276,38 @@ impl LlmManager {
                 messages: Vec::new(),
                 updated_at: crate::utils::get_timestamp(),
             });
-            
+
             if let Some(sp) = system_prompt {
                 if session.messages.is_empty() || session.messages[0].role != "system" {
-                    session.messages.insert(0, ChatMessage {
-                        role: "system".to_string(),
-                        content: sp.clone()
-                    });
+                    session.messages.insert(
+                        0,
+                        ChatMessage {
+                            role: "system".to_string(),
+                            content: sp.clone(),
+                        },
+                    );
                 } else {
                     session.messages[0].content = sp.clone();
                 }
             }
-            
+
             session.messages.push(ChatMessage {
                 role: "user".to_string(),
-                content: message.clone()
+                content: message.clone(),
             });
             session.updated_at = crate::utils::get_timestamp();
-            
-            req_messages = session.messages.iter().map(|m| {
-                serde_json::json!({
-                    "role": m.role,
-                    "content": m.content
+
+            req_messages = session
+                .messages
+                .iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": m.content
+                    })
                 })
-            }).collect();
-            
+                .collect();
+
             Self::save_chats(&c).await;
         }
 
@@ -330,18 +348,19 @@ impl LlmManager {
 
                     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data)
                         && let Some(choices) = parsed.get("choices")
-                            && let Some(first_choice) = choices.get(0)
-                                && let Some(delta) = first_choice.get("delta")
-                                    && let Some(content) = delta.get("content")
-                                        && let Some(content_str) = content.as_str() {
-                                            assistant_content.push_str(content_str);
-                                            let msg = HostMessage::LlmToken {
-                                                token: content_str.to_string(),
-                                                is_final: false,
-                                                timestamp: crate::utils::get_timestamp(),
-                                            };
-                                            Self::send_msg(msg, &rtc_conn, &label).await;
-                                        }
+                        && let Some(first_choice) = choices.get(0)
+                        && let Some(delta) = first_choice.get("delta")
+                        && let Some(content) = delta.get("content")
+                        && let Some(content_str) = content.as_str()
+                    {
+                        assistant_content.push_str(content_str);
+                        let msg = HostMessage::LlmToken {
+                            token: content_str.to_string(),
+                            is_final: false,
+                            timestamp: crate::utils::get_timestamp(),
+                        };
+                        Self::send_msg(msg, &rtc_conn, &label).await;
+                    }
                 }
                 Err(e) => {
                     crate::elog!("LLM ERROR: event stream error: {}", e);
@@ -349,7 +368,7 @@ impl LlmManager {
                 }
             }
         }
-        
+
         // Save the assistant's response to the session
         {
             let mut c = chats.lock().await;
