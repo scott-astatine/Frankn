@@ -178,6 +178,9 @@ class DcMsg {
   static const LlmListChats = "llm_list_chats";
   static const LlmStop = "llm_stop";
   static const LlmToken = "llm_token";
+
+  // Folder Sync
+  static const SyncRequest = "sync_request";
 }
 
 class FsMsg {
@@ -189,6 +192,43 @@ class FsMsg {
   static const DownloadInit = "download_init";
   static const DownloadStart = "download_start";
   static const DownloadEnd = "download_end";
+
+  // Folder Sync
+  static const SyncSnapshot = "sync_snapshot";
+}
+
+enum SyncMode { mirroring, singleSourceOfTruth }
+
+class SyncPair {
+  final String localPath;
+  final String remotePath;
+  final SyncMode mode;
+  final bool clientIsSource; // Only used for singleSourceOfTruth
+  final int intervalMinutes;
+
+  SyncPair({
+    required this.localPath,
+    required this.remotePath,
+    required this.mode,
+    this.clientIsSource = true,
+    this.intervalMinutes = 60,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'local_path': localPath,
+        'remote_path': remotePath,
+        'mode': mode.index,
+        'client_is_source': clientIsSource,
+        'interval_minutes': intervalMinutes,
+      };
+
+  factory SyncPair.fromJson(Map<String, dynamic> json) => SyncPair(
+        localPath: json['local_path'],
+        remotePath: json['remote_path'],
+        mode: SyncMode.values[json['mode'] ?? 0],
+        clientIsSource: json['client_is_source'] ?? true,
+        intervalMinutes: json['interval_minutes'] ?? 60,
+      );
 }
 
 class MediaDCMessage {

@@ -114,6 +114,10 @@ pub enum DcMsg {
     ListBluetoothDevices,
     #[serde(rename = "connect_bluetooth")]
     ConnectBluetooth { mac: String },
+
+    // --- Folder Sync ---
+    #[serde(rename = "sync_request")]
+    SyncRequest { path: String },
 }
 
 macro_rules! dispatch {
@@ -205,11 +209,28 @@ impl DcMsg {
             ConnectWifi { ssid, password } => _async_connect_wifi,
             ListBluetoothDevices => ops::network::list_bluetooth_devices,
             ConnectBluetooth { mac } => _async_connect_bluetooth,
+
+            // Folder Sync
+            SyncRequest { path } => _async_sync_request,
         })
     }
 }
 
 // --- Adapters ---
+
+async fn _async_sync_request(
+    id: &str,
+    path: &String,
+    _rtc: Arc<Mutex<RTCConn>>,
+) -> HostMessage {
+    // To be implemented in ops/sync.rs or fs_sync
+    HostMessage::Response {
+        id: id.to_string(),
+        status: Status::Error("SyncRequest not yet implemented".into()),
+        data: None,
+        timestamp: crate::utils::get_timestamp(),
+    }
+}
 
 async fn _async_ls(
     id: &str,

@@ -17,8 +17,19 @@ pub struct HostConfig {
     pub is_public: bool,
     pub restricted_cmds: Vec<String>,
     pub llm_model_dir: Option<String>,
+    #[serde(default)]
+    pub sync_pairs: Vec<SyncPair>,
     #[serde(skip)]
     pub custom_config_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SyncPair {
+    pub local_path: String,
+    pub remote_path: String,
+    pub mode: String, // "mirror", "single_source"
+    pub client_is_source: bool,
+    pub interval_minutes: u32,
 }
 
 impl HostConfig {
@@ -128,6 +139,7 @@ impl HostConfig {
                 is_public,
                 restricted_cmds: Vec::new(),
                 llm_model_dir,
+                sync_pairs: Vec::new(),
                 custom_config_path: custom_path_clone,
             }
         })

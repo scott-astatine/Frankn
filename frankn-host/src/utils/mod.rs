@@ -169,6 +169,15 @@ pub enum HostMessage {
         hash: String,
         timestamp: u64,
     },
+
+    /// Folder sync snapshot metadata.
+    #[serde(rename = "sync_snapshot")]
+    SyncSnapshot {
+        id: String,
+        root_path: String,
+        files: Vec<serde_json::Value>,
+        timestamp: u64,
+    },
 }
 
 #[macro_export]

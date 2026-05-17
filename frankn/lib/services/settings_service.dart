@@ -23,6 +23,7 @@ class SettingsService {
   static const String _keyLlmDefaultModel = 'llm_default_model';
   static const String _keyLlmSystemPrompt = 'llm_system_prompt';
   static const String _keyLlmProvider = 'llm_provider';
+  static const String _keySyncPairs = 'sync_pairs';
 
   // Default Values
   static const String _defaultSignalingUrl = 'ws://152.67.19.202:8037';
@@ -109,6 +110,18 @@ class SettingsService {
   /// Persists a new color scheme preference.
   Future<bool> setColorScheme(String value) async =>
       await _prefs.setString(_keyColorScheme, value);
+
+  /// Returns the list of configured folder sync pairs.
+  List<SyncPair> get syncPairs {
+    final list = _prefs.getStringList(_keySyncPairs) ?? [];
+    return list.map((e) => SyncPair.fromJson(jsonDecode(e))).toList();
+  }
+
+  /// Persists the list of folder sync pairs.
+  Future<bool> setSyncPairs(List<SyncPair> pairs) async {
+    final list = pairs.map((e) => jsonEncode(e.toJson())).toList();
+    return await _prefs.setStringList(_keySyncPairs, list);
+  }
 
   /// Returns a list of manually saved/paired hosts.
   List<Map<String, String>> get savedHosts {
