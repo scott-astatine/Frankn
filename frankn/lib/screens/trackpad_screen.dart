@@ -25,6 +25,8 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
   int _maxPointers = 0;
   Timer? _batchTimer;
 
+  bool _isDragging = false;
+
   final FocusNode _keyboardFocusNode = FocusNode();
   final TextEditingController _inputController = TextEditingController();
 
@@ -81,35 +83,66 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
 
   // --- KEYBOARD LOGIC ---
 
-  void _lockMod(String mod) {}
-  void _toggleMod(String mod) {
+  void _lockMod(String mod) {
     setState(() {
       switch (mod) {
         case 'CTRL':
-          _ctrl = _nextModState(_ctrl);
+          _ctrl = (_ctrl == ModState.locked) ? ModState.off : ModState.locked;
           _syncMod(29, _ctrl);
           break;
         case 'ALT':
-          _alt = _nextModState(_alt);
+          _alt = (_alt == ModState.locked) ? ModState.off : ModState.locked;
           _syncMod(56, _alt);
           break;
         case 'SHIFT':
-          _shift = _nextModState(_shift);
+          _shift = (_shift == ModState.locked) ? ModState.off : ModState.locked;
           _syncMod(42, _shift);
           break;
         case 'SUPER':
-          _super = _nextModState(_super);
+          _super = (_super == ModState.locked) ? ModState.off : ModState.locked;
           _syncMod(125, _super);
           break;
       }
     });
   }
 
-  ModState _nextModState(ModState current, {bool lock = false}) {
-    if (lock) return ModState.locked;
-    if (current == ModState.off) return ModState.active;
-    if (current == ModState.active) return ModState.locked;
-    return ModState.off;
+  void _toggleMod(String mod) {
+    setState(() {
+      switch (mod) {
+        case 'CTRL':
+          if (_ctrl == ModState.locked) {
+            _ctrl = ModState.off;
+          } else {
+            _ctrl = (_ctrl == ModState.active) ? ModState.off : ModState.active;
+          }
+          _syncMod(29, _ctrl);
+          break;
+        case 'ALT':
+          if (_alt == ModState.locked) {
+            _alt = ModState.off;
+          } else {
+            _alt = (_alt == ModState.active) ? ModState.off : ModState.active;
+          }
+          _syncMod(56, _alt);
+          break;
+        case 'SHIFT':
+          if (_shift == ModState.locked) {
+            _shift = ModState.off;
+          } else {
+            _shift = (_shift == ModState.active) ? ModState.off : ModState.active;
+          }
+          _syncMod(42, _shift);
+          break;
+        case 'SUPER':
+          if (_super == ModState.locked) {
+            _super = ModState.off;
+          } else {
+            _super = (_super == ModState.active) ? ModState.off : ModState.active;
+          }
+          _syncMod(125, _super);
+          break;
+      }
+    });
   }
 
   void _syncMod(int code, ModState state) {
@@ -202,8 +235,36 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
       _sendClick(1);
     } else if (_maxPointers == 2) {
       _sendClick(2);
+    } else if (_maxPointers == 3) {
+      _sendClick(3);
     }
     _maxPointers = 0;
+  }
+
+  void _handleLongPressStart(LongPressStartDetails details) {
+    if (_pointerCount == 1) {
+      setState(() {
+        _isDragging = true;
+      });
+      widget.client.sendInputMsg({
+        'type': InputSig.MouseClick,
+        'button': 1,
+        'down': true,
+      });
+    }
+  }
+
+  void _handleLongPressEnd(LongPressEndDetails details) {
+    if (_isDragging) {
+      setState(() {
+        _isDragging = false;
+      });
+      widget.client.sendInputMsg({
+        'type': InputSig.MouseClick,
+        'button': 1,
+        'down': false,
+      });
+    }
   }
 
   void _sendClick(int button) {
@@ -251,43 +312,45 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
             bottom: isKeyboardVisible
                 ? 100
                 : 0, // Space for the toolbar if keyboard is open
-            child: Listener(
-              onPointerDown: (e) {
-                setState(() {
-                  _pointerCount++;
-                  if (_pointerCount > _maxPointers) {
-                    _maxPointers = _pointerCount;
-                  }
-                });
-              },
-              onPointerUp: (e) {
-                setState(() {
-                  _pointerCount--;
-                  if (_pointerCount < 0) _pointerCount = 0;
-                });
-              },
-              onPointerSignal: (e) {
-                if (e is PointerScrollEvent) {
-                  final sens = SettingsService().trackpadSensitivity;
-                  _scrollX += e.scrollDelta.dx * sens;
-                  _scrollY += e.scrollDelta.dy * sens;
-                }
-              },
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _handleTap,
-                onLongPress: () => _sendClick(3),
-                onPanUpdate: (d) {
+              child: Listener(
+                onPointerDown: (e) {
+                  setState(() {
+                    if (_pointerCount == 0) _maxPointers = 0;
+                    _pointerCount++;
+                    if (_pointerCount > _maxPointers) {
+                      _maxPointers = _pointerCount;
+                    }
+                  });
+                },
+                onPointerUp: (e) {
+                  setState(() {
+                    _pointerCount--;
+                    if (_pointerCount < 0) _pointerCount = 0;
+                  });
+                },
+                onPointerMove: (e) {
                   final sens = SettingsService().trackpadSensitivity;
                   if (_pointerCount <= 1) {
-                    _dx += d.delta.dx * sens;
-                    _dy += d.delta.dy * sens;
+                    _dx += e.delta.dx * sens;
+                    _dy += e.delta.dy * sens;
                   } else if (_pointerCount == 2) {
-                    _scrollX += d.delta.dx * sens;
-                    _scrollY += d.delta.dy * sens;
+                    _scrollX += e.delta.dx * sens;
+                    _scrollY += e.delta.dy * sens;
                   }
                 },
-                child: Container(
+                onPointerSignal: (e) {
+                  if (e is PointerScrollEvent) {
+                    final sens = SettingsService().trackpadSensitivity;
+                    _scrollX += e.scrollDelta.dx * sens;
+                    _scrollY += e.scrollDelta.dy * sens;
+                  }
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _handleTap,
+                  onLongPressStart: _handleLongPressStart,
+                  onLongPressEnd: _handleLongPressEnd,
+                  child: Container(
                   color: Colors.transparent,
                   child: Center(
                     child: Icon(
