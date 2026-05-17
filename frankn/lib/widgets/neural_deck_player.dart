@@ -102,16 +102,16 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
       },
       onTapCancel: () => setState(() => _isPlayPressed = false),
       child: AnimatedScale(
-        scale: _isPlayPressed ? 0.9 : 1.0,
-        duration: const Duration(milliseconds: 150),
+        scale: _isPlayPressed ? 0.8 : 1.0,
+        duration: const Duration(milliseconds: 120),
         curve: Curves.easeOutBack,
         child: ClipOval(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              width: 64,
-              height: 64,
+              width: 68,
+              height: 68,
               decoration: BoxDecoration(
                 color: AppColors.neonPink.withValues(alpha: 0.1),
                 shape: BoxShape.circle,

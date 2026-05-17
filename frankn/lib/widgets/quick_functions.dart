@@ -78,14 +78,11 @@ class _QuickFunctionState extends State<QuickFunction> {
   void initState() {
     super.initState();
     widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetMediaStatus});
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetMediaStatus});
     widget.client.genDcMsgStream.listen((resp) {
       if (!mounted) return;
       final mediamsg = resp['type'] == MediaDCMessage.MediaUpdate
           ? MediaUpdate.fromJson(resp)
           : null;
-      final initMU = resp['type'];
-      widget.client.log(initMU);
       if (mediamsg == null) {
         return;
       } else {

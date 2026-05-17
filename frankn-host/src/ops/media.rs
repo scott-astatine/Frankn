@@ -225,27 +225,24 @@ pub async fn get_media_status(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessag
         }
         .await
         {
-            Ok(d) => HostMessage::Response {
-                id: id.to_string(),
-                status: Status::Success,
-                data: Some(serde_json::json!({
-                    "player_name": d.player_name,
-                    "media_status": d.status,
-                    "volume": d.volume,
-                    "metadata": format!("{} - {}", d.title, d.artist),
-                    "position": d.position,
-                    "length": d.length,
-                    "art_data": d.art_data,
-                    "track_id": d.track_id
-                })),
+            Ok(d) => HostMessage::MediaUpdate {
+                player_name: Some(d.player_name.clone()),
+                playing: d.status.to_lowercase().contains("playing"),
+                art_data: d.art_data,
+                position: Some(d.position),
+                length: Some(d.length),
                 timestamp: crate::utils::get_timestamp(),
+                volume: Some(d.volume),
+                metadata: Some(format!("{} - {}", d.title, d.artist)),
             },
-            Err(_) => HostMessage::Response {
-                id: id.to_string(),
-                status: Status::Success,
-                data: Some(
-                    serde_json::json!({ "media_status": "Stopped", "metadata": "No Media", "volume": 0.0 }),
-                ),
+            Err(_) => HostMessage::MediaUpdate {
+                player_name: None,
+                playing: false,
+                metadata: Some("No Media".into()),
+                art_data: None,
+                position: None,
+                length: None,
+                volume: None,
                 timestamp: crate::utils::get_timestamp(),
             },
         }

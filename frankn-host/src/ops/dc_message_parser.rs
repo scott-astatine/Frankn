@@ -75,7 +75,7 @@ pub enum DcMsg {
     SetDefaultAudioDevice { target_id: String },
 
     // --- Media Control ---
-    #[serde(rename = "start_media_sync")]
+    #[serde(rename = "toggle_play_pause")]
     TogglePlayPause,
     #[serde(rename = "play_next_track")]
     PlayNextTrack,

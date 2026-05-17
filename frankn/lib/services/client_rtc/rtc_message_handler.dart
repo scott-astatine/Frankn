@@ -338,6 +338,7 @@ mixin RtcMessageHandler on RtcClientBase {
 
   void _handleMediaUpdate(Map<String, dynamic> data) async {
     MediaUpdate media = MediaUpdate.fromJson(data);
+    log(data.toString());
 
     final artStr = media.artData;
     if (artStr != null && artStr.startsWith('frankn-fs://')) {
