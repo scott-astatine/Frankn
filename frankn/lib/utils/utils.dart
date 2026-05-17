@@ -40,20 +40,18 @@ class MediaUpdate {
   // The factory constructor acts as your JSON parser
   factory MediaUpdate.fromJson(Map<String, dynamic> json) {
     return MediaUpdate(
-      playerName: json['player_name'].toString().replaceAll(
-        "org.mpris.MediaPlayer2.",
-        "",
-      ),
-      playing: json['playing'] as bool,
-      metadata: json['metadata'],
-      artData: json['art_data'],
-      position: (json['position'] as num).toDouble(),
-      length: (json['length'] as num).toDouble(),
-      volume: (json['volume'] as num).toDouble(),
-      timestamp: json['timestamp'] != null
-          ? (json['timestamp'] as num).toInt()
-          : 0,
-      trackId: json['track_id'].toString(),
+      playerName: (json['player_name'] ?? 'Unknown').toString().replaceAll(
+            "org.mpris.MediaPlayer2.",
+            "",
+          ),
+      playing: json['playing'] == true,
+      metadata: (json['metadata'] ?? 'No Media').toString(),
+      artData: json['art_data']?.toString(),
+      position: (json['position'] as num?)?.toDouble() ?? 0.0,
+      length: (json['length'] as num?)?.toDouble() ?? 0.0,
+      volume: (json['volume'] as num?)?.toDouble() ?? 0.0,
+      timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
+      trackId: (json['track_id'] ?? '').toString(),
     );
   }
 }

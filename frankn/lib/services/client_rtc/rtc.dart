@@ -443,7 +443,14 @@ class RtcClient extends RtcClientBase
   @override
   void log(String msg) {
     final time = DateTime.now().toIso8601String().substring(11, 19);
-    final logMsg = "[$time] $msg";
+
+    // Truncate large messages to prevent buffer overflow crashes in release mode
+    String safeMsg = msg;
+    if (msg.length > 2048) {
+      safeMsg = "${msg.substring(0, 2048)}... [TRUNCATED]";
+    }
+
+    final logMsg = "[$time] $safeMsg";
     print(logMsg);
 
     _logHistory.insert(0, logMsg);

@@ -31,10 +31,10 @@
 
         <meta-data
             android:name="com.pravera.flutter_foreground_task.NOTIFICATION_ICON"
-            android:resource="@mipmap/ic_notification" />
+            android:resource="@drawable/ic_notification" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_notification" />
+            android:resource="@drawable/ic_notification" />
 
         <!-- Audio Service -->
         <service android:name="com.ryanheise.audioservice.AudioService"

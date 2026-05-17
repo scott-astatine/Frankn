@@ -20,7 +20,7 @@ class NotificationService {
   /// Requests permission if not already granted.
   Future<void> initialize({bool requestPermissions = true}) async {
     await AwesomeNotifications().initialize(
-      'resource://mipmap/ic_notification',
+      'resource://drawable/ic_notification',
       [
         NotificationChannel(
           channelGroupKey: 'frankn_channel_group',

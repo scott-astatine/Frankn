@@ -9,6 +9,7 @@
 # WebRTC
 -keep class org.webrtc.** { *; }
 -keep class com.cloudwebrtc.webrtc.** { *; }
+-keep class org.jni_zero.** { *; }
 
 # Flutter Foreground Task
 -keep class com.pravera.flutter_foreground_task.** { *; }
