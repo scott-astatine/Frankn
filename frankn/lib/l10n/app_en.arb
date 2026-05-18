@@ -6,6 +6,10 @@
   "terminal": "Terminal",
   "processes": "Processes",
   "sysLog": "Sys Log",
+  "generalConfig": "General",
+  "storageSync": "Storage Sync",
+  "manageDir": "Manage Dirs",
+  "hostAlias": "Host Alias",
   "liveLog": "Live Log",
   "activeMonitors": "Active Monitors",
   "fetching": "Fetching...",
@@ -67,7 +71,6 @@
   "vol": "VOL",
   "close": "Close",
   "settings": "Settings",
-  "neuralLinkConfiguration": "Neural Link Configuration",
   "signalingServer": "Signaling Server",
   "lastConnectedHost": "Last Connected Host",
   "uiPreferences": "UI Preferences",
@@ -89,5 +92,8 @@
   "sortByDate": "Sort by Date",
   "selected": "Selected",
   "search": "Search",
-  "filterProcesses": "Filter Processes..."
+  "trackpadSensitivity": "Trackpad Sensitivity",
+  "trackpad": "Trackpad",
+  "filterProcesses": "Filter Processes...",
+  "terminate": "Terminate"
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:frankn/utils/utils.dart';
 
 /// Service for managing local app configuration and persistent state.
 ///
@@ -97,7 +98,7 @@ class SettingsService {
 
   /// Returns the trackpad sensitivity multiplier.
   double get trackpadSensitivity =>
-      _prefs.getDouble(_keyTrackpadSensitivity) ?? 1.0;
+      _prefs.getDouble(_keyTrackpadSensitivity) ?? 2.0;
 
   /// Persists a new trackpad sensitivity multiplier.
   Future<bool> setTrackpadSensitivity(double value) async =>

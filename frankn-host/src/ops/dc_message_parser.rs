@@ -43,6 +43,8 @@ pub enum DcMsg {
         sort_by: Option<String>,
         show_hidden: Option<bool>,
     },
+    #[serde(rename = "mkdir")]
+    Mkdir { path: String },
     #[serde(rename = "delete_file")]
     DeleteFile { path: String },
 
@@ -193,6 +195,7 @@ impl DcMsg {
 
             // File System
             Ls { path, sort_by, show_hidden } => _async_ls,
+            Mkdir { path } => _async_mkdir,
             DeleteFile { path } => _async_delete_file,
 
             // System Logs
@@ -217,19 +220,12 @@ impl DcMsg {
 }
 
 // --- Adapters ---
-
 async fn _async_sync_request(
     id: &str,
     path: &String,
-    _rtc: Arc<Mutex<RTCConn>>,
+    rtc: Arc<Mutex<RTCConn>>,
 ) -> HostMessage {
-    // To be implemented in ops/sync.rs or fs_sync
-    HostMessage::Response {
-        id: id.to_string(),
-        status: Status::Error("SyncRequest not yet implemented".into()),
-        data: None,
-        timestamp: crate::utils::get_timestamp(),
-    }
+    crate::fs_sync::sync::handle_sync_request(id, path, rtc, "frankn_cmd").await
 }
 
 async fn _async_ls(
@@ -244,6 +240,10 @@ async fn _async_ls(
 
 async fn _async_delete_file(id: &str, path: &String, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     crate::fs_sync::delete_file(id, path)
+}
+
+async fn _async_mkdir(id: &str, path: &String, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+    crate::fs_sync::mkdir(id, path)
 }
 
 async fn _handle_system_log(

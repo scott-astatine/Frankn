@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
@@ -247,7 +248,7 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       transferMsg = "UPLOADING: ${result.files.single.name}";
     });
 
-    client.sendIntent('upload_init', {
+    client.sendIntent(IsolateAction.uploadInit, {
       'id': transferId,
       'file_name': result.files.single.name,
       'local_path': file.path,

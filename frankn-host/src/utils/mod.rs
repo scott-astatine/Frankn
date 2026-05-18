@@ -39,6 +39,7 @@ pub enum ClientMessage {
         command: DcMsg,
         params: Option<serde_json::Value>,
         auth_token: String,
+        timestamp: u64,
     },
 
     // ── New resume-aware transfer protocol ──
@@ -176,6 +177,7 @@ pub enum HostMessage {
         id: String,
         root_path: String,
         files: Vec<serde_json::Value>,
+        is_final: bool,
         timestamp: u64,
     },
 }

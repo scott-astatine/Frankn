@@ -30,6 +30,8 @@ class RtcThinClient {
   final _aiStreamController =
       StreamController<Map<String, dynamic>>.broadcast();
   final _sshDataController = StreamController<Uint8List>.broadcast();
+  final _syncSnapshotController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   final _authErrorController = StreamController<String>.broadcast();
   HostConnectionState currentHostState = HostConnectionState.disconnected;
@@ -56,6 +58,7 @@ class RtcThinClient {
   // New: Bridge for intents originating from within the background isolate
   bool _isBackground = false;
   final _localIntentController = StreamController<IsolateMsg>.broadcast();
+
   /// Callback to restart the foreground service from the UI Isolate.
   Future<void> Function()? onServiceRestartRequired;
   factory RtcThinClient() => _instance;
@@ -79,6 +82,8 @@ class RtcThinClient {
   Stream<Map<String, dynamic>> get peerStatusStream =>
       _peerStatusController.stream;
   Stream<Uint8List> get sshDataStream => _sshDataController.stream;
+  Stream<Map<String, dynamic>> get syncSnapshotStream =>
+      _syncSnapshotController.stream;
 
   // Mocks for DC state checks
   RTCDataChannel? get sshDC => null;
@@ -110,6 +115,7 @@ class RtcThinClient {
   void handleBackgroundEvent(String data) {
     try {
       final msg = IsolateMsg.fromJson(data);
+
       switch ((msg.type, msg.action)) {
         case (IsolateType.state, IsolateAction.hostState):
           final stateIndex = msg.payload['state'] as int;
@@ -146,7 +152,7 @@ class RtcThinClient {
             _hostListController.add(currentHosts);
           }
         case (IsolateType.state, IsolateAction.isolateReady):
-          print("ThinClient: Background isolate is alive. Syncing...");
+          // print("ThinClient: Background isolate is alive. Syncing...");
           sendIntent(IsolateAction.syncState);
         case (IsolateType.event, IsolateAction.commandResponse):
           _genDcMsgStreamC.add(msg.payload);
@@ -243,6 +249,11 @@ class RtcThinClient {
           _transferProgressController.add({...msg.payload, 'type': 'failed'});
         case (IsolateType.event, IsolateAction.sshOutput):
           _sshDataController.add(base64Decode(msg.payload['data']));
+        case (IsolateType.event, IsolateAction.folderSyncSnapshot):
+          log(
+            "BG: SyncSnapshot to UI for ${msg.payload['root_path'].toString()}",
+          );
+          _syncSnapshotController.add(msg.payload);
         case (IsolateType.event, IsolateAction.authFailed):
           _authErrorController.add(
             msg.payload['error'] ?? 'AUTHENTICATION_FAILED',
@@ -261,7 +272,8 @@ class RtcThinClient {
 
   void requestHostList() => sendIntent(IsolateAction.requestHostList);
 
-  void sendDcMsg(Map<String, dynamic> cmd) => sendIntent(IsolateAction.sendDcMsg, cmd);
+  void sendDcMsg(Map<String, dynamic> cmd) =>
+      sendIntent(IsolateAction.sendDcMsg, cmd);
 
   void sendDownloadInit({
     required String id,
@@ -288,7 +300,11 @@ class RtcThinClient {
     String action, [
     Map<String, dynamic> payload = const {},
   ]) async {
-    final msg = IsolateMsg(type: IsolateType.intent, action: action, payload: payload);
+    final msg = IsolateMsg(
+      type: IsolateType.intent,
+      action: action,
+      payload: payload,
+    );
     if (_isBackground) {
       _localIntentController.add(msg);
     } else {

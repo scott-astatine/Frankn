@@ -201,6 +201,16 @@ class FranknTaskHandler extends TaskHandler {
         );
       });
 
+      RtcClient().syncSnapshotStream.listen((data) {
+        _broadcastToMain(
+          IsolateMsg(
+            type: IsolateType.event,
+            action: IsolateAction.folderSyncSnapshot,
+            payload: data,
+          ),
+        );
+      });
+
       print("Background Isolate: SIGNALING_READY");
       _broadcastToMain(
         IsolateMsg(type: IsolateType.state, action: IsolateAction.isolateReady),
@@ -235,6 +245,80 @@ class FranknTaskHandler extends TaskHandler {
 
   void _broadcastToMain(IsolateMsg msg) {
     FlutterForegroundTask.sendDataToMain(msg.toJson());
+  }
+
+  void _handleUploadInit(IsolateMsg msg) {
+    final engine = TransferEngine(RtcClient());
+    final id = msg.payload['id'];
+    final fileName = msg.payload['file_name'];
+    engine
+        .upload(
+          id: id,
+          remotePath: msg.payload['remote_path'],
+          file: File(msg.payload['local_path']),
+          hash: msg.payload['hash'],
+          onProgress:
+              ({
+                required progress,
+                required bytesTransferred,
+                required totalBytes,
+              }) {
+                _broadcastToMain(
+                  IsolateMsg(
+                    type: IsolateType.event,
+                    action: IsolateAction.transferProgress,
+                    payload: {
+                      'id': id,
+                      'progress': progress,
+                      'bytes_transferred': bytesTransferred,
+                      'total_bytes': totalBytes,
+                    },
+                  ),
+                );
+
+                if (bytesTransferred % (1024 * 1024) < 61440 ||
+                    bytesTransferred == totalBytes) {
+                  NotificationService().showProgressNotification(
+                    id.hashCode.abs() % 100000,
+                    "Uploading '$fileName'...",
+                    "${(progress * 100).toStringAsFixed(1)}%",
+                    progress * 100,
+                  );
+                }
+              },
+        )
+        .then((_) {
+          engine.dispose();
+          _broadcastToMain(
+            IsolateMsg(
+              type: IsolateType.event,
+              action: IsolateAction.transferComplete,
+              payload: {'id': id, 'target_path': msg.payload['remote_path']},
+            ),
+          );
+          NotificationService().showProgressNotification(
+            id.hashCode.abs() % 100000,
+            "Upload Complete",
+            "'$fileName' uploaded successfully.",
+            100.0,
+          );
+        })
+        .catchError((e) {
+          engine.dispose();
+          _broadcastToMain(
+            IsolateMsg(
+              type: IsolateType.event,
+              action: IsolateAction.transferFailed,
+              payload: {'id': id, 'error': e.toString()},
+            ),
+          );
+          NotificationService().showProgressNotification(
+            id.hashCode.abs() % 100000,
+            "Upload Failed",
+            "'$fileName' failed to upload.",
+            100.0,
+          );
+        });
   }
 
   void _handleIntent(IsolateMsg msg) {
@@ -293,82 +377,8 @@ class FranknTaskHandler extends TaskHandler {
         syncState();
         break;
       case IsolateAction.uploadInit:
-        final engine = TransferEngine(RtcClient());
-        final id = msg.payload['id'];
-        final fileName = msg.payload['file_name'];
-        engine
-            .upload(
-              id: id,
-              remotePath: msg.payload['remote_path'],
-              file: File(msg.payload['local_path']),
-              hash: msg.payload['hash'],
-              onProgress:
-                  ({
-                    required progress,
-                    required bytesTransferred,
-                    required totalBytes,
-                  }) {
-                    _broadcastToMain(
-                      IsolateMsg(
-                        type: IsolateType.event,
-                        action: IsolateAction.transferProgress,
-                        payload: {
-                          'id': id,
-                          'progress': progress,
-                          'bytes_transferred': bytesTransferred,
-                          'total_bytes': totalBytes,
-                        },
-                      ),
-                    );
-
-                    if (bytesTransferred % (1024 * 1024) < 61440 ||
-                        bytesTransferred == totalBytes) {
-                      NotificationService().showProgressNotification(
-                        id.hashCode.abs() % 100000,
-                        "Uploading '$fileName'...",
-                        "${(progress * 100).toStringAsFixed(1)}%",
-                        progress * 100,
-                      );
-                    }
-                  },
-            )
-            .then((_) {
-              engine.dispose();
-              _broadcastToMain(
-                IsolateMsg(
-                  type: IsolateType.event,
-                  action: IsolateAction.transferComplete,
-                  payload: {
-                    'id': id,
-                    'target_path': msg.payload['remote_path'],
-                  },
-                ),
-              );
-              NotificationService().showProgressNotification(
-                id.hashCode.abs() % 100000,
-                "Upload Complete",
-                "'$fileName' uploaded successfully.",
-                100.0,
-              );
-            })
-            .catchError((e) {
-              engine.dispose();
-              _broadcastToMain(
-                IsolateMsg(
-                  type: IsolateType.event,
-                  action: IsolateAction.transferFailed,
-                  payload: {'id': id, 'error': e.toString()},
-                ),
-              );
-              NotificationService().showProgressNotification(
-                id.hashCode.abs() % 100000,
-                "Upload Failed",
-                "'$fileName' failed to upload.",
-                100.0,
-              );
-            });
+        _handleUploadInit(msg);
         break;
     }
   }
 }
-

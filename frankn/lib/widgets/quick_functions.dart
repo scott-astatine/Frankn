@@ -138,7 +138,7 @@ class _QuickFunctionState extends State<QuickFunction> {
             MaterialPageRoute(builder: (_) => SShScreen(client: widget.client)),
           );
         }),
-        _opBtn("Trackpad", Icons.mouse, AppColors.neonCyan, () {
+        _opBtn(l10n.trackpad, Icons.mouse, AppColors.neonCyan, () {
           Navigator.push(
             context,
             MaterialPageRoute(

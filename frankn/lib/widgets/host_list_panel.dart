@@ -104,7 +104,7 @@ class _HostListPanelState extends State<HostListPanel> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: _buildLiveLog(l10n),
         ),
       ],
@@ -131,7 +131,6 @@ class _HostListPanelState extends State<HostListPanel> {
 
   Widget _buildLiveLog(AppLocalizations l10n) {
     return Container(
-      padding: const EdgeInsets.only(top: 16),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Colors.white10)),
       ),
@@ -145,7 +144,7 @@ class _HostListPanelState extends State<HostListPanel> {
                 l10n.liveLog.toUpperCase(),
                 style: const TextStyle(
                   color: AppColors.neonCyan,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.5,
                 ),

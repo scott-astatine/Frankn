@@ -218,8 +218,8 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                           borderRadius: BorderRadius.circular(8),
                           child: Container(
                             margin: EdgeInsetsGeometry.all(4),
-                            width: 62,
-                            height: 62,
+                            width: 78,
+                            height: 78,
                             color: Colors.white.withValues(alpha: 0.05),
                             child: widget.artData != null
                                 ? _buildArtImage(

@@ -2,6 +2,7 @@ use crate::{HostMessage, utils::Status};
 use std::fs;
 
 pub mod transfer;
+pub mod sync;
 
 pub fn ls(id: &str, path: &str, sort_by: Option<String>, show_hidden: Option<bool>) -> HostMessage {
     let entries = fs::read_dir(path);
@@ -85,6 +86,23 @@ pub fn ls(id: &str, path: &str, sort_by: Option<String>, show_hidden: Option<boo
 
 pub fn delete_file(id: &str, path: &str) -> HostMessage {
     match fs::remove_file(path) {
+        Ok(_) => HostMessage::Response {
+            id: id.into(),
+            status: Status::Success,
+            data: None,
+            timestamp: 0,
+        },
+        Err(e) => HostMessage::Response {
+            id: id.into(),
+            status: Status::Error(e.to_string()),
+            data: None,
+            timestamp: 0,
+        },
+    }
+}
+
+pub fn mkdir(id: &str, path: &str) -> HostMessage {
+    match fs::create_dir_all(path) {
         Ok(_) => HostMessage::Response {
             id: id.into(),
             status: Status::Success,

@@ -5,6 +5,10 @@
   "fileBrowser": "파일 브라우저",
   "terminal": "터미널",
   "processes": "프로세스",
+  "generalConfig": "일반 설정",
+  "storageSync": "스토리지 동기화",
+  "hostAlias": "호스트 별칭",
+  "manageDir": "디렉터리 관리",
   "sysLog": "시스템 로그",
   "liveLog": "라이브 로그",
   "activeMonitors": "활성 모니터",
@@ -57,7 +61,6 @@
   "vol": "볼륨",
   "close": "닫기",
   "settings": "설정",
-  "neuralLinkConfiguration": "신경 링크 설정",
   "signalingServer": "시그널링 서버",
   "lastConnectedHost": "마지막 연결된 호스트",
   "uiPreferences": "UI 기본 설정",
@@ -79,5 +82,8 @@
   "sortByDate": "날짜순 정렬",
   "selected": "선택됨",
   "search": "검색",
-  "filterProcesses": "프로세스 필터..."
+  "trackpadSensitivity": "트랙패드 민감도",
+  "trackpad": "트랙패드",
+  "filterProcesses": "프로세스 필터...",
+  "terminate": "종료"
 }

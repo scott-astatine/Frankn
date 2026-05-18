@@ -30,6 +30,18 @@ class AppLocalizationsKo extends AppLocalizations {
   String get sysLog => '시스템 로그';
 
   @override
+  String get generalConfig => '일반 설정';
+
+  @override
+  String get storageSync => '스토리지 동기화';
+
+  @override
+  String get manageDir => '디렉터리 관리';
+
+  @override
+  String get hostAlias => '호스트 별칭';
+
+  @override
   String get liveLog => '라이브 로그';
 
   @override
@@ -187,9 +199,6 @@ class AppLocalizationsKo extends AppLocalizations {
   String get settings => '설정';
 
   @override
-  String get neuralLinkConfiguration => '신경 링크 설정';
-
-  @override
   String get signalingServer => '시그널링 서버';
 
   @override
@@ -253,5 +262,14 @@ class AppLocalizationsKo extends AppLocalizations {
   String get search => '검색';
 
   @override
+  String get trackpadSensitivity => '트랙패드 민감도';
+
+  @override
+  String get trackpad => '트랙패드';
+
+  @override
   String get filterProcesses => '프로세스 필터...';
+
+  @override
+  String get terminate => '종료';
 }

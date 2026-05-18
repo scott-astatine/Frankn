@@ -70,7 +70,7 @@ class TransferEngine {
   ///
   /// [id] — Transfer ID (UUID). Pass the same ID to resume a failed upload.
   /// [remotePath] — Target path on the host.
-  /// [data] — File bytes.
+  /// [file] — local File path.
   /// [hash] — SHA-256 hex string for integrity verification.
   /// [resumeOffset] — Byte offset to resume from (0 = fresh, or from getResumeOffset).
   /// [onProgress] — Progress callback.
@@ -94,9 +94,9 @@ class TransferEngine {
     // Initialize transfer on host
     final initCompleter = Completer<void>();
     final initSub = client.genDcMsgStream.listen((data) {
-      if (data['type'] == 'response' && data['id'] == id) {
+      if (data['type'] == DcMsg.HostResponse && data['id'] == id) {
         initCompleter.complete();
-      } else if (data['type'] == 'transfer_complete' && data['id'] == id) {
+      } else if (data['type'] == FsMsg.TransferComplete && data['id'] == id) {
         // Host finished before we sent all data (edge case — resume matched total)
         initCompleter.complete();
       }
@@ -182,47 +182,6 @@ class TransferEngine {
     if (state != null && !state.isComplete) {
       throw Exception("Upload $id completed locally but host did not confirm");
     }
-  }
-
-  /// Download a file from the host with resume support.
-  ///
-  /// Returns the downloaded file. The file is saved to a temp location
-  /// and the path is returned via the callback or the returned Future.
-  ///
-  Future<File> download({
-    required String id,
-    required String remotePath,
-    int resumeOffset = 0,
-    TransferProgress? onProgress,
-    required void Function(File file) onComplete,
-  }) async {
-    final completer = Completer<File>();
-
-    final sub = client.genDcMsgStream.listen((data) {
-      if (data['type'] == 'download_end' && data['id'] == id) {
-        // This engine is primarily for the new resume-aware upload protocol.
-      }
-    });
-
-    client.sendDcMsg({
-      DcMsg.Key: FsMsg.DownloadInit,
-      "id": id,
-      "path": remotePath,
-      "resume_offset": resumeOffset,
-    });
-
-    // For now, downloads still use the legacy stream_start/stream_end + IOSink path
-    // in RtcMessageHandler. This method is a placeholder for future integration.
-    // The actual file handling is done by FileTransferMixin's setupTransferListener.
-
-    // Timeout
-    try {
-      await completer.future.timeout(const Duration(minutes: 10));
-    } finally {
-      sub.cancel();
-    }
-
-    return completer.future;
   }
 
   /// Encode a binary transfer frame.

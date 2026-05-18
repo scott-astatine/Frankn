@@ -9,6 +9,7 @@ import 'package:frankn/widgets/ssh/ssh_theme.dart';
 import 'package:frankn/widgets/ssh/key_bar.dart';
 import 'package:frankn/widgets/ssh/status_bar.dart';
 import 'package:frankn/widgets/ssh/terminal_context_menu.dart';
+import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:xterm/xterm.dart';
 
 class SShScreen extends StatefulWidget {
@@ -134,21 +135,10 @@ class _SShScreenState extends State<SShScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.deepSpace.withAlpha(200),
-        shape: const BeveledRectangleBorder(
-          side: BorderSide(color: AppColors.neonCyan, width: 1),
-          borderRadius: BorderRadius.all(Radius.circular(8)),
-        ),
-        title: Text(
-          error != null ? "AUTHENTICATION FAILED" : "SSH AUTHENTICATION",
-          style: TextStyle(
-            color: error != null ? AppColors.errorRed : AppColors.neonCyan,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          ),
-        ),
+      builder: (context) => CyberAlertDialog(
+        borderColor: error != null ? AppColors.errorRed : AppColors.neonCyan,
+        titleColor: error != null ? AppColors.errorRed : AppColors.neonCyan,
+        title: error != null ? "AUTHENTICATION FAILED" : "SSH AUTHENTICATION",
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

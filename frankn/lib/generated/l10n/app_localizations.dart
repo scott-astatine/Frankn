@@ -140,6 +140,30 @@ abstract class AppLocalizations {
   /// **'Sys Log'**
   String get sysLog;
 
+  /// No description provided for @generalConfig.
+  ///
+  /// In en, this message translates to:
+  /// **'General'**
+  String get generalConfig;
+
+  /// No description provided for @storageSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage Sync'**
+  String get storageSync;
+
+  /// No description provided for @manageDir.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Dirs'**
+  String get manageDir;
+
+  /// No description provided for @hostAlias.
+  ///
+  /// In en, this message translates to:
+  /// **'Host Alias'**
+  String get hostAlias;
+
   /// No description provided for @liveLog.
   ///
   /// In en, this message translates to:
@@ -446,12 +470,6 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settings;
 
-  /// No description provided for @neuralLinkConfiguration.
-  ///
-  /// In en, this message translates to:
-  /// **'Neural Link Configuration'**
-  String get neuralLinkConfiguration;
-
   /// No description provided for @signalingServer.
   ///
   /// In en, this message translates to:
@@ -578,11 +596,29 @@ abstract class AppLocalizations {
   /// **'Search'**
   String get search;
 
+  /// No description provided for @trackpadSensitivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Trackpad Sensitivity'**
+  String get trackpadSensitivity;
+
+  /// No description provided for @trackpad.
+  ///
+  /// In en, this message translates to:
+  /// **'Trackpad'**
+  String get trackpad;
+
   /// No description provided for @filterProcesses.
   ///
   /// In en, this message translates to:
   /// **'Filter Processes...'**
   String get filterProcesses;
+
+  /// No description provided for @terminate.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminate'**
+  String get terminate;
 }
 
 class _AppLocalizationsDelegate

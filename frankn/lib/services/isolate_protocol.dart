@@ -48,6 +48,7 @@ class IsolateAction {
   static const syncState = "sync_state";
   static const uploadInit = "upload_init";
   static const logIntent = "log_intent";
+  static const folderSyncInit = "folder_sync_init";
 
   // State & Event Actions (Background -> UI)
   static const hostState = "host_state";
@@ -63,6 +64,9 @@ class IsolateAction {
   static const transferFailed = "transfer_failed";
   static const downloadStart = "download_start";
   static const downloadEnd = "download_end";
+  static const folderSyncSnapshot = "folder_sync_snapshot";
+  static const folderSyncProgress = "folder_sync_progress";
+  static const folderSyncComplete = "folder_sync_complete";
   static const sshOutput = "ssh_output";
   static const authFailed = "auth_failed";
   static const authSuccess = "auth_success";

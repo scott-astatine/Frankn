@@ -4,6 +4,7 @@ import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/cyber_card.dart';
 import 'package:frankn/utils/cyber_button.dart';
+import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -86,20 +87,10 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
     final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F0F0F),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.errorRed),
-        ),
-        title: Text(
-          "${l10n.terminateIntent.toUpperCase()} // ${name.toUpperCase()}",
-          style: const TextStyle(
-            color: AppColors.errorRed,
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
+      builder: (context) => CyberAlertDialog(
+        borderColor: AppColors.errorRed,
+        titleColor: AppColors.errorRed,
+        title: "${l10n.terminateIntent.toUpperCase()} // ${name.toUpperCase()}",
         content: Text(
           l10n.killProcessConfirm(pid),
           style: const TextStyle(color: Colors.white70, fontSize: 13),

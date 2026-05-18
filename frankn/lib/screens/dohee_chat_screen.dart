@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/widgets/dohee_chat/chat_message.dart';
 import 'package:frankn/widgets/dohee_chat/message_bubble.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -598,19 +599,10 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
-          return AlertDialog(
-            backgroundColor: const Color(0xFF0F0F0F),
-            shape: const BeveledRectangleBorder(
-              side: BorderSide(color: NeoColors.fuchsia, width: 1),
-            ),
-            title: Text(
-              "NEURAL_CORE_CONFIG",
-              style: GoogleFonts.jetBrainsMono(
-                color: NeoColors.fuchsia,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+          return CyberAlertDialog(
+            title: "NEURAL_CORE_CONFIG",
+            titleColor: NeoColors.fuchsia,
+            borderColor: NeoColors.fuchsia,
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

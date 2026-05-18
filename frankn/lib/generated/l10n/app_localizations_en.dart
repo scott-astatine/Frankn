@@ -30,6 +30,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sysLog => 'Sys Log';
 
   @override
+  String get generalConfig => 'General';
+
+  @override
+  String get storageSync => 'Storage Sync';
+
+  @override
+  String get manageDir => 'Manage Dirs';
+
+  @override
+  String get hostAlias => 'Host Alias';
+
+  @override
   String get liveLog => 'Live Log';
 
   @override
@@ -187,9 +199,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
-  String get neuralLinkConfiguration => 'Neural Link Configuration';
-
-  @override
   String get signalingServer => 'Signaling Server';
 
   @override
@@ -253,5 +262,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get search => 'Search';
 
   @override
+  String get trackpadSensitivity => 'Trackpad Sensitivity';
+
+  @override
+  String get trackpad => 'Trackpad';
+
+  @override
   String get filterProcesses => 'Filter Processes...';
+
+  @override
+  String get terminate => 'Terminate';
 }

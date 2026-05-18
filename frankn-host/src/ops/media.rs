@@ -476,9 +476,9 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                                         .send_message("frankn_media", &Bytes::from(json.clone()))
                                         .await;
                                 }
-                                for c in map.keys() {
-                                    log!("Media Update sent to Client({c}): {:?}", msg);
-                                }
+                                // for c in map.keys() {
+                                //     log!("Media Update sent to Client({c}): {:?}", msg);
+                                // }
                             }
                         }
                     }

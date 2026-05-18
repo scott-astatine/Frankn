@@ -251,6 +251,9 @@ abstract class RtcClientBase {
   /// Controller for SSH binary data from host.
   StreamController<Uint8List> get sshDataController;
 
+  /// Controller for folder sync snapshot metadata.
+  StreamController<Map<String, dynamic>> get syncSnapshotController;
+
   /// Controller for host connection state changes.
   /// Used by UI to update connection status indicators.
   StreamController<HostConnectionState> get hostStateController;
@@ -411,6 +414,12 @@ class RtcClient extends RtcClientBase
       StreamController<Uint8List>.broadcast();
   Stream<Uint8List> get sshDataStream => sshDataController.stream;
 
+  @override
+  final StreamController<Map<String, dynamic>> syncSnapshotController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get syncSnapshotStream =>
+      syncSnapshotController.stream;
+
   // ========== BASE IMPLEMENTATION ==========
 
   /// Setter for authentication failure flag.
@@ -466,12 +475,13 @@ class RtcClient extends RtcClientBase
     // Only log non-noisy messages (skip ping, telemetry, and file chunks)
     if (!msg.contains(DcMsg.Ping) &&
         !msg.contains(DcMsg.Telemetry) &&
+        !msg.contains(DcMsg.TogglePlayPause) &&
         !msg.contains(InputSig.MouseMove) &&
         !msg.contains(InputSig.MouseClick) &&
         !msg.contains(InputSig.Scroll) &&
         !msg.contains(InputSig.Text) &&
         !msg.contains(InputSig.KeyPress)) {
-      log("TX [$label]: $msg");
+      log("SENT to $currentHostName [$label]: $msg");
     }
     if (channel?.state == RTCDataChannelState.RTCDataChannelOpen) {
       channel!.send(RTCDataChannelMessage(msg));
