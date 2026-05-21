@@ -7,6 +7,7 @@ import 'package:frankn/utils/cyber_button.dart';
 import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 
 class ProcessManagerScreen extends StatefulWidget {
   final RtcThinClient client;
@@ -34,25 +35,38 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
     _fetchProcesses();
 
     // 1. Listen for process list responses
-    widget.client.genDcMsgStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      final data = resp['type'] == 'response' ? resp['data'] : resp;
-      if (data != null && data is Map && data.containsKey('processes')) {
-        setState(() {
-          _processes = data['processes'];
-          // Only update stats if we don't have a live telemetry feed yet
-          _stats ??= data['stats'];
-          _isLoading = false;
-        });
+      if (msg is HostMsgResponse) {
+        final data = msg.data;
+        if (data != null && data is Map && data.containsKey('processes')) {
+          setState(() {
+            _processes = data['processes'];
+            // Only update stats if we don't have a live telemetry feed yet
+            _stats ??= data['stats'];
+            _isLoading = false;
+          });
+        }
+      } else if (msg is HostMsgUnknown && msg.raw.containsKey('processes')) {
+          setState(() {
+            _processes = msg.raw['processes'];
+            _stats ??= msg.raw['stats'];
+            _isLoading = false;
+          });
       }
     });
 
     // 2. Hook into LIVE telemetry heartbeat for the top bars
-    _telemetrySub = widget.client.genDcMsgStream.listen((resp) {
+    _telemetrySub = widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      if (resp['type'] == 'telemetry') {
+      if (msg is HostMsgTelemetry) {
         setState(() {
-          _stats = resp;
+          _stats = {
+            'cpu_load': msg.cpuLoad,
+            'used_mem': msg.usedMem,
+            'total_mem': msg.totalMem,
+            'cpu_temp': msg.cpuTemp,
+          };
         });
       }
     });
@@ -68,11 +82,10 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
 
   void _fetchProcesses() {
     setState(() => _isLoading = true);
-    widget.client.sendDcMsg({
-      DcMsg.Key: DcMsg.ListProcesses,
-      "sort_by": _sortBy,
-      "filter": _searchQuery.isEmpty ? null : _searchQuery,
-    });
+    widget.client.sendDcMsg(DcMsgListProcesses(
+      sortBy: _sortBy,
+      filter: _searchQuery.isEmpty ? null : _searchQuery,
+    ));
   }
 
   void _onSearchChanged(String value) {
@@ -109,7 +122,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
             isSmall: true,
             onPressed: () {
               Navigator.pop(context);
-              widget.client.sendDcMsg({DcMsg.Key: DcMsg.Kill, "proc": pid});
+              widget.client.sendDcMsg(DcMsgKillProcess(proc: pid));
               _fetchProcesses();
             },
           ),

@@ -7,6 +7,7 @@ import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:xterm/xterm.dart';
 
 class SshController extends ChangeNotifier {
@@ -81,31 +82,30 @@ class SshController extends ChangeNotifier {
       bool hostReady = false;
       final completer = Completer<bool>();
 
-      _commandSubscription = client.genDcMsgStream.listen((resp) {
+      _commandSubscription = client.genDcMsgStream.listen((msg) {
         if (_isDisposed) return;
 
-        final Map<String, dynamic> data;
-        if (resp['type'] == 'response' && resp.containsKey('data')) {
-          data = (resp['data'] as Map<String, dynamic>?) ?? {};
-        } else {
-          data = resp;
+        Map<String, dynamic>? data;
+        String? status;
+        String? error;
+
+        if (msg is HostMsgResponse) {
+            data = msg.data is Map ? msg.data as Map<String, dynamic> : null;
+            status = msg.status;
+            error = msg.error;
+        } else if (msg is HostMsgUnknown) {
+            data = msg.raw;
+            status = msg.raw['status']?.toString();
         }
 
-        final status = resp['status']?.toString().toLowerCase();
-
-        if (status == 'success' &&
-            data['message']?.contains('SSH reachable') == true) {
+        if (status?.toLowerCase() == 'success' &&
+            data?['message']?.contains('SSH reachable') == true) {
           terminal.write(
             '\x1b[32m[SYSTEM]\x1b[0m Host SSH bridge confirmed ready.\r\n',
           );
           if (!completer.isCompleted) completer.complete(true);
-        } else if (status == 'error' ||
-            (resp['status'] is Map && resp['status'].containsKey('Error'))) {
-          final errorMsg =
-              resp['status_msg'] ??
-              data['message'] ??
-              (resp['status'] is Map ? resp['status']['Error'] : null) ??
-              'Host SSH Error';
+        } else if (status?.toLowerCase() == 'error' || error != null) {
+          final errorMsg = error ?? data?['message'] ?? 'Host SSH Error';
           if (!completer.isCompleted) completer.completeError(errorMsg);
         }
       });

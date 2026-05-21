@@ -14,7 +14,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
-import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 
 /// State manager for file browser operations.
 class FileBrowserState with ChangeNotifier {
@@ -74,7 +74,7 @@ class FileBrowserState with ChangeNotifier {
   }
 
   /// Updates the file list and clears selection/loading state.
-  /// Called when [DcMsg.Ls] response is received.
+  /// Called when directory listing response is received.
   void setEntries(List<dynamic> entries) {
     _entries = entries;
     _isLoading = false;
@@ -178,45 +178,37 @@ class FileBrowserState with ChangeNotifier {
     setIsLoading(true);
     _selectedPaths.clear();
 
-    client.sendDcMsg({
-      DcMsg.Key: DcMsg.Ls,
-      "path": _currentPath,
-      "sort_by": _sortBy.value,
-      "show_hidden": _showHidden,
-    });
+    client.sendDcMsg(DcMsgLs(
+      path: _currentPath,
+      sortBy: _sortBy.value,
+      showHidden: _showHidden,
+    ));
   }
 
   /// Listens to the global [RtcThinClient] response stream.
   /// This connects the UI state to the networking layer.
   void _listenForResponses() {
-    _responseSub = client.genDcMsgStream.listen((resp) {
-      final data = _extractResponseData(resp);
-      final type = resp['type'];
-
+    _responseSub = client.genDcMsgStream.listen((msg) {
       // Handle directory listing response
-      if (data.containsKey('entries')) {
-        setEntries(data['entries']);
+      if (msg is HostMsgResponse) {
+        final data = msg.data;
+        if (data is Map && data.containsKey('entries')) {
+          setEntries(data['entries']);
+        }
+      } else if (msg is HostMsgUnknown && msg.raw.containsKey('entries')) {
+        setEntries(msg.raw['entries']);
       }
       // Handle file transfer completion (from FileTransferMixin)
-      else if (type == FsMsg.DownloadEnd) {
+      else if (msg is HostMsgDownloadEnd) {
         setTransferMessage("");
         setTransferProgress(0.0);
         setIsLoading(false);
-      } else if (type == FsMsg.DownloadStart) {
-        setTransferMessage("DOWNLOADING: ${resp['file_name']}");
+      } else if (msg is HostMsgDownloadStart) {
+        setTransferMessage("DOWNLOADING: ${msg.fileName}");
         setTransferProgress(0.0);
         setIsLoading(true);
       }
     });
-  }
-
-  /// Helper to unwrap nested response data structures.
-  Map<String, dynamic> _extractResponseData(Map<String, dynamic> resp) {
-    if (resp['type'] == 'response' && resp.containsKey('data')) {
-      final data = resp['data'];
-      if (data is Map<String, dynamic>) return data;
-    }
-    return resp;
   }
 
   // ========== FILTERING ==========

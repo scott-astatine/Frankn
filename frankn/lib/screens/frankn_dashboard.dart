@@ -7,6 +7,8 @@ import 'package:frankn/widgets/quick_functions.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/screens/log_terminal_screen.dart';
 
+import 'package:frankn/utils/dc_msg_util.dart';
+
 class FranknDashboard extends StatefulWidget {
   final RtcThinClient client;
   const FranknDashboard({super.key, required this.client});
@@ -40,20 +42,20 @@ class _FranknDashboardState extends State<FranknDashboard> {
     });
 
     // 2. Listen for host responses (Telemetry + Pongs)
-    widget.client.genDcMsgStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
 
       // Handle Telemetry Broadcast
-      if (resp['type'] == 'telemetry') {
+      if (msg is HostMsgTelemetry) {
         setState(() {
-          _cpu = (resp['cpu_load'] as num).toDouble();
-          _ram = (resp['used_mem'] as num).toDouble() / (1024 * 1024 * 1024);
+          _cpu = msg.cpuLoad;
+          _ram = msg.usedMem / (1024 * 1024 * 1024);
           _hasTelemetry = true;
         });
       }
       // Handle Ping Response (RTT calculation)
-      else if (resp['type'] == 'response') {
-        final data = resp['data'];
+      else if (msg is HostMsgResponse) {
+        final data = msg.data;
         if (data is Map && data['response'] == 'Pong') {
           if (_lastPingTime != null) {
             setState(() {
@@ -73,7 +75,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
   void _sendPing() {
     if (widget.client.currentHostState == HostConnectionState.authenticated) {
       _lastPingTime = DateTime.now().millisecondsSinceEpoch;
-      widget.client.sendDcMsg({DcMsg.Key: DcMsg.Ping});
+      widget.client.sendDcMsg(const DcMsgPing());
     }
   }
 

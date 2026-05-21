@@ -3,6 +3,7 @@ import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/file_browser/file_browser_state.dart';
 import 'package:frankn/utils/file_browser/file_browser_ui.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 
 /// A specialized modal file browser used for selecting a directory on the host.
 class RemoteDirSelector extends StatefulWidget {
@@ -88,10 +89,9 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
                     ? "$currentPath$name" 
                     : "$currentPath/$name";
                 
-                widget.client.sendDcMsg({
-                  DcMsg.Key: "mkdir",
-                  "path": newPath,
-                });
+                widget.client.sendDcMsg(DcMsgMkdir(
+                  path: newPath,
+                ));
                 
                 // Wait briefly for host to create, then refresh
                 Future.delayed(const Duration(milliseconds: 300), () {
@@ -173,17 +173,18 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
             child: ListView.builder(
               itemCount: _browserState.entries.length,
               itemBuilder: (context, index) {
-                final entry = _browserState.entries[index];
-                if (!entry['is_dir']) return const SizedBox.shrink();
+                final rawEntry = _browserState.entries[index];
+                final entry = RemoteEntry.fromJson(Map<String, dynamic>.from(rawEntry));
+                if (!entry.isDir) return const SizedBox.shrink();
 
                 return ListTile(
                   leading: const Icon(Icons.folder, color: AppColors.matrixGreen, size: 20),
                   title: Text(
-                    entry['name'],
+                    entry.name,
                     style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                   onTap: () {
-                    _browserState.navigateDown(entry['name']);
+                    _browserState.navigateDown(entry.name);
                   },
                 );
               },

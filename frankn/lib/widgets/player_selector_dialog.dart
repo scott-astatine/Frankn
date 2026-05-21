@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/cyber_card.dart';
 
 void showPlayerSelectorDialog(BuildContext context, RtcThinClient client) {
@@ -28,19 +29,27 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
   @override
   void initState() {
     super.initState();
-    _sub = widget.client.genDcMsgStream.listen((resp) {
+    _sub = widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      final data = resp['type'] == 'response' ? resp['data'] : resp;
-      if (data != null && data is Map && data.containsKey('players')) {
-        setState(() {
-          _players = List<String>.from(data['players'] ?? []);
-          _activePlayer = data['active_player']?.toString();
-          _isLoading = false;
-        });
+      if (msg is HostMsgResponse) {
+        final data = msg.data;
+        if (data != null && data is Map && data.containsKey('players')) {
+          setState(() {
+            _players = List<String>.from(data['players'] ?? []);
+            _activePlayer = data['active_player']?.toString();
+            _isLoading = false;
+          });
+        }
+      } else if (msg is HostMsgUnknown && msg.raw.containsKey('players')) {
+          setState(() {
+            _players = List<String>.from(msg.raw['players'] ?? []);
+            _activePlayer = msg.raw['active_player']?.toString();
+            _isLoading = false;
+          });
       }
     });
 
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.ListPlayers});
+    widget.client.sendDcMsg(const DcMsgListPlayers());
   }
 
   @override
@@ -50,13 +59,12 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
   }
 
   void _selectPlayer(String playerName) {
-    widget.client.sendDcMsg({
-      DcMsg.Key: DcMsg.SetActivePlayer,
-      "player_name": playerName,
-    });
+    widget.client.sendDcMsg(DcMsgSetActivePlayer(
+      playerName: playerName,
+    ));
     // Give it a moment to take effect, then request sync
     Future.delayed(const Duration(milliseconds: 300), () {
-      widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetMediaStatus});
+      widget.client.sendDcMsg(const DcMsgGetMediaStatus());
     });
     Navigator.pop(context);
   }

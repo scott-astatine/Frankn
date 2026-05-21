@@ -5,7 +5,8 @@ import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/cyber_card.dart';
 import 'package:frankn/utils/cyber_button.dart';
-import 'package:frankn/widgets/pairing_dialog.dart';
+import 'package:frankn/widgets/host_pairing_dialog.dart';
+import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/screens/log_terminal_screen.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
@@ -252,7 +253,7 @@ class _HostListPanelState extends State<HostListPanel> {
             onPressed: () async {
               final result = await showDialog(
                 context: context,
-                builder: (context) => const PairingDialog(),
+                builder: (context) => const HostPairingDialog(),
               );
               if (result == true) setState(() {});
             },
@@ -330,7 +331,7 @@ class _HostListPanelState extends State<HostListPanel> {
                   child: CyberButton(
                     text: "LINK",
                     isSmall: true,
-                    onPressed: () => _showPasswordDialog(context, id, name),
+                    onPressed: () => _authDialog(context, id, name),
                   ),
                 )
               else
@@ -357,11 +358,7 @@ class _HostListPanelState extends State<HostListPanel> {
     );
   }
 
-  void _showPasswordDialog(
-    BuildContext context,
-    String hostId,
-    String hostName,
-  ) {
+  void _authDialog(BuildContext context, String hostId, String hostName) {
     final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController();
     bool isLoading = false;
@@ -388,21 +385,10 @@ class _HostListPanelState extends State<HostListPanel> {
             }
           });
 
-          return AlertDialog(
-            backgroundColor: const Color(0xFF0F0F0F),
-            shape: const BeveledRectangleBorder(
-              side: BorderSide(color: AppColors.neonCyan),
-              borderRadius: BorderRadius.all(Radius.circular(9.0)),
-            ),
-            title: Text(
-              l10n.uplinkSecurity.toUpperCase(),
-              style: const TextStyle(
-                color: AppColors.neonCyan,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
+          return CyberAlertDialog(
+            title: l10n.uplinkSecurity.toUpperCase(),
+            borderColor: AppColors.neonCyan,
+            titleColor: AppColors.neonCyan,
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -427,9 +413,13 @@ class _HostListPanelState extends State<HostListPanel> {
                   const SizedBox(height: 16),
                 ],
                 if (isLoading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: CircularProgressIndicator(color: AppColors.neonCyan),
+                  Center(
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: CircularProgressIndicator(
+                        color: AppColors.neonCyan,
+                      ),
+                    ),
                   )
                 else
                   TextField(

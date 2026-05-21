@@ -17,7 +17,7 @@ import 'dart:typed_data';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'package:frankn/services/client_rtc/rtc.dart';
-import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 
 /// Binary frame constants — must match host-side definitions.
 class _FrameConst {
@@ -47,9 +47,10 @@ class TransferEngine {
 
   // Active transfer state
   final Map<String, _TransferState> _activeTransfers = {};
+  final Set<String> _cancelledTransfers = {};
 
   // Stream subscription for transfer-related messages
-  StreamSubscription<Map<String, dynamic>>? _messageSub;
+  StreamSubscription<HostMessage>? _messageSub;
 
   TransferEngine(this.client) {
     _messageSub = client.genDcMsgStream.listen(_onMessage);
@@ -62,8 +63,9 @@ class TransferEngine {
 
   /// Cancel an in-progress transfer.
   Future<void> cancel(String id) async {
+    _cancelledTransfers.add(id);
     _activeTransfers.remove(id);
-    client.sendDcMsg({DcMsg.Key: FsMsg.TransferCancel, "id": id});
+    client.sendTransferCancel(id);
   }
 
   /// Upload a file to the host with resume support.
@@ -92,11 +94,17 @@ class TransferEngine {
     );
 
     // Initialize transfer on host
+    int actualResumeOffset = resumeOffset;
     final initCompleter = Completer<void>();
-    final initSub = client.genDcMsgStream.listen((data) {
-      if (data['type'] == DcMsg.HostResponse && data['id'] == id) {
+    final initSub = client.genDcMsgStream.listen((msg) {
+      if (msg is HostMsgResponse && msg.id == id) {
+        final respData = msg.data;
+        if (respData != null && respData is Map && respData['offset'] != null) {
+          actualResumeOffset = respData['offset'] as int;
+          client.log("FS: Host requested resume from offset $actualResumeOffset");
+        }
         initCompleter.complete();
-      } else if (data['type'] == FsMsg.TransferComplete && data['id'] == id) {
+      } else if (msg is HostMsgTransferComplete && msg.id == id) {
         // Host finished before we sent all data (edge case — resume matched total)
         initCompleter.complete();
       }
@@ -114,14 +122,19 @@ class TransferEngine {
     initSub.cancel();
 
     // Stream chunks
-    int offset = resumeOffset;
+    int offset = actualResumeOffset;
     int seq = 0;
 
     final raf = await file.open(mode: FileMode.read);
     try {
-      await raf.setPosition(resumeOffset);
+      await raf.setPosition(actualResumeOffset);
 
       while (offset < totalSize) {
+        if (_cancelledTransfers.contains(id)) {
+          client.log("FS: Upload $id cancelled by user.");
+          throw Exception("TRANSFER_CANCELLED");
+        }
+
         if (client.fsDC?.state != RTCDataChannelState.RTCDataChannelOpen) {
           throw Exception("FS channel closed during upload $id");
         }
@@ -165,8 +178,8 @@ class TransferEngine {
     }
 
     // Wait for host ACK of completion
-    final completeSub = client.genDcMsgStream.listen((data) {
-      if (data['type'] == 'transfer_complete' && data['id'] == id) {
+    final completeSub = client.genDcMsgStream.listen((msg) {
+      if (msg is HostMsgTransferComplete && msg.id == id) {
         final state = _activeTransfers[id];
         state?.isComplete = true;
       }
@@ -236,24 +249,18 @@ class TransferEngine {
   }
 
   /// Process incoming transfer-related JSON messages.
-  void _onMessage(Map<String, dynamic> data) {
-    final type = data['type'];
-    final id = data['id'];
-    if (id == null) return;
-
-    final state = _activeTransfers[id];
-    if (state == null) return;
-
-    switch (type) {
-      case 'transfer_ack':
-        final offset = data['offset'] as int? ?? 0;
-        final seq = data['seq'] as int? ?? 0;
-        state.lastAckOffset = offset;
-        state.lastAckSeq = seq;
-        break;
-      case 'transfer_complete':
+  void _onMessage(HostMessage msg) {
+    if (msg is HostMsgTransferAck) {
+      final state = _activeTransfers[msg.id];
+      if (state != null) {
+        state.lastAckOffset = msg.offset;
+        state.lastAckSeq = msg.seq;
+      }
+    } else if (msg is HostMsgTransferComplete) {
+      final state = _activeTransfers[msg.id];
+      if (state != null) {
         state.isComplete = true;
-        break;
+      }
     }
   }
 }

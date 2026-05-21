@@ -95,5 +95,112 @@
   "trackpadSensitivity": "Trackpad Sensitivity",
   "trackpad": "Trackpad",
   "filterProcesses": "Filter Processes...",
-  "terminate": "Terminate"
+  "terminate": "Terminate",
+  "folderSynchronization": "Folder Synchronization",
+  "folderSyncComplete": "Folder Sync Complete",
+  "folderSyncCompleteNoChanges": "Folder Sync Complete: No Changes",
+  "fullStorageAccessRequired": "Full Storage Access Required",
+  "establishNewLink": "Establish New Link",
+  "modifyLink": "Modify Link",
+  "localDir": "Local Directory",
+  "notSelected": "Not Selected",
+  "remoteDir": "Remote Directory",
+  "syncStrategy": "Sync Strategy",
+  "bidirectionalMirror": "Bidirectional Mirror",
+  "singleSourceBackup": "Single Source Backup",
+  "clientIsSourceLabel": "Client Is Source",
+  "syncInterval": "Sync Interval",
+  "everyNMinutes": "Every {minutes} Minutes",
+  "@everyNMinutes": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+  "everyHour": "Every Hour",
+  "every6Hours": "Every 6 Hours",
+  "onceADay": "Once A Day",
+  "update": "Update",
+  "localEndpoint": "Local Endpoint",
+  "remoteEndpoint": "Remote Endpoint",
+  "mirror": "Mirror",
+  "backup": "Backup",
+  "lastSyncedLabel": "Last Synced: {time}",
+  "@lastSyncedLabel": {
+    "placeholders": {
+      "time": { "type": "String" }
+    }
+  },
+  "triggerSyncNow": "Trigger Sync Now",
+  "noSyncPairsEstablished": "No Sync Pairs Established",
+  "inSync": "In Sync",
+  "changesPending": "{count} Changes Pending",
+  "@changesPending": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "verifying": "Verifying...",
+  "english": "English",
+  "korean": "Korean",
+  "pixels": "{size} PX",
+  "@pixels": {
+    "placeholders": {
+      "size": { "type": "int" }
+    }
+  },
+  "multiplier": "{value}X Multiplier",
+  "@multiplier": {
+    "placeholders": {
+      "value": { "type": "double" }
+    }
+  },
+  "multiplierValue": "{value}X",
+  "@multiplierValue": {
+    "placeholders": {
+      "value": { "type": "double" }
+    }
+  },
+  "renameHost": "Rename Host",
+  "reinitializingNeuralLink": "Re-initializing Neural Link to new server...",
+  "invalidUrlFormat": "Invalid URL format. Must start with ws:// or wss://",
+  "defaultLlm": "Default LLM",
+  "unknown": "Unknown",
+  "notSet": "Not Set",
+  "uiDefaults": "UI Defaults",
+  "criticalReset": "Critical Reset",
+  "terminateConfigsConfirm": "Terminate all persistent links and system configurations?",
+  "execute": "Execute",
+  "forgetIntents": "Forget Intents",
+  "noMediaPlaying": "No Media Playing",
+  "idle": "Idle",
+  "idleInstance": "Idle Instance",
+  "doheeChat": "Dohee Chat",
+  "unknownArtist": "Unknown Artist",
+  "bluetoothDevices": "Bluetooth Devices",
+  "noDevicesFound": "No Devices Found",
+  "wifiNetworks": "Wi-Fi Networks",
+  "noNetworksFound": "No Networks Found",
+  "connectToSsid": "Connect To {ssid}",
+  "@connectToSsid": {
+    "placeholders": {
+      "ssid": { "type": "String" }
+    }
+  },
+  "password": "Password",
+  "neuralModelVault": "Neural Model Vault",
+  "scanningVault": "Scanning Vault...",
+  "noModelsFound": "No .gguf models found in host vault directory.",
+  "connectivityAudio": "Connectivity & Audio",
+  "criticalAction": "Critical // {action}",
+  "@criticalAction": {
+    "placeholders": {
+      "action": { "type": "String" }
+    }
+  },
+  "remoteCommandConfirm": "Are you sure you want to proceed with this remote command?",
+  "scanning": "Scanning...",
+  "connected": "Connected",
+  "importFromImage": "Import From Image",
+  "hostIdHint": "e.g. 550e8400-e29b...",
+  "aliasHint": "e.g. WORK-RIG"
 }

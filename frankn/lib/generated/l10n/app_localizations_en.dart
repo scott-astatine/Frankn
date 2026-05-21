@@ -272,4 +272,225 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get terminate => 'Terminate';
+
+  @override
+  String get folderSynchronization => 'Folder Synchronization';
+
+  @override
+  String get folderSyncComplete => 'Folder Sync Complete';
+
+  @override
+  String get folderSyncCompleteNoChanges => 'Folder Sync Complete: No Changes';
+
+  @override
+  String get fullStorageAccessRequired => 'Full Storage Access Required';
+
+  @override
+  String get establishNewLink => 'Establish New Link';
+
+  @override
+  String get modifyLink => 'Modify Link';
+
+  @override
+  String get localDir => 'Local Directory';
+
+  @override
+  String get notSelected => 'Not Selected';
+
+  @override
+  String get remoteDir => 'Remote Directory';
+
+  @override
+  String get syncStrategy => 'Sync Strategy';
+
+  @override
+  String get bidirectionalMirror => 'Bidirectional Mirror';
+
+  @override
+  String get singleSourceBackup => 'Single Source Backup';
+
+  @override
+  String get clientIsSourceLabel => 'Client Is Source';
+
+  @override
+  String get syncInterval => 'Sync Interval';
+
+  @override
+  String everyNMinutes(int minutes) {
+    return 'Every $minutes Minutes';
+  }
+
+  @override
+  String get everyHour => 'Every Hour';
+
+  @override
+  String get every6Hours => 'Every 6 Hours';
+
+  @override
+  String get onceADay => 'Once A Day';
+
+  @override
+  String get update => 'Update';
+
+  @override
+  String get localEndpoint => 'Local Endpoint';
+
+  @override
+  String get remoteEndpoint => 'Remote Endpoint';
+
+  @override
+  String get mirror => 'Mirror';
+
+  @override
+  String get backup => 'Backup';
+
+  @override
+  String lastSyncedLabel(String time) {
+    return 'Last Synced: $time';
+  }
+
+  @override
+  String get triggerSyncNow => 'Trigger Sync Now';
+
+  @override
+  String get noSyncPairsEstablished => 'No Sync Pairs Established';
+
+  @override
+  String get inSync => 'In Sync';
+
+  @override
+  String changesPending(int count) {
+    return '$count Changes Pending';
+  }
+
+  @override
+  String get verifying => 'Verifying...';
+
+  @override
+  String get english => 'English';
+
+  @override
+  String get korean => 'Korean';
+
+  @override
+  String pixels(int size) {
+    return '$size PX';
+  }
+
+  @override
+  String multiplier(double value) {
+    return '${value}X Multiplier';
+  }
+
+  @override
+  String multiplierValue(double value) {
+    return '${value}X';
+  }
+
+  @override
+  String get renameHost => 'Rename Host';
+
+  @override
+  String get reinitializingNeuralLink =>
+      'Re-initializing Neural Link to new server...';
+
+  @override
+  String get invalidUrlFormat =>
+      'Invalid URL format. Must start with ws:// or wss://';
+
+  @override
+  String get defaultLlm => 'Default LLM';
+
+  @override
+  String get unknown => 'Unknown';
+
+  @override
+  String get notSet => 'Not Set';
+
+  @override
+  String get uiDefaults => 'UI Defaults';
+
+  @override
+  String get criticalReset => 'Critical Reset';
+
+  @override
+  String get terminateConfigsConfirm =>
+      'Terminate all persistent links and system configurations?';
+
+  @override
+  String get execute => 'Execute';
+
+  @override
+  String get forgetIntents => 'Forget Intents';
+
+  @override
+  String get noMediaPlaying => 'No Media Playing';
+
+  @override
+  String get idle => 'Idle';
+
+  @override
+  String get idleInstance => 'Idle Instance';
+
+  @override
+  String get doheeChat => 'Dohee Chat';
+
+  @override
+  String get unknownArtist => 'Unknown Artist';
+
+  @override
+  String get bluetoothDevices => 'Bluetooth Devices';
+
+  @override
+  String get noDevicesFound => 'No Devices Found';
+
+  @override
+  String get wifiNetworks => 'Wi-Fi Networks';
+
+  @override
+  String get noNetworksFound => 'No Networks Found';
+
+  @override
+  String connectToSsid(String ssid) {
+    return 'Connect To $ssid';
+  }
+
+  @override
+  String get password => 'Password';
+
+  @override
+  String get neuralModelVault => 'Neural Model Vault';
+
+  @override
+  String get scanningVault => 'Scanning Vault...';
+
+  @override
+  String get noModelsFound => 'No .gguf models found in host vault directory.';
+
+  @override
+  String get connectivityAudio => 'Connectivity & Audio';
+
+  @override
+  String criticalAction(String action) {
+    return 'Critical // $action';
+  }
+
+  @override
+  String get remoteCommandConfirm =>
+      'Are you sure you want to proceed with this remote command?';
+
+  @override
+  String get scanning => 'Scanning...';
+
+  @override
+  String get connected => 'Connected';
+
+  @override
+  String get importFromImage => 'Import From Image';
+
+  @override
+  String get hostIdHint => 'e.g. 550e8400-e29b...';
+
+  @override
+  String get aliasHint => 'e.g. WORK-RIG';
 }

@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 
 late Directory globalTempDir;
@@ -11,49 +13,6 @@ enum HostConnectionState {
   connected,
   failed,
   authenticated,
-}
-
-class MediaUpdate {
-  final bool playing;
-  final String metadata;
-  final String? artData;
-  final double position; // u64 in Rust translates to int in Dart
-  final double length;
-  final double volume; // f64 in Rust translates to double in Dart
-  final int timestamp;
-
-  final String playerName;
-  final String trackId;
-
-  MediaUpdate({
-    required this.playing,
-    required this.metadata,
-    this.artData,
-    required this.position,
-    required this.length,
-    required this.volume,
-    required this.timestamp,
-    required this.playerName,
-    required this.trackId,
-  });
-
-  // The factory constructor acts as your JSON parser
-  factory MediaUpdate.fromJson(Map<String, dynamic> json) {
-    return MediaUpdate(
-      playerName: (json['player_name'] ?? 'Unknown').toString().replaceAll(
-            "org.mpris.MediaPlayer2.",
-            "",
-          ),
-      playing: json['playing'] == true,
-      metadata: (json['metadata'] ?? 'No Media').toString(),
-      artData: json['art_data']?.toString(),
-      position: (json['position'] as num?)?.toDouble() ?? 0.0,
-      length: (json['length'] as num?)?.toDouble() ?? 0.0,
-      volume: (json['volume'] as num?)?.toDouble() ?? 0.0,
-      timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
-      trackId: (json['track_id'] ?? '').toString(),
-    );
-  }
 }
 
 enum ModState { off, active, locked }
@@ -114,89 +73,6 @@ class SignalingMessage {
   static const Error = "error";
 }
 
-class DcMsg {
-  static const Challenge = "challenge";
-  static const AuthSuccess = "auth_success";
-  static const AuthRequest = "auth_request";
-  static const AuthFailed = "auth_failed";
-  static const Notification = "notification";
-  static const HostResponse = "response";
-  static const Telemetry = "telemetry";
-
-  static const Key = "dc_msg_type";
-
-  // Power
-  static const Disconnect = "disconnect";
-  static const Shutdown = "shutdown";
-  static const Reboot = "reboot";
-  static const LockScreen = "lock_screen";
-  static const UnlockScreen = "unlock_screen";
-
-  // System
-  static const Update = "update";
-  static const RestartHostServer = "restart_host_server";
-  static const Ping = "ping";
-  static const Pong = "Pong";
-  static const Kill = "kill";
-  static const ListProcesses = "list_processes";
-  static const SystemLog = "system_log";
-  static const StartSsh = "start_ssh";
-  static const StopSsh = "stop_ssh";
-
-  // File System (basic operations)
-  static const Ls = "ls";
-  static const DeleteFile = "delete_file";
-
-  // Audio Mixer
-  static const GetAudioDevices = "get_audio_devices";
-  static const SetDeviceVolume = "set_device_volume";
-  static const SetDefaultAudioDevice = "set_default_audio_device";
-
-  // Media
-  static const TogglePlayPause = "toggle_play_pause";
-  static const PlayNextTrack = "play_next_track";
-  static const PlayPreviousTrack = "play_previous_track";
-  static const SetVolume = "set_volume";
-  static const GetMediaStatus = "get_media_status";
-  static const ListPlayers = "list_players";
-  static const SetActivePlayer = "set_active_player";
-  static const Seek = "seek";
-
-  // Network
-  static const GetNetworkStatus = "get_network_status";
-  static const ToggleRadio = "toggle_radio";
-  static const ListWifiNetworks = "list_wifi_networks";
-  static const ConnectWifi = "connect_wifi";
-  static const ListBluetoothDevices = "list_bluetooth_devices";
-  static const ConnectBluetooth = "connect_bluetooth";
-
-  // LLM
-  static const LlmStart = "llm_start";
-  static const LlmChat = "llm_chat";
-  static const LlmLoadChat = "llm_load_chat";
-  static const LlmDeleteChat = "llm_delete_chat";
-  static const LlmListChats = "llm_list_chats";
-  static const LlmStop = "llm_stop";
-  static const LlmToken = "llm_token";
-
-  // Folder Sync
-  static const SyncRequest = "sync_request";
-}
-
-class FsMsg {
-  // File Transfer (resume-aware binary protocol)
-  static const TransferInit = "transfer_init";
-  static const TransferAck = "transfer_ack";
-  static const TransferComplete = "transfer_complete";
-  static const TransferCancel = "transfer_cancel";
-  static const DownloadInit = "download_init";
-  static const DownloadStart = "download_start";
-  static const DownloadEnd = "download_end";
-
-  // Folder Sync
-  static const SyncSnapshot = "sync_snapshot";
-}
-
 enum SyncMode { mirroring, singleSourceOfTruth }
 
 class SyncPair {
@@ -205,6 +81,7 @@ class SyncPair {
   final SyncMode mode;
   final bool clientIsSource; // Only used for singleSourceOfTruth
   final int intervalMinutes;
+  final int? lastSynced; // Unix timestamp in seconds
 
   SyncPair({
     required this.localPath,
@@ -212,6 +89,7 @@ class SyncPair {
     required this.mode,
     this.clientIsSource = true,
     this.intervalMinutes = 60,
+    this.lastSynced,
   });
 
   Map<String, dynamic> toJson() => {
@@ -220,6 +98,7 @@ class SyncPair {
         'mode': mode.index,
         'client_is_source': clientIsSource,
         'interval_minutes': intervalMinutes,
+        'last_synced': lastSynced,
       };
 
   factory SyncPair.fromJson(Map<String, dynamic> json) => SyncPair(
@@ -228,18 +107,29 @@ class SyncPair {
         mode: SyncMode.values[json['mode'] ?? 0],
         clientIsSource: json['client_is_source'] ?? true,
         intervalMinutes: json['interval_minutes'] ?? 60,
+        lastSynced: json['last_synced'],
       );
-}
-
-class MediaDCMessage {
-  static const MediaUpdate = "media_update";
 }
 
 class FileUtils {
   static String formatSize(int bytes) {
     if (bytes < 1024) return "$bytes B";
     if (bytes < 1024 * 1024) return "${(bytes / 1024).toStringAsFixed(1)} KB";
-    return "${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB";
+    if (bytes < 1024 * 1024 * 1024) {
+      return "${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB";
+    }
+    return "${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB";
+  }
+
+  /// Generates a stable transfer ID for a file based on its path and size.
+  /// This ensures that resumable transfers can find their .part files.
+  static String generateStableTransferId(String path, int size) {
+    final bytes = utf8.encode("$path|$size");
+    final digest = sha256.convert(bytes);
+    final hex = digest.toString();
+
+    // Format as UUID (8-4-4-4-12)
+    return "${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}";
   }
 
   static IconData getFileIcon(String name) {

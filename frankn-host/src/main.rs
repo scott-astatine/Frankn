@@ -722,7 +722,6 @@ async fn parse_dc_msg(
                             .await;
                             if let Ok(json) = serde_json::to_string(&response) {
                                 let conn = rtc_conn.lock().await;
-                                // crate::log!("LINK: Sending response for {} (len: {})", id, json.len());
                                 let _ = conn.send_message(label, &Bytes::from(json)).await;
                             }
                         }

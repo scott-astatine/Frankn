@@ -10,6 +10,7 @@ import 'package:frankn/services/frankn_task_handler.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/theme.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:path_provider/path_provider.dart';
@@ -40,7 +41,7 @@ void main() async {
   FlutterForegroundTask.addTaskDataCallback((data) {
     if (data is String) {
       if (data == 'disconnect_intent') {
-        RtcThinClient().sendDcMsg({DcMsg.Key: DcMsg.Disconnect});
+        RtcThinClient().sendDcMsg(const DcMsgDisconnect());
         RtcThinClient().disconnectFromHost();
       } else {
         RtcThinClient().handleBackgroundEvent(data);

@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/cyber_card.dart';
 import 'package:frankn/screens/dohee_chat_screen.dart';
+import 'package:frankn/widgets/cyber_alert_dialog.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class ModelSelectorDialog extends StatefulWidget {
   final RtcThinClient client;
@@ -37,28 +40,30 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
       _error = null;
     });
 
-    _responseSub = widget.client.genDcMsgStream.listen((resp) {
+    _responseSub = widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      final type = resp['type'];
-      if (type == 'response') {
-        final data = resp['data'];
-        if (data != null && data['models'] != null) {
+      if (msg is HostMsgResponse) {
+        final data = msg.data;
+        if (data != null && data is Map && data['models'] != null) {
           setState(() {
             _models = data['models'];
           });
           _responseSub?.cancel();
-        } else if (resp['status'] != null &&
-            resp['status'] is Map &&
-            resp['status']['Error'] != null) {
+        } else if (msg.error != null) {
           setState(() {
-            _error = resp['status']['Error'];
+            _error = msg.error;
           });
           _responseSub?.cancel();
         }
+      } else if (msg is HostMsgUnknown && msg.raw.containsKey('models')) {
+          setState(() {
+            _models = msg.raw['models'];
+          });
+          _responseSub?.cancel();
       }
     });
 
-    widget.client.sendDcMsg({DcMsg.Key: 'list_models'});
+    widget.client.sendDcMsg(const DcMsgListModels());
   }
 
   @override
@@ -69,34 +74,23 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF0F0F0F),
-      shape: const BeveledRectangleBorder(
-        side: BorderSide(color: AppColors.neonPink),
-        borderRadius: BorderRadius.all(Radius.circular(9.0)),
-      ),
-      title: const Text(
-        "NEURAL MODEL VAULT",
-        style: TextStyle(
-          color: AppColors.neonPink,
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
-        ),
-      ),
-      content: SizedBox(width: double.maxFinite, child: _buildContent()),
+    final l10n = AppLocalizations.of(context)!;
+    return CyberAlertDialog(
+      title: l10n.neuralModelVault,
+      content: SizedBox(width: double.maxFinite, child: _buildContent(l10n)),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text(
-            "CANCEL",
-            style: TextStyle(color: AppColors.textGrey),
+          child: Text(
+            l10n.cancel,
+            style: const TextStyle(color: AppColors.textGrey),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(AppLocalizations l10n) {
     if (_error != null) {
       return Text(
         _error!,
@@ -105,16 +99,16 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
     }
 
     if (_models == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: AppColors.neonPink),
-            SizedBox(height: 16),
+            const CircularProgressIndicator(color: AppColors.neonPink),
+            const SizedBox(height: 16),
             Text(
-              "SCANNING VAULT...",
-              style: TextStyle(color: AppColors.neonPink, fontSize: 10),
+              l10n.scanningVault,
+              style: const TextStyle(color: AppColors.neonPink, fontSize: 10),
             ),
           ],
         ),
@@ -122,9 +116,9 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
     }
 
     if (_models!.isEmpty) {
-      return const Text(
-        "No .gguf models found in host vault directory.",
-        style: TextStyle(color: AppColors.textGrey, fontSize: 12),
+      return Text(
+        l10n.noModelsFound,
+        style: const TextStyle(color: AppColors.textGrey, fontSize: 12),
       );
     }
 

@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
+import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:re_editor/re_editor.dart';
 import 'package:re_highlight/languages/dart.dart';
@@ -45,6 +47,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
   File? _localFile;
   bool _isInitialized = false;
   bool _isSaving = false;
+  String? _activeDownloadId;
 
   StreamSubscription? _transferSub;
 
@@ -56,9 +59,9 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
     setupTransferListener();
     
     // Listen for the specific completion of this file in the background
-    _transferSub = client.transferProgressStream.listen((data) {
-      if (data['type'] == 'complete' && data['file_name'] == widget.fileName) {
-        final String? path = data['final_path'];
+    _transferSub = client.transferProgressStream.listen((msg) {
+      if (msg is TransferProgressComplete && msg.fileName == widget.fileName) {
+        final String? path = msg.finalPath;
         if (path != null) {
           _readLocalFile(path);
         }
@@ -87,8 +90,8 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
   @override
   void refreshDirectory() {}
 
-  void _loadFile() {
-    downloadFile(
+  void _loadFile() async {
+    _activeDownloadId = await downloadFile(
       widget.remotePath,
       showNotification: false,
       isTemporary: true,
@@ -129,6 +132,13 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
   @override
   void dispose() {
     _transferSub?.cancel();
+    if (!_isInitialized && _activeDownloadId != null) {
+      client.sendIntent(
+        IsolateAction.cancelTransfer,
+        {'id': _activeDownloadId},
+      );
+      client.log("CODE EDITOR: Cancelled background download due to exit");
+    }
     _controller.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();

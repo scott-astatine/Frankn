@@ -1,5 +1,8 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:frankn/services/isolate_protocol.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:open_filex/open_filex.dart';
 
@@ -39,7 +42,7 @@ class NotificationService {
           channelGroupName: 'Frankn Group',
         ),
       ],
-      debug: true,
+      debug: false,
     );
 
     await AwesomeNotifications().setListeners(
@@ -59,20 +62,20 @@ class NotificationService {
   ///
   /// The payload includes the original app name and notification body.
   /// Used for things like "Build Complete", "New Email", etc.
-  Future<void> showNotificationFromHost(Map<String, dynamic> data) async {
-    final int id = data['id'] is int
-        ? data['id']
+  Future<void> showNotificationFromHost(HostMsgNotification msg) async {
+    final int id = msg.id != 0
+        ? msg.id
         : (DateTime.now().millisecondsSinceEpoch % 100000);
 
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: id,
         channelKey: 'frankn_host_alerts',
-        title: "${data['app_name']}: ${data['title']}",
-        body: data['body'],
+        title: "${msg.appName}: ${msg.title}",
+        body: msg.body,
         notificationLayout: NotificationLayout.Default,
         category: NotificationCategory.Message,
-        payload: {'host_id': data['id'].toString()},
+        payload: {'host_id': msg.id.toString()},
         color: AppColors.neonCyan,
         backgroundColor: AppColors.panelGrey,
       ),
@@ -85,32 +88,50 @@ class NotificationService {
       ],
     );
   }
-
-  /// Shows or updates a progress bar notification for file transfers.
-  ///
-  /// This notification is locked (non-dismissible) while progress < 100%.
-  Future<void> showProgressNotification(
-    int id,
-    String title,
-    String body,
-    double progress,
-  ) async {
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: id,
-        channelKey: 'frankn_host_alerts',
-        title: title,
-        body: body,
-        notificationLayout: NotificationLayout.ProgressBar,
-        progress: progress,
-        category: NotificationCategory.Progress,
-        payload: {'host_id': '0'},
-        color: AppColors.neonCyan,
-        backgroundColor: AppColors.panelGrey,
-        locked: true,
-      ),
-    );
-  }
+/// Shows or updates a progress bar notification for file transfers.
+///
+/// This notification is locked (non-dismissible) while progress < 100%.
+Future<void> showProgressNotification(
+  int id,
+  String title,
+  String body,
+  double progress, {
+  String? transferId,
+}) async {
+  await AwesomeNotifications().createNotification(
+    content: NotificationContent(
+      id: id,
+      channelKey: 'frankn_host_alerts',
+      title: title,
+      body: body,
+      notificationLayout: progress >= 100
+          ? NotificationLayout.Default
+          : NotificationLayout.ProgressBar,
+      progress: progress,
+      category: NotificationCategory.Progress,
+      color: AppColors.neonCyan,
+      backgroundColor: AppColors.panelGrey,
+      locked: progress < 100,
+      payload: transferId != null ? {'transfer_id': transferId} : null,
+    ),
+    actionButtons: progress < 100
+        ? [
+            NotificationActionButton(
+              key: 'CANCEL_TRANSFER',
+              label: 'CANCEL',
+              actionType: ActionType.KeepOnTop,
+              color: AppColors.errorRed,
+            ),
+          ]
+        : [
+            NotificationActionButton(
+              key: 'DISMISS',
+              label: 'DISMISS',
+              actionType: ActionType.DismissAction,
+            ),
+          ],
+  );
+}
 
   /// Shows a notification when a file download completes.
   ///
@@ -147,6 +168,56 @@ class NotificationService {
       ],
     );
   }
+
+  /// Shows or updates a progress bar notification for a folder sync session.
+  Future<void> showSyncNotification({
+    required int id,
+    required String folderName,
+    required String folderPath,
+    required int completedItems,
+    required int totalItems,
+    required String totalSize,
+    required String currentFile,
+    required double progress,
+    bool isComplete = false,
+  }) async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: id,
+        channelKey: 'frankn_host_alerts',
+        title: isComplete ? "✅ SYNC_COMPLETE: $folderName" : "🔄 SYNCING: $folderName",
+        body: isComplete
+            ? "$totalItems items synced ($totalSize)"
+            : "${(progress * 100).toStringAsFixed(1)}% ($completedItems/$totalItems) - $currentFile",
+        notificationLayout: isComplete
+            ? NotificationLayout.Default
+            : NotificationLayout.ProgressBar,
+        progress: progress * 100,
+        summary: folderPath,
+        category:
+            isComplete ? NotificationCategory.Status : NotificationCategory.Progress,
+        color: isComplete ? AppColors.matrixGreen : AppColors.neonCyan,
+        backgroundColor: AppColors.panelGrey,
+        locked: !isComplete,
+      ),
+      actionButtons: isComplete
+          ? [
+              NotificationActionButton(
+                key: 'DISMISS',
+                label: 'DISMISS',
+                actionType: ActionType.DismissAction,
+              ),
+            ]
+          : [
+              NotificationActionButton(
+                key: 'CANCEL_SYNC',
+                label: 'CANCEL',
+                actionType: ActionType.KeepOnTop,
+                color: AppColors.errorRed,
+              ),
+            ],
+    );
+  }
 }
 
 /// Static handler for notification actions (taps/buttons).
@@ -156,6 +227,17 @@ class NotificationService {
 /// using the [OpenFilex] plugin.
 @pragma("vm:entry-point")
 Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
+  if (receivedAction.buttonKeyPressed == 'CANCEL_SYNC') {
+    RtcThinClient().sendIntent(IsolateAction.stopSync);
+  }
+
+  if (receivedAction.buttonKeyPressed == 'CANCEL_TRANSFER') {
+    final tid = receivedAction.payload?['transfer_id'];
+    if (tid != null) {
+      RtcThinClient().sendIntent(IsolateAction.cancelTransfer, {'id': tid});
+    }
+  }
+
   if (receivedAction.buttonKeyPressed == 'OPEN_FILE' ||
       (receivedAction.channelKey == 'frankn_host_alerts' &&
           receivedAction.payload?.containsKey('file_path') == true)) {

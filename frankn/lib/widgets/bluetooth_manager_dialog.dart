@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
-import 'package:frankn/utils/cyber_card.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
+import 'package:frankn/widgets/cyber_alert_dialog.dart';
 
 void showBluetoothManagerDialog(BuildContext context, RtcThinClient client) {
   showDialog(
@@ -28,14 +30,21 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
   @override
   void initState() {
     super.initState();
-    _sub = widget.client.genDcMsgStream.listen((resp) {
+    _sub = widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      final data = resp['type'] == 'response' ? resp['data'] : resp;
-      if (data != null && data is Map && data.containsKey('devices')) {
-        setState(() {
-          _devices = List<dynamic>.from(data['devices'] ?? []);
-          _isLoading = false;
-        });
+      if (msg is HostMsgResponse) {
+        final data = msg.data;
+        if (data != null && data is Map && data.containsKey('devices')) {
+          setState(() {
+            _devices = List<dynamic>.from(data['devices'] ?? []);
+            _isLoading = false;
+          });
+        }
+      } else if (msg is HostMsgUnknown && msg.raw.containsKey('devices')) {
+          setState(() {
+            _devices = List<dynamic>.from(msg.raw['devices'] ?? []);
+            _isLoading = false;
+          });
       }
     });
 
@@ -47,7 +56,7 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
   }
 
   void _fetchDevices() {
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.ListBluetoothDevices});
+    widget.client.sendDcMsg(const DcMsgListBluetoothDevices());
   }
 
   @override
@@ -58,122 +67,97 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
   }
 
   void _connect(String mac) {
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.ConnectBluetooth, "mac": mac});
+    widget.client.sendDcMsg(DcMsgConnectBluetooth(mac: mac));
     Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: Colors.transparent,
-      contentPadding: EdgeInsets.zero,
-      content: CyberCard(
-        borderColor: AppColors.neonPink.withValues(alpha: 0.3),
-        child: Container(
-          width: 300,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.bluetooth, color: AppColors.neonPink),
-                  const SizedBox(width: 12),
-                  const Text(
-                    "BLUETOOTH DEVICES",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
-                    ),
+    final l10n = AppLocalizations.of(context)!;
+    return CyberAlertDialog(
+      title: l10n.bluetoothDevices,
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: CircularProgressIndicator(color: AppColors.neonPink),
+                ),
+              )
+            else if (_devices.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text(
+                    l10n.noDevicesFound,
+                    style:
+                        const TextStyle(color: AppColors.textGrey, fontSize: 12),
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              if (_isLoading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: CircularProgressIndicator(color: AppColors.neonPink),
-                  ),
-                )
-              else if (_devices.isEmpty)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: Text(
-                      "NO DEVICES FOUND",
-                      style: TextStyle(color: AppColors.textGrey, fontSize: 12),
-                    ),
-                  ),
-                )
-              else
-                SizedBox(
-                  height: 300,
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _devices.length,
-                    itemBuilder: (context, index) {
-                      final dev = _devices[index];
-                      final bool isConnected = dev['connected'] == true;
-                      return ListTile(
-                        leading: Icon(
-                          isConnected
-                              ? Icons.bluetooth_connected
-                              : Icons.bluetooth,
-                          color: isConnected
-                              ? AppColors.neonPink
-                              : Colors.white38,
+                ),
+              )
+            else
+              SizedBox(
+                height: 300,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _devices.length,
+                  itemBuilder: (context, index) {
+                    final dev = _devices[index];
+                    final bool isConnected = dev['connected'] == true;
+                    return ListTile(
+                      leading: Icon(
+                        isConnected
+                            ? Icons.bluetooth_connected
+                            : Icons.bluetooth,
+                        color:
+                            isConnected ? AppColors.neonPink : Colors.white38,
+                      ),
+                      title: Text(
+                        dev['name'] ?? 'Unknown',
+                        style: TextStyle(
+                          color: isConnected ? AppColors.neonPink : Colors.white,
+                          fontSize: 13,
+                          fontWeight:
+                              isConnected ? FontWeight.bold : FontWeight.normal,
                         ),
-                        title: Text(
-                          dev['name'] ?? 'Unknown',
-                          style: TextStyle(
-                            color: isConnected
-                                ? AppColors.neonPink
-                                : Colors.white,
-                            fontSize: 13,
-                            fontWeight: isConnected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        subtitle: isConnected
-                            ? const Text(
-                                "Connected",
-                                style: TextStyle(
-                                  color: AppColors.neonPink,
-                                  fontSize: 10,
-                                ),
-                              )
-                            : Text(
-                                dev['mac'] ?? '',
-                                style: const TextStyle(
-                                  color: AppColors.textGrey,
-                                  fontSize: 10,
-                                ),
+                      ),
+                      subtitle: isConnected
+                          ? Text(
+                              l10n.connected,
+                              style: const TextStyle(
+                                color: AppColors.neonPink,
+                                fontSize: 10,
                               ),
-                        onTap: () => _connect(dev['mac'] ?? ""),
-                      );
-                    },
-                  ),
-                ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    "CLOSE",
-                    style: TextStyle(color: AppColors.textGrey),
-                  ),
+                            )
+                          : Text(
+                              dev['mac'] ?? '',
+                              style: const TextStyle(
+                                color: AppColors.textGrey,
+                                fontSize: 10,
+                              ),
+                            ),
+                      onTap: () => _connect(dev['mac'] ?? ""),
+                    );
+                  },
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            l10n.close,
+            style: const TextStyle(color: AppColors.textGrey),
+          ),
+        ),
+      ],
     );
   }
 }

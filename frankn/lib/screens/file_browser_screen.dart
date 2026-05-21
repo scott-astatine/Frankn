@@ -8,6 +8,7 @@ import 'package:frankn/utils/file_browser/file_browser_state.dart';
 import 'package:frankn/utils/file_browser/file_browser_ui.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/widgets/file_browser_item.dart';
 
 class FileBrowserScreen extends StatefulWidget {
@@ -113,10 +114,11 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
   @override
   void refreshDirectory() => _browserState.refreshDirectory();
 
-  Widget _buildItem(dynamic entry, bool isGrid) {
+  Widget _buildItem(dynamic rawEntry, bool isGrid) {
+    final entry = RemoteEntry.fromJson(Map<String, dynamic>.from(rawEntry));
     final fullPath = PathHelper.join(
       _browserState.currentPath,
-      entry['name'] as String,
+      entry.name,
     );
     return FileBrowserItem(
       entry: entry,
@@ -128,10 +130,10 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
           _browserState.toggleSelection(fullPath);
           return;
         }
-        if (entry['is_dir']) {
-          _browserState.navigateDown(entry['name']);
+        if (entry.isDir) {
+          _browserState.navigateDown(entry.name);
         } else {
-          final name = entry['name'] as String;
+          final name = entry.name;
           final icon = FileUtils.getFileIcon(name);
 
           if (icon == Icons.image) {
@@ -160,14 +162,14 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
             );
           } else {
             // For PDFs, Videos, and other binaries, just trigger a normal download with notification
-            downloadFile(fullPath);
+            downloadFile(fullPath, size: entry.size);
           }
         }
       },
       onLongPress: () => _browserState.toggleSelection(fullPath),
       onDelete: (path) =>
-          widget.client.sendDcMsg({DcMsg.Key: DcMsg.DeleteFile, "path": path}),
-      onDownload: (path) => downloadFile(path),
+          widget.client.sendDcMsg(DcMsgDeleteFile(path: path)),
+      onDownload: (path, size) => downloadFile(path, size: size),
       onEdit: (path, name) => Navigator.push(
         context,
         MaterialPageRoute(
@@ -229,16 +231,26 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
   void _handleBulkDelete() {
     final paths = _browserState.selectedPaths.toList();
     for (var path in paths) {
-      widget.client.sendDcMsg({DcMsg.Key: DcMsg.DeleteFile, "path": path});
+      widget.client.sendDcMsg(DcMsgDeleteFile(path: path));
     }
     _browserState.clearSelection();
     _browserState.refreshDirectory();
   }
 
   void _handleBulkDownload() {
+    final entries = _browserState.getFilteredEntries();
     final paths = _browserState.selectedPaths.toList();
     for (var path in paths) {
-      downloadFile(path);
+      final rawEntry = entries.firstWhere(
+        (e) =>
+            PathHelper.join(_browserState.currentPath, e['name'] as String) ==
+            path,
+        orElse: () => null,
+      );
+      if (rawEntry != null) {
+          final entry = RemoteEntry.fromJson(Map<String, dynamic>.from(rawEntry));
+          downloadFile(path, size: entry.size);
+      }
     }
     _browserState.clearSelection();
   }

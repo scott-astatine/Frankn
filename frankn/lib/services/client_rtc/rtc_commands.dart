@@ -18,7 +18,7 @@ mixin RtcCommands on RtcClientBase {
     isAuthFailed = false; // Clear previous failure state
     currentPassword = password;
     log("Requesting Authentication...");
-    sendHostMessage({'type': DcMsg.AuthRequest, 'timestamp': getTimestamp()});
+    sendHostMessage(const ClientMsgAuthRequest().toJson());
   }
 
   /// Starts an SSH terminal session on the connected host.
@@ -26,22 +26,22 @@ mixin RtcCommands on RtcClientBase {
   /// The host will allocate a PTY and begin forwarding terminal data
   /// through the SSH data channel for remote shell access.
   void startSsh() {
-    sendDcMsg({DcMsg.Key: DcMsg.StartSsh});
+    sendDcMsg(const DcMsgStartSsh());
   }
 
   /// Terminates the active SSH terminal session on the host.
   ///
   /// Cleans up the PTY allocation and stops terminal data forwarding.
   void stopSsh() {
-    sendDcMsg({DcMsg.Key: DcMsg.StopSsh});
+    sendDcMsg(const DcMsgStopSsh());
   }
 
   @override
   void sendInputMsg(Map<String, dynamic> msg) {
     final token = AuthService().sessionToken;
     if (token == null) return;
-    
-    // For input we don't necessarily need the whole DcMsg envelope, 
+
+    // For input we don't necessarily need the whole DcMsg envelope,
     // but looking at Rust backend, it expects raw `InputMsg` JSON directly on `frankn_input` channel.
     final jsonMsg = jsonEncode(msg);
     sendToChannel(inputDC, jsonMsg, "INPUT");
@@ -95,14 +95,15 @@ mixin RtcCommands on RtcClientBase {
   }) {
     sendToChannel(
       fsDC,
-      jsonEncode({
-        'type': FsMsg.TransferInit,
-        'id': id,
-        'path': path,
-        'total_size': totalSize,
-        'hash': hash,
-        'resume_offset': resumeOffset,
-      }),
+      jsonEncode(
+        ClientMsgTransferInit(
+          id: id,
+          path: path,
+          totalSize: totalSize,
+          hash: hash,
+          resumeOffset: resumeOffset,
+        ).toJson(),
+      ),
       "FS",
     );
   }
@@ -111,7 +112,7 @@ mixin RtcCommands on RtcClientBase {
   void sendTransferCancel(String id) {
     sendToChannel(
       fsDC,
-      jsonEncode({'type': FsMsg.TransferCancel, 'id': id}),
+      jsonEncode(ClientMsgTransferCancel(id: id).toJson()),
       "FS",
     );
   }
@@ -124,12 +125,13 @@ mixin RtcCommands on RtcClientBase {
   }) {
     sendToChannel(
       fsDC,
-      jsonEncode({
-        'type': FsMsg.DownloadInit,
-        'id': id,
-        'path': path,
-        'resume_offset': resumeOffset,
-      }),
+      jsonEncode(
+        ClientMsgDownloadInit(
+          id: id,
+          path: path,
+          resumeOffset: resumeOffset,
+        ).toJson(),
+      ),
       "FS",
     );
   }
@@ -147,7 +149,7 @@ mixin RtcCommands on RtcClientBase {
   /// - Media operations → mediaChannel (frankn_media)
   /// - All others → dataChannel (frankn_cmd)
   @override
-  void sendDcMsg(Map<String, dynamic> msg) {
+  void sendDcMsg(DcMsg command) {
     final token = AuthService().sessionToken;
     if (token == null) {
       log("Command Error: Not authenticated.");
@@ -156,45 +158,42 @@ mixin RtcCommands on RtcClientBase {
 
     final msgId = const Uuid().v4();
 
-    final finalMsg = {
-      'type': 'dc_msg',
-      'id': msgId,
-      'auth_token': token,
-      'timestamp': getTimestamp(),
-      ...msg,
-    };
+    final clientMsg = ClientMsgXDcMsg(
+      id: msgId,
+      command: command,
+      authToken: token,
+    );
 
-    final type = msg[DcMsg.Key];
-    final jsonMsg = jsonEncode(finalMsg);
+    final jsonMsg = jsonEncode(clientMsg.toJson());
 
-    if (type != DcMsg.Ping && type != DcMsg.Telemetry) {
-      // log("DEBUG: dc_msg type=$type id=$msgId");
-    }
-
-    switch (type) {
+    switch (command) {
       // File system operations routed to dedicated FS channel
-      case DcMsg.Ls:
-      case DcMsg.DeleteFile:
-      case FsMsg.TransferInit:
-      case FsMsg.TransferCancel:
-      case FsMsg.DownloadInit:
+      case DcMsgLs() || DcMsgDeleteFile() || DcMsgMkdir() || DcMsgSyncRequest():
         sendToChannel(fsDC, jsonMsg, "FS");
         break;
 
       // Media control operations routed to dedicated media channel
-      case DcMsg.SetVolume:
-      case DcMsg.SetDeviceVolume:
-      case DcMsg.TogglePlayPause:
-      case DcMsg.PlayNextTrack:
-      case DcMsg.PlayPreviousTrack:
-      case DcMsg.GetMediaStatus:
-      case DcMsg.Seek:
+      case DcMsgSetVolume() ||
+          DcMsgSetDeviceVolume() ||
+          DcMsgTogglePlayPause() ||
+          DcMsgPlayNextTrack() ||
+          DcMsgPlayPreviousTrack() ||
+          DcMsgGetMediaStatus() ||
+          DcMsgSeek() ||
+          DcMsgSetActivePlayer() ||
+          DcMsgListPlayers() ||
+          DcMsgGetAudioDevices() ||
+          DcMsgSetDefaultAudioDevice():
         sendToChannel(mediaDC, jsonMsg, "MEDIA");
         break;
 
-      case DcMsg.LlmStart:
-      case DcMsg.LlmChat:
-      case DcMsg.LlmStop:
+      case DcMsgLlmStart() ||
+          DcMsgLlmChat() ||
+          DcMsgLlmStop() ||
+          DcMsgListModels() ||
+          DcMsgLlmLoadChat() ||
+          DcMsgLlmDeleteChat() ||
+          DcMsgLlmListChats():
         sendToChannel(aiDC, jsonMsg, "AI");
         break;
 

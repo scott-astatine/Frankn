@@ -24,6 +24,7 @@ use std::sync::LazyLock;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::Mutex;
+use tokio::task::AbortHandle;
 use tokio_tungstenite::tungstenite::Bytes;
 
 /// Partial transfer state persisted alongside the `.part` file.
@@ -50,6 +51,10 @@ struct UploadSession {
 
 /// Global upload session registry.
 static UPLOAD_SESSIONS: LazyLock<Mutex<HashMap<String, Arc<Mutex<UploadSession>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Global registry for active download tasks to enable instant cancellation via AbortHandle.
+static DOWNLOAD_TASKS: LazyLock<Mutex<HashMap<String, AbortHandle>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 // ── Binary frame constants ─────────────────────────────────────────────────
@@ -241,6 +246,7 @@ pub async fn handle_transfer_init(
 // ── TransferCancel: abort and cleanup ──────────────────────────────────────
 
 pub async fn handle_transfer_cancel(id: &str) -> HostMessage {
+    // 1. Clean up uploads
     let session = {
         let mut sessions = UPLOAD_SESSIONS.lock().await;
         sessions.remove(id)
@@ -249,13 +255,22 @@ pub async fn handle_transfer_cancel(id: &str) -> HostMessage {
     if let Some(session_arc) = session {
         let session = session_arc.lock().await;
         cleanup_partial(&session.path).await;
-        crate::log!("FS: Transfer {} cancelled, partial cleaned up", id);
+        crate::log!("FS: Upload transfer {} cancelled, partial cleaned up", id);
     }
 
-    HostMessage::Response {
+    // 2. Clean up downloads (kill zombie tasks instantly)
+    let abort_handle = {
+        let mut tasks = DOWNLOAD_TASKS.lock().await;
+        tasks.remove(id)
+    };
+
+    if let Some(handle) = abort_handle {
+        handle.abort();
+        crate::log!("FS: Download task {} forcefully terminated by user", id);
+    }
+
+    HostMessage::TransferCancel {
         id: id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({ "message": "Transfer cancelled" })),
         timestamp: crate::utils::get_timestamp(),
     }
 }
@@ -531,9 +546,11 @@ pub async fn handle_download_init(
     let transfer_id = id.to_string();
     let label = channel_label.to_string();
     let conn_for_download = Arc::clone(&rtc_conn);
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         let _ = stream_download(f, transfer_id, label, full_hash, conn_for_download).await;
     });
+
+    DOWNLOAD_TASKS.lock().await.insert(id.to_string(), handle.abort_handle());
 
     HostMessage::Response {
         id: id.to_string(),

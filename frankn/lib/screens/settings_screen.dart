@@ -22,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _client = RtcThinClient();
 
   void _showLanguageSelector() {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -41,7 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildSelectorTile(
-              "ENGLISH",
+              l10n.english,
               _settings.localeCode == 'en',
               () async {
                 await _settings.setLocaleCode('en');
@@ -51,7 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 setState(() {});
               },
             ),
-            _buildSelectorTile("한국어", _settings.localeCode == 'ko', () async {
+            _buildSelectorTile(l10n.korean, _settings.localeCode == 'ko', () async {
               await _settings.setLocaleCode('ko');
               appLocale.value = const Locale('ko');
               if (!context.mounted) return;
@@ -82,6 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showFontSizeSelector() {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -103,7 +105,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               .map(
                 (size) => ListTile(
                   title: Text(
-                    "$size PX",
+                    l10n.pixels(size),
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontFamily: 'JetBrainsMonoNerdFont',
@@ -127,6 +129,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showTrackpadSensitivitySelector() {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -148,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               .map(
                 (size) => ListTile(
                   title: Text(
-                    "${size}X MULTIPLIER",
+                    l10n.multiplier(size),
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontFamily: 'JetBrainsMonoNerdFont',
@@ -175,11 +178,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final hostId = _client.currentHostId;
     if (hostId == null) return;
 
+    final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController(text: _client.currentHostName);
     showDialog(
       context: context,
       builder: (context) => CyberAlertDialog(
-        title: "RENAME_HOST",
+        title: l10n.renameHost,
         content: TextField(
           controller: controller,
           style: const TextStyle(
@@ -198,9 +202,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "ABORT",
-              style: TextStyle(color: AppColors.textGrey),
+            child: Text(
+              l10n.abort,
+              style: const TextStyle(color: AppColors.textGrey),
             ),
           ),
           TextButton(
@@ -214,9 +218,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 setState(() {});
               }
             },
-            child: const Text(
-              "UPDATE",
-              style: TextStyle(
+            child: Text(
+              l10n.update,
+              style: const TextStyle(
                 color: AppColors.neonPink,
                 fontWeight: FontWeight.bold,
               ),
@@ -255,9 +259,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
-                "ABORT",
-                style: TextStyle(color: AppColors.textGrey),
+              child: Text(
+                l10n.abort,
+                style: const TextStyle(color: AppColors.textGrey),
               ),
             ),
             TextButton(
@@ -272,29 +276,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   setState(() {});
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text(
-                        'Re-initializing Neural Link to new server...',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        l10n.reinitializingNeuralLink,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       backgroundColor: AppColors.matrixGreen,
                     ),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text(
-                        'Invalid URL format. Must start with ws:// or wss://',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        l10n.invalidUrlFormat,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       backgroundColor: AppColors.errorRed,
                     ),
                   );
                 }
               },
-              child: const Text(
-                "UPDATE",
-                style: TextStyle(
+              child: Text(
+                l10n.update,
+                style: const TextStyle(
                   color: AppColors.neonPink,
                   fontWeight: FontWeight.bold,
                 ),
@@ -350,7 +354,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (_client.currentHostId != null) ...[
                 _buildSettingsItem(
                   title: l10n.hostAlias,
-                  value: _client.currentHostName ?? "UNKNOWN",
+                  value: _client.currentHostName ?? l10n.unknown,
                   icon: Icons.terminal_rounded,
                   iconColor: Colors.cyan,
                   onTap: _renameHost,
@@ -379,9 +383,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               if (_client.currentHostId != null)
                 _buildSettingsItem(
-                  title: "Default LLM",
+                  title: l10n.defaultLlm,
                   value: _settings.llmDefaultModel.isEmpty
-                      ? "NOT_SET"
+                      ? l10n.notSet
                       : _settings.llmDefaultModel,
                   icon: Icons.memory_rounded,
                   iconColor: Colors.indigo,
@@ -392,20 +396,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           const SizedBox(height: 32),
-          _buildSectionHeader("UI 기본 설정 (UI DEFAULTS)"),
+          _buildSectionHeader(l10n.uiDefaults),
           const SizedBox(height: 12),
           _buildSettingsGroup(
             children: [
               _buildSettingsItem(
                 title: l10n.language,
-                value: _settings.localeCode == 'ko' ? "한국어" : "ENGLISH",
+                value: _settings.localeCode == 'ko' ? l10n.korean : l10n.english,
                 icon: Icons.language_rounded,
                 iconColor: Colors.blue,
                 onTap: _showLanguageSelector,
               ),
               _buildSettingsItem(
                 title: l10n.terminalFontSize,
-                value: "${_settings.terminalFontSize.toInt()} PX",
+                value: l10n.pixels(_settings.terminalFontSize.toInt()),
                 icon: Icons.text_fields_rounded,
                 iconColor: Colors.grey[400]!,
                 valueColor: Colors.white,
@@ -413,7 +417,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSettingsItem(
                 title: l10n.trackpadSensitivity,
-                value: "${_settings.trackpadSensitivity}X",
+                value: l10n.multiplierValue(_settings.trackpadSensitivity),
                 icon: Icons.mouse_rounded,
                 iconColor: Colors.grey[400]!,
                 valueColor: Colors.white,
@@ -435,7 +439,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSectionHeader(String title, {Color? color}) {
     return Text(
-      title.toUpperCase(),
+      title,
       style: TextStyle(
         color: color ?? Colors.grey[600],
         fontSize: 10,
@@ -523,6 +527,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildDangerGroup() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: Colors.red[900]!.withValues(alpha: 0.15),
@@ -538,25 +543,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (context) => CyberAlertDialog(
-                  title: "CRITICAL_RESET",
+                  title: l10n.criticalReset,
                   titleColor: Colors.red,
                   borderColor: Colors.red[900]!,
-                  content: const Text(
-                    "Terminate all persistent links and system configurations?",
-                    style: TextStyle(color: Colors.white70),
+                  content: Text(
+                    l10n.terminateConfigsConfirm,
+                    style: const TextStyle(color: Colors.white70),
                   ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: const Text(
-                        "ABORT",
-                        style: TextStyle(color: AppColors.textGrey),
+                      child: Text(
+                        l10n.abort,
+                        style: const TextStyle(color: AppColors.textGrey),
                       ),
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(context, true),
                       child: Text(
-                        "EXECUTE",
+                        l10n.execute,
                         style: TextStyle(
                           color: Colors.red[600],
                           fontWeight: FontWeight.bold,
@@ -583,7 +588,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    "모든 데이터 지우기",
+                    l10n.clearAllData,
                     style: GoogleFonts.inter(
                       color: Colors.red[100],
                       fontWeight: FontWeight.w500,
@@ -598,7 +603,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       children: [
                         Flexible(
                           child: Text(
-                            "FORGET_INTENTS",
+                            l10n.forgetIntents,
                             style: GoogleFonts.jetBrainsMono(
                               color: Colors.red[600],
                               fontWeight: FontWeight.bold,

@@ -5,6 +5,7 @@ import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 
 class SyslogScreen extends StatefulWidget {
   final RtcThinClient client;
@@ -25,17 +26,20 @@ class _SyslogScreenState extends State<SyslogScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _fetchLogs();
 
-    widget.client.genDcMsgStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      final Map<String, dynamic> data =
-          (resp['type'] == 'response' && resp.containsKey('data'))
-          ? resp['data'] as Map<String, dynamic>
-          : resp;
+      
+      Map<String, dynamic>? data;
+      if (msg is HostMsgResponse && msg.data is Map) {
+          data = msg.data as Map<String, dynamic>;
+      } else if (msg is HostMsgUnknown) {
+          data = msg.raw;
+      }
 
-      if (data.containsKey('stdout') || data.containsKey('stderr')) {
+      if (data != null && (data.containsKey('stdout') || data.containsKey('stderr'))) {
         setState(() {
           _logContent = "";
-          if (data['stderr'] != null && data['stderr'].toString().isNotEmpty) {
+          if (data!['stderr'] != null && data['stderr'].toString().isNotEmpty) {
             _logContent += "=== STDERR ===\n${data['stderr']}\n\n";
           }
           if (data['stdout'] != null) {
@@ -60,10 +64,9 @@ class _SyslogScreenState extends State<SyslogScreen> {
     setState(() {
       _logContent = "Fetching...";
     });
-    widget.client.sendDcMsg({
-      DcMsg.Key: DcMsg.SystemLog,
-      "args": _serviceController.text.isEmpty ? null : _serviceController.text,
-    });
+    widget.client.sendDcMsg(DcMsgSystemLog(
+      args: _serviceController.text.isEmpty ? null : _serviceController.text,
+    ));
   }
 
   @override

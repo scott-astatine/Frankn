@@ -102,24 +102,18 @@ mixin RtcConnection on RtcClientBase {
 
       peerConnection = await createPeerConnection(config);
 
-      // Create data channels in STRICT order to avoid SDP m-line conflicts
-      // Channel IDs must match the order expected by the host
+      // Create data channels in STRICT order with fixed IDs for Host compatibility
       genDC = await peerConnection!.createDataChannel(
         'frankn_cmd',
         RTCDataChannelInit()..id = 1,
       );
-      // Set handler immediately to prevent message loss during channel setup
-      genDC!.onMessage = (msg) =>
-          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+      _setupChannelHandlers(genDC!);
 
       sshDC = await peerConnection!.createDataChannel(
         'frankn_ssh',
         RTCDataChannelInit()..id = 2,
       );
-      // Default buffering handler — SshController overrides this when starting a session.
-      // Messages arriving before SshController takes over are queued in _sshEarlyBuffer.
-      _sshEarlyBuffer.clear();
-      _sshHandlerActive = false;
+      // Special handler for SSH (buffered until UI takes over)
       sshDC!.onMessage = (msg) {
         final data = msg.isBinary ? msg.binary : utf8.encode(msg.text);
         final bytes = Uint8List.fromList(data);
@@ -133,32 +127,27 @@ mixin RtcConnection on RtcClientBase {
         'frankn_fs',
         RTCDataChannelInit()..id = 3,
       );
-      // Set handler immediately to prevent message loss during channel setup
-      fsDC!.onMessage = (msg) =>
-          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+      _setupChannelHandlers(fsDC!);
 
       mediaDC = await peerConnection!.createDataChannel(
         'frankn_media',
         RTCDataChannelInit()..id = 4,
       );
-      // Set handler immediately to prevent message loss during channel setup
-      mediaDC!.onMessage = (msg) =>
-          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+      _setupChannelHandlers(mediaDC!);
 
       aiDC = await peerConnection!.createDataChannel(
         'dohee_x',
         RTCDataChannelInit()..id = 5,
       );
-      aiDC!.onMessage = (msg) =>
-          handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+      _setupChannelHandlers(aiDC!);
 
       inputDC = await peerConnection!.createDataChannel(
         'frankn_input',
         RTCDataChannelInit()..id = 6,
       );
-      inputDC!.onMessage = (msg) => log("Input Channel: ${msg.text}");
+      _setupChannelHandlers(inputDC!);
 
-      // Monitor data channel state for connection progress
+      // Monitor main command channel state for connection progress
       genDC!.onDataChannelState = (dcState) {
         log("DC State [frankn_cmd]: $dcState");
         switch (dcState) {
@@ -241,6 +230,12 @@ mixin RtcConnection on RtcClientBase {
     } finally {
       _isConnectingInternal = false;
     }
+  }
+
+  void _setupChannelHandlers(RTCDataChannel channel) {
+    channel.onMessage = (msg) {
+      handleHostMessage(msg.isBinary ? msg.binary : msg.text);
+    };
   }
 
   /// Updates the host connection state with automatic reconnection logic.

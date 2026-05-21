@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/utils/cyber_card.dart';
 
@@ -24,18 +25,19 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
     super.initState();
     _refresh();
 
-    widget.client.genDcMsgStream.listen((resp) {
+    widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      final Map<String, dynamic> data;
-      if (resp['type'] == 'response' && resp.containsKey('data')) {
-        data = resp['data'] as Map<String, dynamic>;
-      } else {
-        data = resp;
+      
+      Map<String, dynamic>? data;
+      if (msg is HostMsgResponse && msg.data is Map) {
+          data = msg.data as Map<String, dynamic>;
+      } else if (msg is HostMsgUnknown) {
+          data = msg.raw;
       }
 
-      if (data.containsKey('devices')) {
+      if (data != null && data.containsKey('devices')) {
         setState(() {
-          _devices = data['devices'];
+          _devices = data!['devices'];
           _isLoading = false;
         });
       }
@@ -44,25 +46,23 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
 
   void _refresh() {
     setState(() => _isLoading = true);
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetAudioDevices});
+    widget.client.sendDcMsg(const DcMsgGetAudioDevices());
   }
 
   void _updateVolume(String deviceId, double volume) {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 50), () {
-      widget.client.sendDcMsg({
-        DcMsg.Key: DcMsg.SetDeviceVolume,
-        "target_id": deviceId,
-        "volume": volume,
-      });
+      widget.client.sendDcMsg(DcMsgSetDeviceVolume(
+        targetId: deviceId,
+        volume: volume,
+      ));
     });
   }
 
   void _setActiveDevice(String deviceId) {
-    widget.client.sendDcMsg({
-      DcMsg.Key: DcMsg.SetDefaultAudioDevice,
-      "target_id": deviceId,
-    });
+    widget.client.sendDcMsg(DcMsgSetDefaultAudioDevice(
+      targetId: deviceId,
+    ));
     setState(() {
       for (var dev in _devices) {
         dev['is_active'] = (dev['id'] == deviceId);

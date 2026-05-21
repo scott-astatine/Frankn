@@ -1,133 +1,89 @@
 part of 'rtc.dart';
 
+/// Mixin for RtcClient that handles incoming messages and routes them.
 mixin RtcMessageHandler on RtcClientBase {
-  // Transfer ID -> IOSink for direct-to-disk writing
+  // Transfer tracking
+  final Map<String, int> _totalSizes = {};
+  final Map<String, int> _receivedSizes = {};
   final Map<String, IOSink> _activeSinks = {};
   final Map<String, String> _tempPaths = {};
   final Map<String, String> _expectedHashes = {};
+
   final Map<String, String> _downloadTargetDirs = {};
-  final Map<String, int> _totalSizes = {};
-  final Map<String, int> _receivedSizes = {};
   final Map<String, bool> _showNotificationMap = {};
 
+  // Album art tracking
   String? _lastArtSig;
   String? _lastArtLocalPath;
   String? _currentArtTransferId;
 
-  @override
-  void handleHostMessage(dynamic rawData) {
-    try {
-      if (rawData is Uint8List) {
-        // Check for high-speed binary framing (Magic Byte 0x01)
-        if (rawData.length >= 50 && rawData[0] == 0x01) {
-          // New extended format: [magic][36-byte ID][8-byte offset][4-byte seq][1-byte flags][data]
-          final idBytes = rawData.sublist(1, 37);
-          final id = utf8.decode(
-            idBytes.where((b) => b != 0).toList(),
-            allowMalformed: true,
-          );
-
-          // Parse offset and seq for resume-aware downloads
-          final offsetBytes = rawData.sublist(37, 45);
-          final offset = ByteData.view(offsetBytes.buffer).getUint64(0);
-
-          final seqBytes = rawData.sublist(45, 49);
-          final seq = ByteData.view(seqBytes.buffer).getUint32(0);
-
-          final flags = rawData[49];
-
-          if (_activeSinks.containsKey(id)) {
-            _handleBinaryChunk(id, rawData.sublist(50), offset, seq, flags);
-            return;
-          }
-          // If sink not ready yet, chunk will be dropped (shouldn't happen with ordered DCs)
-          return;
-        }
-
-        // If not a binary chunk, attempt JSON decode
-        try {
-          final text = utf8.decode(rawData);
-          if (text.startsWith('{')) {
-            _handleJsonMessage(jsonDecode(text));
-            return;
-          }
-        } catch (_) {}
-      } else if (rawData is String) {
-        _handleJsonMessage(jsonDecode(rawData));
-      }
-    } catch (e) {
-      log("Neural Link Error: Failed to parse incoming frame: $e");
-    }
+  void _handleChallenge(HostMsgChallenge msg) async {
+    log("Computing Auth Response...");
+    final argon2Hash =
+        await AuthService().computeArgon2Hash(currentPassword ?? "", msg.salt);
+    final response = AuthService().computeResponse(argon2Hash, msg.challenge);
+    sendHostMessage(ClientMsgAuthResponse(response: response).toJson());
   }
 
-  void _handleAuthFailed(Map<String, dynamic> data) {
-    log("AUTH FAILED: ${data['error']}");
-    authFailed = true;
-    updateHostState(HostConnectionState.disconnected);
-  }
-
-  void _handleAuthSuccess(Map<String, dynamic> data) {
-    final token = data['token'];
-    AuthService().setToken(token);
-    log("AUTH SUCCESS. Session Token acquired.");
+  void _handleAuthSuccess(HostMsgAuthSuccess msg) {
+    isAuthFailed = false;
+    AuthService().setToken(msg.token);
     updateHostState(HostConnectionState.authenticated);
+    log("AUTH SUCCESS. Session Token acquired.");
   }
 
-  void _handleBinaryChunk(
-    String id,
-    Uint8List chunk,
-    int offset,
-    int seq,
-    int flags,
-  ) {
+  void _handleAuthFailed(HostMsgAuthFailed msg) {
+    isAuthFailed = true;
+    updateHostState(HostConnectionState.failed);
+    log("AUTH FAILED: ${msg.error}");
+  }
+
+  void _handleBinaryChunk(Uint8List chunk) async {
+    final magic = chunk[0];
+    if (magic != 0x01) return;
+
+    final idBytes = chunk.sublist(1, 37);
+    final id = ascii.decode(idBytes);
+    final data = chunk.sublist(37);
+
     final sink = _activeSinks[id];
     if (sink != null) {
-      sink.add(chunk);
+      sink.add(data);
+      _receivedSizes[id] = (_receivedSizes[id] ?? 0) + data.length;
 
-      // Track progress for resume-aware transfers
-      final currentTotal = (offset + chunk.length);
-      _receivedSizes[id] = currentTotal;
-
+      final currentTotal = _receivedSizes[id]!;
       final totalSize = _totalSizes[id] ?? 1;
       final progress = (currentTotal / totalSize).clamp(0.0, 1.0);
+
+      // Emit progress event
+      transferProgressController.add(TransferProgressUpdate(
+        id: id,
+        progress: progress,
+        bytesSent: currentTotal,
+        totalBytes: totalSize,
+      ));
 
       // Update notification every 1MB or on completion
       if ((_showNotificationMap[id] ?? true) &&
           (currentTotal % (1024 * 1024) < chunk.length ||
               currentTotal == totalSize)) {
-        final fileName = activeFileNames[id] ?? "File";
+        final String sizeInfo =
+            "${FileUtils.formatSize(currentTotal)} / ${FileUtils.formatSize(totalSize)}";
         NotificationService().showProgressNotification(
           id.hashCode.abs() % 100000,
-          "Downloading '$fileName'...",
-          "${(progress * 100).toStringAsFixed(1)}%",
-          progress * 100,
+          "Downloading '${activeFileNames[id] ?? 'File'}'...",
+          "$sizeInfo (${(progress * 100).toStringAsFixed(1)}%)",
+          progress,
+          transferId: id,
         );
       }
     }
   }
 
-  void _handleChallenge(Map<String, dynamic> data) async {
-    final challenge = data['challenge'];
-    final salt = data['salt'];
-    if (currentPassword != null) {
-      log("Computing Auth Response...");
-      final argon2Hash = await AuthService().computeArgon2Hash(
-        currentPassword!,
-        salt,
-      );
-      final response = AuthService().computeResponse(argon2Hash, challenge);
-
-      sendHostMessage({'type': 'auth_response', 'response': response});
-    }
-  }
-
-  void _handleDownloadEnd(Map<String, dynamic> data) async {
-    final String transferId = data['id'];
+  void _handleDownloadEnd(HostMsgDownloadEnd msg) async {
+    final transferId = msg.id;
     final sink = _activeSinks.remove(transferId);
     final tempPath = _tempPaths.remove(transferId);
-    final bool showNotif = _showNotificationMap.remove(transferId) ?? true;
-    _totalSizes.remove(transferId);
-    _receivedSizes.remove(transferId);
 
     if (sink == null || tempPath == null) {
       log("WARN: DownloadEnd for unknown transfer ID $transferId — ignoring.");
@@ -140,105 +96,107 @@ mixin RtcMessageHandler on RtcClientBase {
     final fileName = activeFileNames.remove(transferId);
     if (fileName == null) {
       log("WARN: DownloadEnd for $transferId has no registered file name.");
+      transferProgressController.add(TransferProgressFailed(
+        id: transferId,
+        error: 'No file name registered',
+      ));
       return;
     }
+
+    // Emit completion event
+    transferProgressController.add(TransferProgressComplete(
+      id: transferId,
+      finalPath: tempPath,
+      fileName: fileName,
+    ));
+
     final file = File(tempPath);
 
     String? expectedHash = _expectedHashes.remove(transferId);
-    if (data.containsKey('hash') && data['hash'] != null) {
-      expectedHash = data['hash'];
+    if (msg.hash.isNotEmpty) {
+      expectedHash = msg.hash;
     }
 
-    if (expectedHash != null) {
-      // Verify hash without loading full file into RAM
-      final stream = file.openRead();
-      final actualHash = (await sha256.bind(stream).single)
-          .toString()
-          .toLowerCase();
+    if (expectedHash != null && expectedHash.isNotEmpty) {
+      final bytes = await file.readAsBytes();
+      final digest = sha256.convert(bytes).toString();
 
-      if (actualHash != expectedHash.toLowerCase()) {
-        log(
-          "CRITICAL: Integrity failure for $fileName! Expected: $expectedHash, Got: $actualHash",
+      if (digest != expectedHash) {
+        log("FS ERROR: Hash mismatch for $fileName (Got: $digest, Expected: $expectedHash)");
+        NotificationService().showDownloadComplete(
+          transferId.hashCode.abs() % 100000,
+          "Download Failed",
+          "Integrity check failed for $fileName",
         );
-      } else {
-        log("Integrity verified for $fileName.");
+        return;
       }
-    } else {
-      log(
-        "WARN: DownloadEnd for $fileName has no hash — skipping integrity check.",
-      );
     }
 
-    // Relocate the file to its final destination
-    String? finalPath;
-    try {
-      final targetDir = _downloadTargetDirs.remove(transferId);
-      if (targetDir != null && targetDir.isNotEmpty) {
-        finalPath = "$targetDir/$fileName";
-        await _moveFile(file, finalPath);
-        log("FS: File relocated to $finalPath");
-      } else {
-        // Default to app documents if no target dir specified
-        final appDocDir = await getApplicationDocumentsDirectory();
-        finalPath = "${appDocDir.path}/$fileName";
-        await _moveFile(file, finalPath);
-        log("FS: File relocated to default path: $finalPath");
-      }
-    } catch (e) {
-      log("FS ERROR: Failed to relocate $fileName: $e");
+    // Success! Relocate to final destination
+    final targetDir = _downloadTargetDirs.remove(transferId);
+    String finalPath = tempPath;
+
+    if (targetDir != null) {
+      final destPath = "$targetDir/$fileName";
+      await _moveFile(file, destPath);
+      finalPath = destPath;
+      log("FS: Download Complete. File saved to: $finalPath");
     }
 
-    if (showNotif && finalPath != null) {
-      final notifId = transferId.hashCode.abs() % 100000;
-      await NotificationService().showDownloadComplete(
-        notifId,
+    if (_showNotificationMap.remove(transferId) ?? true) {
+      NotificationService().showDownloadComplete(
+        transferId.hashCode.abs() % 100000,
         fileName,
         finalPath,
       );
+    } else {
+      // Internal system download (e.g. album art)
+      if (transferId == _currentArtTransferId) {
+        _lastArtLocalPath = "file://$finalPath";
+        log("FS: Album Art cached: $finalPath");
+
+        // Force a UI refresh by re-broadcasting the last media update with the local path
+        // We don't need to force a sync! The Host's media loop polls every
+        // second and broadcasts a MediaUpdate whenever the position changes.
+      }
     }
 
-    if (transferId == _currentArtTransferId && finalPath != null) {
-      // The album art download just finished!
-      _lastArtLocalPath = 'file://$finalPath';
-
-      // We don't need to force a sync! The Host's media loop polls every 1
-      // second and broadcasts a MediaUpdate whenever the position changes.
-      // The next natural update will pick up `_lastArtLocalPath` and send it to the UI.
-    }
-
-    genDcMsgController.add({
-      'type': FsMsg.DownloadEnd,
+    genDcMsgController.add(HostMsgDownloadEnd.fromJson({
+      'type': 'download_end',
       'file_name': fileName,
       'temp_path': tempPath,
       'final_path': finalPath,
       'id': transferId,
       'completed': expectedHash != null,
-    });
+    } as Map<String, dynamic>));
   }
 
-  void _handleDownloadStart(Map<String, dynamic> data) {
-    final String transferId = data['id'];
-    final fileName = data['file_name'];
+  void _handleDownloadStart(HostMsgDownloadStart msg) {
+    final String transferId = msg.id;
+    final fileName = msg.fileName;
     final tempDir = globalTempDir;
     final tempFile = File('${tempDir.path}/$transferId.part');
 
     // Initialize tracking
-    _totalSizes[transferId] = data['total_size'] ?? 0;
-    _receivedSizes[transferId] = data['offset'] as int? ?? 0;
+    _totalSizes[transferId] = msg.totalSize;
+    _receivedSizes[transferId] = msg.offset;
 
     // Show initial notification if requested
     if (_showNotificationMap[transferId] ?? true) {
+      final String sizeInfo =
+          "${FileUtils.formatSize(_receivedSizes[transferId] ?? 0)} / ${FileUtils.formatSize(_totalSizes[transferId] ?? 0)}";
       NotificationService().showProgressNotification(
         transferId.hashCode.abs() % 100000,
         "Downloading '$fileName'...",
-        "0.0%",
+        "$sizeInfo (0.0%)",
         0.0,
+        transferId: transferId,
       );
     }
 
     // For resume-aware downloads, the host tells us what offset it started from.
     // We open the file in append mode if resuming, or create fresh.
-    final hostOffset = data['offset'] as int? ?? 0;
+    final hostOffset = msg.offset;
     if (hostOffset > 0 && tempFile.existsSync()) {
       // Resuming — append to existing partial file
       _activeSinks[transferId] = tempFile.openWrite(mode: FileMode.append);
@@ -251,115 +209,32 @@ mixin RtcMessageHandler on RtcClientBase {
     _tempPaths[transferId] = tempFile.path;
     activeFileNames[transferId] = fileName;
 
-    if (data.containsKey('hash') && data['hash'] != null) {
-      _expectedHashes[transferId] = data['hash'];
+    if (msg.hash != null) {
+      _expectedHashes[transferId] = msg.hash!;
     }
-    genDcMsgController.add(data);
+    genDcMsgController.add(msg);
   }
 
-  void _handleHostResponse(Map<String, dynamic> data) {
-    genDcMsgController.add(data);
+  void _handleHostResponse(HostMsgResponse msg) {
+    genDcMsgController.add(msg);
 
-    if (data['data'] != null) {
-      if (data['data']['response'] != DcMsg.Pong) {
-        log("Host Response: $data");
+    if (msg.data != null) {
+      if (msg.data is Map && msg.data['response'] != 'Pong') {
+        log("Host Response: ${msg.data}");
       }
     }
   }
 
-  void _handleJsonMessage(Map<String, dynamic> data) async {
-    final strD = data.toString();
-    if (!(strD.contains(DcMsg.Telemetry) ||
-        strD.contains('art_data') ||
-        strD.contains(DcMsg.TogglePlayPause) ||
-        strD.contains(DcMsg.Pong))) {
-      log("RAW_RX: ${jsonEncode(data)}");
-    }
-    final type = data['type'];
+  void _handleMediaUpdate(HostMsgMediaUpdate msg) async {
+    final artStr = msg.artData;
+    String? localArtPath;
 
-    switch (type) {
-      case FsMsg.DownloadStart:
-        _handleDownloadStart(data);
-        break;
-
-      case FsMsg.DownloadEnd:
-        _handleDownloadEnd(data);
-        break;
-
-      case DcMsg.Challenge:
-        _handleChallenge(data);
-        break;
-
-      case DcMsg.AuthSuccess:
-        _handleAuthSuccess(data);
-        break;
-
-      case DcMsg.AuthFailed:
-        _handleAuthFailed(data);
-        break;
-
-      case MediaDCMessage.MediaUpdate:
-        _handleMediaUpdate(data);
-        break;
-
-      case DcMsg.Notification:
-        notificationController.add(data);
-        break;
-
-      case DcMsg.HostResponse:
-        _handleHostResponse(data);
-        break;
-
-      case DcMsg.LlmToken:
-        genDcMsgController.add(data);
-        break;
-
-      case DcMsg.Telemetry:
-        final cpu = data['cpu_load']?.toStringAsFixed(1);
-        final usedMem = ((data['used_mem'] ?? 0) / 1024 / 1024 / 1024)
-            .toStringAsFixed(1);
-        final cpuTemp = data['cpu_temp']?.toStringAsFixed(1) ?? '0.0';
-
-        // Use standard Unicode emojis for the notification body
-        final cpuVal = data['cpu_load'] as double? ?? 0.0;
-        final statusIcon = cpuVal > 80 ? '🔥' : '🟢';
-
-        updateBackgroundService(
-          text: "$statusIcon: $cpu% | 💾 : $usedMem GB | 🌡️ $cpuTemp°C",
-        );
-        genDcMsgController.add(data);
-        break;
-
-      case FsMsg.SyncSnapshot:
-        log("FS_SYNC: Received snapshot for ${data['root_path']}");
-        syncSnapshotController.add(data);
-        break;
-
-      case FsMsg.TransferAck:
-      case FsMsg.TransferComplete:
-      case FsMsg.TransferCancel:
-        genDcMsgController.add(data);
-        break;
-
-      default:
-        log("Unknown host message type: $type");
-    }
-  }
-
-  void _handleMediaUpdate(Map<String, dynamic> data) async {
-    MediaUpdate media = MediaUpdate.fromJson(data);
-    // log(data.toString());
-
-    final artStr = media.artData;
     if (artStr != null && artStr.startsWith('frankn-fs://')) {
       if (artStr == _lastArtSig) {
         // Signature matches. It's the same song.
         if (_lastArtLocalPath != null) {
-          // Download finished previously, inject the local path for AudioService
-          data['art_data'] = _lastArtLocalPath;
-        } else {
-          // It's still downloading right now. Hide the path so AudioService doesn't crash.
-          data.remove('art_data');
+          // Download finished previously
+          localArtPath = _lastArtLocalPath;
         }
       } else {
         // New signature detected (song changed).
@@ -389,25 +264,146 @@ mixin RtcMessageHandler on RtcClientBase {
         _expectedHashes[uuid] = ''; // Ignore hash verification
         _showNotificationMap[uuid] = false; // Silent download
 
-        data.remove('art_data'); // Hide from UI until download completes
-
         // 4. Initiate download
         sendToChannel(
           fsDC,
-          jsonEncode({
-            'type': FsMsg.DownloadInit,
-            'id': uuid,
-            'path': remotePath,
-            'resume_offset': 0,
-          }),
+          jsonEncode(ClientMsgDownloadInit(
+            id: uuid,
+            path: remotePath,
+            resumeOffset: 0,
+          ).toJson()),
           "FS",
         );
       }
-    } else if (artStr != null && !artStr.startsWith('http')) {
-      data.remove('art_data'); // Fallback for legacy host messages
     }
 
-    genDcMsgController.add(data);
+    final media = msg;
+
+    franknAudioHandlerInstance?.updateMediaState(
+      isPlaying: media.playing,
+      title: media.metadata.contains(" - ")
+          ? media.metadata.split(" - ")[0]
+          : media.metadata,
+      artist: media.metadata.contains(" - ")
+          ? media.metadata.split(" - ").sublist(1).join(" - ")
+          : "Unknown Artist",
+      playerName: media.playerName,
+      position: Duration(microseconds: media.position.toInt()),
+      duration: Duration(microseconds: media.length.toInt()),
+      artUri: localArtPath != null
+          ? Uri.parse(localArtPath)
+          : (media.artData != null && media.artData!.startsWith('http'))
+              ? Uri.parse(media.artData!)
+              : null,
+      volume: media.volume,
+    );
+
+    genDcMsgController.add(media);
+  }
+
+  void _handleJsonMessage(Map<String, dynamic> data) async {
+    try {
+      final strD = data.toString();
+      if (!(strD.contains('telemetry') ||
+          strD.contains('art_data') ||
+          strD.contains('toggle_play_pause') ||
+          strD.contains('Pong'))) {
+        log("RAW_RX: ${jsonEncode(data)}");
+      }
+
+      final msg = HostMessage.fromJson(data);
+
+      switch (msg) {
+        case HostMsgDownloadStart():
+          _handleDownloadStart(msg);
+        case HostMsgDownloadEnd():
+          _handleDownloadEnd(msg);
+        case HostMsgChallenge():
+          _handleChallenge(msg);
+        case HostMsgAuthSuccess():
+          _handleAuthSuccess(msg);
+        case HostMsgAuthFailed():
+          _handleAuthFailed(msg);
+        case HostMsgMediaUpdate():
+          _handleMediaUpdate(msg);
+        case HostMsgNotification():
+          notificationController.add(msg);
+        case HostMsgResponse():
+          _handleHostResponse(msg);
+        case HostMsgLlmToken():
+          genDcMsgController.add(msg);
+        case HostMsgTelemetry():
+          final cpu = msg.cpuLoad.toStringAsFixed(1);
+          final usedMem = (msg.usedMem / 1024 / 1024 / 1024).toStringAsFixed(1);
+          final cpuTemp = msg.cpuTemp.toStringAsFixed(1);
+
+          final statusIcon = msg.cpuLoad > 80 ? '🔥' : '🟢';
+
+          updateBackgroundService(
+            text: "$statusIcon: $cpu% | 💾 : $usedMem GB | 🌡️ $cpuTemp°C",
+          );
+          genDcMsgController.add(msg);
+        case HostMsgSyncSnapshot():
+          log("FS_SYNC: Received snapshot for ${msg.rootPath}");
+          syncSnapshotController.add(msg);
+        case HostMsgTransferAck():
+        case HostMsgTransferComplete():
+          genDcMsgController.add(msg);
+        case HostMsgTransferCancel():
+          final id = msg.id;
+          final sink = _activeSinks.remove(id);
+          sink?.close();
+          final path = _tempPaths.remove(id);
+          if (path != null) {
+            final file = File(path);
+            if (file.existsSync()) file.deleteSync();
+          }
+          // Emit a failed event so the UI stops loading
+          transferProgressController.add(
+            TransferProgressFailed(id: id, error: 'Transfer cancelled by host'),
+          );
+          genDcMsgController.add(msg);
+        case HostMsgUnknown():
+          log("Unknown host message type: ${msg.type}");
+      }
+    } catch (e, stack) {
+      log("PARSE ERROR: $e\n$stack");
+    }
+  }
+
+  @override
+  void handleHostMessage(dynamic rawData) {
+    if (rawData is String) {
+      try {
+        final data = jsonDecode(rawData);
+        if (data is Map) {
+          _handleJsonMessage(Map<String, dynamic>.from(data));
+        } else {
+          log("RX Warn: Decoded JSON is not a Map: $data");
+        }
+      } catch (e) {
+        log("RX Error (JSON): $e");
+      }
+    } else if (rawData is Uint8List) {
+      // 1. Check for file transfer magic byte
+      if (rawData.isNotEmpty && rawData[0] == 0x01) {
+        _handleBinaryChunk(rawData);
+        return;
+      }
+
+      // 2. Fallback: Attempt to decode as UTF-8 JSON
+      try {
+        final text = utf8.decode(rawData);
+        if (text.startsWith('{')) {
+          final data = jsonDecode(text);
+          if (data is Map) {
+            _handleJsonMessage(Map<String, dynamic>.from(data));
+          }
+        }
+      } catch (_) {
+        // If not UTF-8 or not JSON, ignore (legacy/malformed)
+      }
+    }
   }
 
   Future<void> _moveFile(File source, String destPath) async {

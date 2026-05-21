@@ -28,14 +28,15 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 
 import 'package:frankn/main.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/services/auth_service.dart';
+import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/settings_service.dart';
 
@@ -68,7 +69,7 @@ abstract class RtcClientBase {
 
   /// Sends a data channel command to the host with proper authentication.
   /// Automatically routes to the appropriate WebRTC channel based on command type.
-  void sendDcMsg(Map<String, dynamic> cmd);
+  void sendDcMsg(DcMsg cmd);
 
   /// Sends a raw input message over the frankn_input channel.
   void sendInputMsg(Map<String, dynamic> msg);
@@ -242,21 +243,27 @@ abstract class RtcClientBase {
 
   /// Controller for command responses from host.
   /// Streams JSON responses to command executions.
-  StreamController<Map<String, dynamic>> get genDcMsgController;
+  StreamController<HostMessage> get genDcMsgController;
 
   /// Controller for system notifications from host.
   /// Receives D-Bus notifications that are displayed on the mobile device.
-  StreamController<Map<String, dynamic>> get notificationController;
+  StreamController<HostMsgNotification> get notificationController;
 
   /// Controller for SSH binary data from host.
   StreamController<Uint8List> get sshDataController;
 
   /// Controller for folder sync snapshot metadata.
-  StreamController<Map<String, dynamic>> get syncSnapshotController;
+  StreamController<HostMsgSyncSnapshot> get syncSnapshotController;
 
   /// Controller for host connection state changes.
   /// Used by UI to update connection status indicators.
   StreamController<HostConnectionState> get hostStateController;
+
+  /// Stream of file transfer progress updates.
+  Stream<TransferProgressEvent> get transferProgressStream;
+
+  /// Controller for file transfer progress updates.
+  StreamController<TransferProgressEvent> get transferProgressController;
 }
 
 /// Concrete implementation of the RTC client using mixin composition.
@@ -269,7 +276,7 @@ abstract class RtcClientBase {
 ///
 /// The singleton pattern ensures all parts of the app use the same connection instance.
 class RtcClient extends RtcClientBase
-    with RtcMessageHandler, RtcSignaling, RtcConnection, RtcCommands {
+    with RtcSignaling, RtcConnection, RtcCommands, RtcMessageHandler {
   /// Singleton instance - only one RTC client exists per app instance.
   static final RtcClient _instance = RtcClient._internal();
 
@@ -397,16 +404,16 @@ class RtcClient extends RtcClientBase
   /// Broadcast controller for responses to commands sent to the host.
   /// Includes file operations, system commands, and media controls.
   @override
-  final StreamController<Map<String, dynamic>> genDcMsgController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get genDcMsgStream => genDcMsgController.stream;
+  final StreamController<HostMessage> genDcMsgController =
+      StreamController<HostMessage>.broadcast();
+  Stream<HostMessage> get genDcMsgStream => genDcMsgController.stream;
 
   /// Broadcast controller for system notifications from the host.
   /// Receives D-Bus notifications that are displayed on the mobile device.
   @override
-  final StreamController<Map<String, dynamic>> notificationController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get notificationStream =>
+  final StreamController<HostMsgNotification> notificationController =
+      StreamController<HostMsgNotification>.broadcast();
+  Stream<HostMsgNotification> get notificationStream =>
       notificationController.stream;
 
   @override
@@ -415,10 +422,17 @@ class RtcClient extends RtcClientBase
   Stream<Uint8List> get sshDataStream => sshDataController.stream;
 
   @override
-  final StreamController<Map<String, dynamic>> syncSnapshotController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get syncSnapshotStream =>
+  final StreamController<HostMsgSyncSnapshot> syncSnapshotController =
+      StreamController<HostMsgSyncSnapshot>.broadcast();
+  Stream<HostMsgSyncSnapshot> get syncSnapshotStream =>
       syncSnapshotController.stream;
+
+  @override
+  final StreamController<TransferProgressEvent> transferProgressController =
+      StreamController<TransferProgressEvent>.broadcast();
+  @override
+  Stream<TransferProgressEvent> get transferProgressStream =>
+      transferProgressController.stream;
 
   // ========== BASE IMPLEMENTATION ==========
 
@@ -473,9 +487,9 @@ class RtcClient extends RtcClientBase
   @override
   void sendToChannel(RTCDataChannel? channel, String msg, String label) {
     // Only log non-noisy messages (skip ping, telemetry, and file chunks)
-    if (!msg.contains(DcMsg.Ping) &&
-        !msg.contains(DcMsg.Telemetry) &&
-        !msg.contains(DcMsg.TogglePlayPause) &&
+    if (!msg.contains('ping') &&
+        !msg.contains('telemetry') &&
+        !msg.contains('toggle_play_pause') &&
         !msg.contains(InputSig.MouseMove) &&
         !msg.contains(InputSig.MouseClick) &&
         !msg.contains(InputSig.Scroll) &&

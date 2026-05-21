@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/widgets/dohee_chat/chat_message.dart';
@@ -124,7 +125,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _inputController.dispose();
     _scrollController.dispose();
     _throttleTimer?.cancel();
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.LlmStop});
+    widget.client.sendDcMsg(const DcMsgLlmStop());
     super.dispose();
   }
 
@@ -134,33 +135,31 @@ class _ChatScreenState extends State<ChatScreen> {
     _currentModel = widget.modelPath;
     _startModel(_currentModel);
 
-    _aiSub = widget.client.aiStream.listen((data) {
-      if (data['type'] == DcMsg.LlmToken || data['type'] == 'llm_token') {
-        _handleToken(data);
-      }
+    _aiSub = widget.client.aiStream.listen((msg) {
+      _handleToken(msg);
     });
 
-    _cmdSub = widget.client.genDcMsgStream.listen((resp) {
+    _cmdSub = widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      if (resp['type'] == 'response') {
-        final data = resp['data'];
-        if (data != null && data['models'] != null) {
-          setState(() {
-            _availableModels = (data['models'] as List)
-                .map((m) => m['name'] as String)
-                .toList();
-          });
-        } else if (data != null && data['chats'] != null) {
-          _availableChats.value = data['chats'];
-        } else if (data != null &&
-            data['id'] != null &&
-            data['messages'] != null) {
-          _loadChatData(data);
+      if (msg is HostMsgResponse) {
+        final data = msg.data;
+        if (data != null && data is Map) {
+          if (data['models'] != null) {
+            setState(() {
+              _availableModels = (data['models'] as List)
+                  .map((m) => m['name'] as String)
+                  .toList();
+            });
+          } else if (data['chats'] != null) {
+            _availableChats.value = data['chats'];
+          } else if (data['id'] != null && data['messages'] != null) {
+            _loadChatData(Map<String, dynamic>.from(data));
+          }
         }
       }
     });
 
-    widget.client.sendDcMsg({DcMsg.Key: 'list_models'});
+    widget.client.sendDcMsg(const DcMsgListModels());
   }
 
   Widget _buildConnectionStatus() {
@@ -322,10 +321,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                       onTap: () {
-                        widget.client.sendDcMsg({
-                          DcMsg.Key: DcMsg.LlmLoadChat,
-                          "chat_id": chat['id'],
-                        });
+                        widget.client.sendDcMsg(DcMsgLlmLoadChat(
+                          chatId: chat['id'],
+                        ));
                         Navigator.pop(context);
                       },
                       trailing: IconButton(
@@ -335,10 +333,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           size: 18,
                         ),
                         onPressed: () {
-                          widget.client.sendDcMsg({
-                            DcMsg.Key: DcMsg.LlmDeleteChat,
-                            "chat_id": chat['id'],
-                          });
+                          widget.client.sendDcMsg(DcMsgLlmDeleteChat(
+                            chatId: chat['id'],
+                          ));
                           // Optimistically remove
                           final newChats = List<dynamic>.from(
                             _availableChats.value,
@@ -464,9 +461,9 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _handleToken(Map<String, dynamic> data) {
-    final token = data['token'] as String;
-    final isFinal = data['is_final'] as bool? ?? false;
+  void _handleToken(HostMsgLlmToken msg) {
+    final token = msg.token;
+    final isFinal = msg.isFinal;
 
     if (_isStreaming == false && !isFinal) {
       setState(() => _isStreaming = true);
@@ -568,17 +565,16 @@ class _ChatScreenState extends State<ChatScreen> {
       _isStreaming = true;
     });
 
-    widget.client.sendDcMsg({
-      DcMsg.Key: DcMsg.LlmChat,
-      "message": text,
-      "system_prompt": _systemPrompt,
-      "chat_id": _chatId,
-    });
+    widget.client.sendDcMsg(DcMsgLlmChat(
+      message: text,
+      systemPrompt: _systemPrompt,
+      chatId: _chatId,
+    ));
     _scrollToBottomIfNeeded(force: true);
   }
 
   void _showHistory() {
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.LlmListChats});
+    widget.client.sendDcMsg(const DcMsgLlmListChats());
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF0F0F0F),
@@ -727,7 +723,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _startModel(String path) {
     setState(() => _isModelLoading = true);
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.LlmStart, "model_path": path});
+    widget.client.sendDcMsg(DcMsgLlmStart(modelPath: path));
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted) {
         setState(() {
@@ -744,7 +740,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _switchModel(String newPath) {
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.LlmStop});
+    widget.client.sendDcMsg(const DcMsgLlmStop());
     setState(() {
       _currentModel = newPath;
       _messages.add(

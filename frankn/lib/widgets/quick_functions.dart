@@ -9,6 +9,7 @@ import 'package:frankn/screens/trackpad_screen.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/widgets/animated_op_btn.dart';
 import 'package:frankn/widgets/dohee_chat/model_selector_dialog.dart';
 import 'package:frankn/widgets/neural_deck_player.dart';
@@ -23,22 +24,21 @@ class QuickFunction extends StatefulWidget {
 
 class _QuickFunctionState extends State<QuickFunction> {
   bool _mediaIsPlaying = false;
-  String _mediaMetadata = "No Media Playing";
-  String _mediaArtist = "Idle";
+  String? _mediaMetadata;
+  String? _mediaArtist;
   double _mediaPosition = 0.0;
   double _mediaLength = 1.0;
-  String _playerName = "IDLE.INSTANCE";
+  String? _playerName;
   String? _artData;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    widget.client.log("Logggggin media update from quick functions...");
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          l10n.neuralDeck.toUpperCase(),
+          l10n.neuralDeck,
           style: const TextStyle(
             color: Colors.white24,
             fontSize: 10,
@@ -50,16 +50,16 @@ class _QuickFunctionState extends State<QuickFunction> {
         NeuralDeckPlayer(
           client: widget.client,
           mediaIsPlaying: _mediaIsPlaying,
-          mediaMetadata: _mediaMetadata,
-          mediaArtist: _mediaArtist,
+          mediaMetadata: _mediaMetadata ?? l10n.noMediaPlaying,
+          mediaArtist: _mediaArtist ?? l10n.idle,
           mediaPosition: _mediaPosition,
           mediaLength: _mediaLength,
-          playerName: _playerName,
+          playerName: _playerName ?? l10n.idleInstance,
           artData: _artData,
         ),
         const SizedBox(height: 32),
         Text(
-          l10n.systemOperations.toUpperCase(),
+          l10n.systemOperations,
           style: const TextStyle(
             color: Colors.white24,
             fontSize: 10,
@@ -77,12 +77,11 @@ class _QuickFunctionState extends State<QuickFunction> {
   @override
   void initState() {
     super.initState();
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetMediaStatus});
-    widget.client.genDcMsgStream.listen((resp) {
+    widget.client.sendDcMsg(const DcMsgGetMediaStatus());
+    widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-      final mediamsg = resp['type'] == MediaDCMessage.MediaUpdate
-          ? MediaUpdate.fromJson(resp)
-          : null;
+      final l10n = AppLocalizations.of(context)!;
+      final mediamsg = msg is HostMsgMediaUpdate ? msg : null;
       if (mediamsg == null) {
         return;
       } else {
@@ -94,11 +93,11 @@ class _QuickFunctionState extends State<QuickFunction> {
             _mediaArtist = parts.sublist(1).join(" - ");
           } else {
             _mediaMetadata = rawMetadata;
-            _mediaArtist = "Unknown Artist";
+            _mediaArtist = l10n.unknownArtist;
           }
           _playerName = mediamsg.playerName;
-          if (_mediaArtist == "Unknown Artist") {
-            _mediaArtist = _playerName.split('.').last;
+          if (_mediaArtist == l10n.unknownArtist) {
+            _mediaArtist = _playerName?.split('.').last;
           }
           _artData = mediamsg.artData;
           _mediaPosition = mediamsg.position;
@@ -146,7 +145,7 @@ class _QuickFunctionState extends State<QuickFunction> {
             ),
           );
         }),
-        _opBtn("Dohee Chat", Icons.auto_awesome, AppColors.neonPink, () {
+        _opBtn(l10n.doheeChat, Icons.auto_awesome, AppColors.neonPink, () {
           _showNeuralChatDialog(context, widget.client);
         }),
         _opBtn(l10n.processes, Icons.show_chart, AppColors.textGrey, () {

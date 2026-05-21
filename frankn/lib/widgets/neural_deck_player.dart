@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/widgets/volume_mixer_dialog.dart';
 import 'package:frankn/widgets/player_selector_dialog.dart';
 
@@ -58,10 +59,9 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
     if (target < 0) target = 0;
     if (target > widget.mediaLength) target = widget.mediaLength;
 
-    widget.client.sendDcMsg({
-      DcMsg.Key: DcMsg.Seek,
-      "position": target.toInt(),
-    });
+    widget.client.sendDcMsg(DcMsgSeek(
+      position: target.toInt(),
+    ));
   }
 
   Widget _buildArtImage(String data, {BoxFit fit = BoxFit.contain}) {
@@ -98,7 +98,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
       onTapDown: (_) => setState(() => _isPlayPressed = true),
       onTapUp: (_) {
         setState(() => _isPlayPressed = false);
-        widget.client.sendDcMsg({DcMsg.Key: DcMsg.TogglePlayPause});
+        widget.client.sendDcMsg(const DcMsgTogglePlayPause());
       },
       onTapCancel: () => setState(() => _isPlayPressed = false),
       child: AnimatedScale(
@@ -145,8 +145,6 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    widget.client.log("$widget.mediaIsPlaying");
-
     return MouseRegion(
       onEnter: (_) => setState(() => _isHoveringCard = true),
       onExit: (_) => setState(() => _isHoveringCard = false),
@@ -326,9 +324,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                 icon: Icons.skip_previous_rounded,
                                 size: 28,
                                 color: Colors.white,
-                                onTap: () => widget.client.sendDcMsg({
-                                  DcMsg.Key: DcMsg.PlayPreviousTrack,
-                                }),
+                                onTap: () => widget.client.sendDcMsg(const DcMsgPlayPreviousTrack()),
                               ),
                               const SizedBox(width: 16),
                               _playBtn(),
@@ -337,9 +333,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                 icon: Icons.skip_next,
                                 size: 28,
                                 color: Colors.white,
-                                onTap: () => widget.client.sendDcMsg({
-                                  DcMsg.Key: DcMsg.PlayNextTrack,
-                                }),
+                                onTap: () => widget.client.sendDcMsg(const DcMsgPlayNextTrack()),
                               ),
                             ],
                           ),

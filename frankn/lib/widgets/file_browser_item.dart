@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/cyber_card.dart';
 import 'package:frankn/utils/cyber_button.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class FileBrowserItem extends StatelessWidget {
-  final Map<String, dynamic> entry;
+  final RemoteEntry entry;
   final bool isGrid;
   final String fullPath;
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final Function(String) onDelete;
-  final Function(String) onDownload;
+  final Function(String, int) onDownload;
   final Function(String, String) onEdit;
   final Function(String, String) onViewImage;
 
@@ -31,8 +32,9 @@ class FileBrowserItem extends StatelessWidget {
   });
 
   void _showContextMenu(BuildContext context) {
-    final bool isDir = entry['is_dir'] ?? false;
-    final String name = entry['name'] ?? 'UNKNOWN';
+    final bool isDir = entry.isDir;
+    final String name = entry.name;
+    final int size = entry.size;
     final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
@@ -73,7 +75,7 @@ class FileBrowserItem extends StatelessWidget {
                         isSmall: true,
                         onPressed: () {
                           Navigator.pop(context);
-                          onDownload(fullPath);
+                          onDownload(fullPath, size);
                         },
                       ),
                     ),
@@ -117,13 +119,13 @@ class FileBrowserItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDir = entry['is_dir'] ?? false;
-    final String name = entry['name'] ?? 'UNKNOWN';
+    final bool isDir = entry.isDir;
+    final String name = entry.name;
     final l10n = AppLocalizations.of(context)!;
     final String sizeStr = isDir
         ? l10n.directory.toUpperCase()
-        : FileUtils.formatSize(entry['size'] as int);
-    final String modified = entry['modified'] ?? "00:00:00";
+        : FileUtils.formatSize(entry.size);
+    final String modified = entry.modified;
     final Color color = isDir ? AppColors.cyberYellow : AppColors.neonCyan;
 
     return Padding(
@@ -166,7 +168,7 @@ class FileBrowserItem extends StatelessWidget {
           child: Icon(
             isSelected
                 ? Icons.check
-                : (isDirIcon(entry)
+                : (entry.isDir
                     ? Icons.folder_outlined
                     : Icons.insert_drive_file_outlined),
             color: isSelected ? AppColors.neonCyan : color,
@@ -214,7 +216,7 @@ class FileBrowserItem extends StatelessWidget {
           child: Icon(
             isSelected
                 ? Icons.check
-                : (isDirIcon(entry)
+                : (entry.isDir
                     ? Icons.folder_outlined
                     : Icons.insert_drive_file_outlined),
             color: isSelected ? AppColors.neonCyan : color,
@@ -281,5 +283,5 @@ class FileBrowserItem extends StatelessWidget {
     );
   }
 
-  bool isDirIcon(Map<String, dynamic> entry) => entry['is_dir'] ?? false;
+  bool isDirIcon(RemoteEntry entry) => entry.isDir;
 }

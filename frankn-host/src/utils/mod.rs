@@ -39,7 +39,6 @@ pub enum ClientMessage {
         command: DcMsg,
         params: Option<serde_json::Value>,
         auth_token: String,
-        timestamp: u64,
     },
 
     // ── New resume-aware transfer protocol ──
@@ -148,6 +147,13 @@ pub enum HostMessage {
     TransferComplete {
         id: String,
         hash: String,
+        timestamp: u64,
+    },
+
+    /// Transfer cancelled by client.
+    #[serde(rename = "transfer_cancel")]
+    TransferCancel {
+        id: String,
         timestamp: u64,
     },
 

@@ -41,6 +41,12 @@ class SettingsService {
     _prefs = await SharedPreferences.getInstance();
   }
 
+  /// Reloads the preferences from disk.
+  /// Useful for picking up changes made in other isolates.
+  Future<void> reload() async {
+    await _prefs.reload();
+  }
+
   // ========== ACCESSORS ==========
 
   /// Returns the manually selected LLM provider.

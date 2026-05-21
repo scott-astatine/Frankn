@@ -216,7 +216,7 @@ pub async fn set_active_player(
     }
 }
 
-pub async fn get_media_status(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn get_media_status(_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     #[cfg(target_os = "linux")]
     {
         match async {

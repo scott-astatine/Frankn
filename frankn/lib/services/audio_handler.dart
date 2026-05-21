@@ -1,17 +1,20 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 late AudioHandler audioHandler;
-late FranknAudioHandler franknAudioHandler;
+FranknAudioHandler? _franknAudioHandler;
+
+FranknAudioHandler? get franknAudioHandlerInstance => _franknAudioHandler;
 
 Future<void> initAudioService() async {
   audioHandler = await AudioService.init(
     builder: () {
-      franknAudioHandler = FranknAudioHandler();
+      _franknAudioHandler = FranknAudioHandler();
       print("Initializing Audio Service.");
-      return franknAudioHandler;
+      return _franknAudioHandler!;
     },
     config: AudioServiceConfig(
       androidNotificationChannelId: 'com.astatine.frankn.channel.audio',
@@ -67,17 +70,15 @@ class FranknAudioHandler extends BaseAudioHandler {
       if (newPhoneVolume > _lastPhoneVolume) {
         // Volume Up knob
         _currentHostVolume = (_currentHostVolume + 0.05).clamp(0.0, 1.5);
-        _client.sendDcMsg({
-          DcMsg.Key: DcMsg.SetVolume,
-          "level": _currentHostVolume,
-        });
+        _client.sendDcMsg(DcMsgSetVolume(
+          level: _currentHostVolume,
+        ));
       } else if (newPhoneVolume < _lastPhoneVolume) {
         // Volume Down knob
         _currentHostVolume = (_currentHostVolume - 0.05).clamp(0.0, 1.5);
-        _client.sendDcMsg({
-          DcMsg.Key: DcMsg.SetVolume,
-          "level": _currentHostVolume,
-        });
+        _client.sendDcMsg(DcMsgSetVolume(
+          level: _currentHostVolume,
+        ));
       }
       _lastPhoneVolume = newPhoneVolume;
     });
@@ -135,28 +136,28 @@ class FranknAudioHandler extends BaseAudioHandler {
   @override
   Future<void> play() async {
     if (_client.currentHostState == HostConnectionState.authenticated) {
-      _client.sendDcMsg({DcMsg.Key: DcMsg.TogglePlayPause});
+      _client.sendDcMsg(const DcMsgTogglePlayPause());
     }
   }
 
   @override
   Future<void> pause() async {
     if (_client.currentHostState == HostConnectionState.authenticated) {
-      _client.sendDcMsg({DcMsg.Key: DcMsg.TogglePlayPause});
+      _client.sendDcMsg(const DcMsgTogglePlayPause());
     }
   }
 
   @override
   Future<void> skipToNext() async {
     if (_client.currentHostState == HostConnectionState.authenticated) {
-      _client.sendDcMsg({DcMsg.Key: DcMsg.PlayNextTrack});
+      _client.sendDcMsg(const DcMsgPlayNextTrack());
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
     if (_client.currentHostState == HostConnectionState.authenticated) {
-      _client.sendDcMsg({DcMsg.Key: DcMsg.PlayPreviousTrack});
+      _client.sendDcMsg(const DcMsgPlayPreviousTrack());
     }
   }
 
@@ -164,7 +165,7 @@ class FranknAudioHandler extends BaseAudioHandler {
   Future<void> fastForward() async {
     if (_client.currentHostState == HostConnectionState.authenticated) {
       final newPos = playbackState.value.position.inMicroseconds + 10000000;
-      _client.sendDcMsg({DcMsg.Key: DcMsg.Seek, "position": newPos});
+      _client.sendDcMsg(DcMsgSeek(position: newPos));
     }
   }
 
@@ -172,20 +173,18 @@ class FranknAudioHandler extends BaseAudioHandler {
   Future<void> rewind() async {
     if (_client.currentHostState == HostConnectionState.authenticated) {
       final newPos = playbackState.value.position.inMicroseconds - 10000000;
-      _client.sendDcMsg({
-        DcMsg.Key: DcMsg.Seek,
-        "position": newPos < 0 ? 0 : newPos,
-      });
+      _client.sendDcMsg(DcMsgSeek(
+        position: newPos < 0 ? 0 : newPos,
+      ));
     }
   }
 
   @override
   Future<void> seek(Duration position) async {
     if (_client.currentHostState == HostConnectionState.authenticated) {
-      _client.sendDcMsg({
-        DcMsg.Key: DcMsg.Seek,
-        "position": position.inMicroseconds,
-      });
+      _client.sendDcMsg(DcMsgSeek(
+        position: position.inMicroseconds,
+      ));
     }
   }
 }

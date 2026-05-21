@@ -619,6 +619,408 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Terminate'**
   String get terminate;
+
+  /// No description provided for @folderSynchronization.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder Synchronization'**
+  String get folderSynchronization;
+
+  /// No description provided for @folderSyncComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder Sync Complete'**
+  String get folderSyncComplete;
+
+  /// No description provided for @folderSyncCompleteNoChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder Sync Complete: No Changes'**
+  String get folderSyncCompleteNoChanges;
+
+  /// No description provided for @fullStorageAccessRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Full Storage Access Required'**
+  String get fullStorageAccessRequired;
+
+  /// No description provided for @establishNewLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Establish New Link'**
+  String get establishNewLink;
+
+  /// No description provided for @modifyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Modify Link'**
+  String get modifyLink;
+
+  /// No description provided for @localDir.
+  ///
+  /// In en, this message translates to:
+  /// **'Local Directory'**
+  String get localDir;
+
+  /// No description provided for @notSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Selected'**
+  String get notSelected;
+
+  /// No description provided for @remoteDir.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote Directory'**
+  String get remoteDir;
+
+  /// No description provided for @syncStrategy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync Strategy'**
+  String get syncStrategy;
+
+  /// No description provided for @bidirectionalMirror.
+  ///
+  /// In en, this message translates to:
+  /// **'Bidirectional Mirror'**
+  String get bidirectionalMirror;
+
+  /// No description provided for @singleSourceBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Single Source Backup'**
+  String get singleSourceBackup;
+
+  /// No description provided for @clientIsSourceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Client Is Source'**
+  String get clientIsSourceLabel;
+
+  /// No description provided for @syncInterval.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync Interval'**
+  String get syncInterval;
+
+  /// No description provided for @everyNMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {minutes} Minutes'**
+  String everyNMinutes(int minutes);
+
+  /// No description provided for @everyHour.
+  ///
+  /// In en, this message translates to:
+  /// **'Every Hour'**
+  String get everyHour;
+
+  /// No description provided for @every6Hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Every 6 Hours'**
+  String get every6Hours;
+
+  /// No description provided for @onceADay.
+  ///
+  /// In en, this message translates to:
+  /// **'Once A Day'**
+  String get onceADay;
+
+  /// No description provided for @update.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get update;
+
+  /// No description provided for @localEndpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Local Endpoint'**
+  String get localEndpoint;
+
+  /// No description provided for @remoteEndpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote Endpoint'**
+  String get remoteEndpoint;
+
+  /// No description provided for @mirror.
+  ///
+  /// In en, this message translates to:
+  /// **'Mirror'**
+  String get mirror;
+
+  /// No description provided for @backup.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup'**
+  String get backup;
+
+  /// No description provided for @lastSyncedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Last Synced: {time}'**
+  String lastSyncedLabel(String time);
+
+  /// No description provided for @triggerSyncNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger Sync Now'**
+  String get triggerSyncNow;
+
+  /// No description provided for @noSyncPairsEstablished.
+  ///
+  /// In en, this message translates to:
+  /// **'No Sync Pairs Established'**
+  String get noSyncPairsEstablished;
+
+  /// No description provided for @inSync.
+  ///
+  /// In en, this message translates to:
+  /// **'In Sync'**
+  String get inSync;
+
+  /// No description provided for @changesPending.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} Changes Pending'**
+  String changesPending(int count);
+
+  /// No description provided for @verifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying...'**
+  String get verifying;
+
+  /// No description provided for @english.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get english;
+
+  /// No description provided for @korean.
+  ///
+  /// In en, this message translates to:
+  /// **'Korean'**
+  String get korean;
+
+  /// No description provided for @pixels.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} PX'**
+  String pixels(int size);
+
+  /// No description provided for @multiplier.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}X Multiplier'**
+  String multiplier(double value);
+
+  /// No description provided for @multiplierValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}X'**
+  String multiplierValue(double value);
+
+  /// No description provided for @renameHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename Host'**
+  String get renameHost;
+
+  /// No description provided for @reinitializingNeuralLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-initializing Neural Link to new server...'**
+  String get reinitializingNeuralLink;
+
+  /// No description provided for @invalidUrlFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid URL format. Must start with ws:// or wss://'**
+  String get invalidUrlFormat;
+
+  /// No description provided for @defaultLlm.
+  ///
+  /// In en, this message translates to:
+  /// **'Default LLM'**
+  String get defaultLlm;
+
+  /// No description provided for @unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get unknown;
+
+  /// No description provided for @notSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Set'**
+  String get notSet;
+
+  /// No description provided for @uiDefaults.
+  ///
+  /// In en, this message translates to:
+  /// **'UI Defaults'**
+  String get uiDefaults;
+
+  /// No description provided for @criticalReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical Reset'**
+  String get criticalReset;
+
+  /// No description provided for @terminateConfigsConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminate all persistent links and system configurations?'**
+  String get terminateConfigsConfirm;
+
+  /// No description provided for @execute.
+  ///
+  /// In en, this message translates to:
+  /// **'Execute'**
+  String get execute;
+
+  /// No description provided for @forgetIntents.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget Intents'**
+  String get forgetIntents;
+
+  /// No description provided for @noMediaPlaying.
+  ///
+  /// In en, this message translates to:
+  /// **'No Media Playing'**
+  String get noMediaPlaying;
+
+  /// No description provided for @idle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get idle;
+
+  /// No description provided for @idleInstance.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle Instance'**
+  String get idleInstance;
+
+  /// No description provided for @doheeChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Dohee Chat'**
+  String get doheeChat;
+
+  /// No description provided for @unknownArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown Artist'**
+  String get unknownArtist;
+
+  /// No description provided for @bluetoothDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth Devices'**
+  String get bluetoothDevices;
+
+  /// No description provided for @noDevicesFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No Devices Found'**
+  String get noDevicesFound;
+
+  /// No description provided for @wifiNetworks.
+  ///
+  /// In en, this message translates to:
+  /// **'Wi-Fi Networks'**
+  String get wifiNetworks;
+
+  /// No description provided for @noNetworksFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No Networks Found'**
+  String get noNetworksFound;
+
+  /// No description provided for @connectToSsid.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect To {ssid}'**
+  String connectToSsid(String ssid);
+
+  /// No description provided for @password.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get password;
+
+  /// No description provided for @neuralModelVault.
+  ///
+  /// In en, this message translates to:
+  /// **'Neural Model Vault'**
+  String get neuralModelVault;
+
+  /// No description provided for @scanningVault.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning Vault...'**
+  String get scanningVault;
+
+  /// No description provided for @noModelsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No .gguf models found in host vault directory.'**
+  String get noModelsFound;
+
+  /// No description provided for @connectivityAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Connectivity & Audio'**
+  String get connectivityAudio;
+
+  /// No description provided for @criticalAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical // {action}'**
+  String criticalAction(String action);
+
+  /// No description provided for @remoteCommandConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to proceed with this remote command?'**
+  String get remoteCommandConfirm;
+
+  /// No description provided for @scanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning...'**
+  String get scanning;
+
+  /// No description provided for @connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get connected;
+
+  /// No description provided for @importFromImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Import From Image'**
+  String get importFromImage;
+
+  /// No description provided for @hostIdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 550e8400-e29b...'**
+  String get hostIdHint;
+
+  /// No description provided for @aliasHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. WORK-RIG'**
+  String get aliasHint;
 }
 
 class _AppLocalizationsDelegate

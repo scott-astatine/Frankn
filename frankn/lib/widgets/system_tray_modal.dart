@@ -6,7 +6,9 @@ import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/cyber_card.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/widgets/bluetooth_manager_dialog.dart';
+import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/widgets/wifi_manager_dialog.dart';
 
 class SystemTrayModal extends StatefulWidget {
@@ -70,7 +72,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        l10n.adminOverride.toUpperCase(),
+                        l10n.adminOverride,
                         style: const TextStyle(
                           color: AppColors.errorRed,
                           fontWeight: FontWeight.w900,
@@ -98,7 +100,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Network & Audio Section
-                      _buildSectionLabel("CONNECTIVITY & AUDIO"),
+                      _buildSectionLabel(l10n.connectivityAudio),
                       Row(
                         children: [
                           _buildCompactActionButton(
@@ -172,7 +174,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                       ),
 
                       const SizedBox(height: 32),
-                      _buildSectionLabel("SYSTEM OPERATIONS"),
+                      _buildSectionLabel(l10n.systemOperations),
                       GridView.count(
                         crossAxisCount: 2,
                         shrinkWrap: true,
@@ -185,33 +187,25 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                             Icons.lock_outline,
                             l10n.lockHost,
                             AppColors.neonCyan,
-                            () => widget.client.sendDcMsg({
-                              DcMsg.Key: DcMsg.LockScreen,
-                            }),
+                            () => widget.client.sendDcMsg(const DcMsgLockScreen()),
                           ),
                           _buildGridButton(
                             Icons.lock_open,
                             l10n.unlockHost,
                             AppColors.neonCyan,
-                            () => widget.client.sendDcMsg({
-                              DcMsg.Key: DcMsg.UnlockScreen,
-                            }),
+                            () => widget.client.sendDcMsg(const DcMsgUnlockScreen()),
                           ),
                           _buildGridButton(
                             Icons.sync,
                             l10n.restartSvc,
                             AppColors.cyberYellow,
-                            () => widget.client.sendDcMsg({
-                              DcMsg.Key: DcMsg.RestartHostServer,
-                            }),
+                            () => widget.client.sendDcMsg(const DcMsgRestartHostServer()),
                           ),
                           _buildGridButton(
                             Icons.cloud_download_outlined,
                             l10n.sysUpdate,
                             AppColors.cyberYellow,
-                            () => widget.client.sendDcMsg({
-                              DcMsg.Key: DcMsg.Update,
-                            }),
+                            () => widget.client.sendDcMsg(const DcMsgUpdate()),
                           ),
                           _buildGridButton(
                             Icons.restart_alt,
@@ -220,8 +214,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                             () => _confirmDestructiveAction(
                               context,
                               l10n.reboot,
-                              DcMsg.Reboot,
-                              null,
+                              const DcMsgReboot(),
                             ),
                           ),
                           _buildGridButton(
@@ -231,8 +224,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                             () => _confirmDestructiveAction(
                               context,
                               l10n.shutdown,
-                              DcMsg.Shutdown,
-                              {"args": "now"},
+                              const DcMsgShutdown(args: "now"),
                             ),
                           ),
                         ],
@@ -244,9 +236,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                         color: Colors.transparent,
                         child: InkWell(
                           onTap: () {
-                            widget.client.sendDcMsg({
-                              DcMsg.Key: DcMsg.Disconnect,
-                            });
+                            widget.client.sendDcMsg(const DcMsgDisconnect());
                             widget.onDisconnect();
                             Navigator.pop(context);
                           },
@@ -268,7 +258,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                                   ),
                                   const SizedBox(width: 12),
                                   Text(
-                                    l10n.disconnectLink.toUpperCase(),
+                                    l10n.disconnectLink,
                                     style: const TextStyle(
                                       color: AppColors.neonPink,
                                       fontWeight: FontWeight.w900,
@@ -303,9 +293,9 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
   void initState() {
     super.initState();
     _sub = widget.client.genDcMsgStream.listen(_handleResponse);
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetAudioDevices});
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetNetworkStatus});
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.GetMediaStatus});
+    widget.client.sendDcMsg(const DcMsgGetAudioDevices());
+    widget.client.sendDcMsg(const DcMsgGetNetworkStatus());
+    widget.client.sendDcMsg(const DcMsgGetMediaStatus());
   }
 
   Widget _buildCompactActionButton(
@@ -368,7 +358,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
               Icon(icon, color: color, size: 24),
               const SizedBox(width: 6),
               Text(
-                label.toUpperCase(),
+                label,
                 style: TextStyle(
                   color: color.withValues(alpha: 0.9),
                   fontWeight: FontWeight.w900,
@@ -403,48 +393,36 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
   void _confirmDestructiveAction(
     BuildContext context,
     String title,
-    String command,
-    Map<String, dynamic>? args,
+    DcMsg command,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F0F0F),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.errorRed),
-        ),
-        title: Text(
-          "CRITICAL // $title",
-          style: const TextStyle(
-            color: AppColors.errorRed,
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        content: const Text(
-          "Are you sure you want to proceed with this remote command?",
-          style: TextStyle(color: Colors.white70, fontSize: 13),
+      builder: (context) => CyberAlertDialog(
+        title: l10n.criticalAction(title),
+        borderColor: AppColors.errorRed,
+        titleColor: AppColors.errorRed,
+        content: Text(
+          l10n.remoteCommandConfirm,
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "ABORT",
-              style: TextStyle(color: AppColors.textGrey),
+            child: Text(
+              l10n.abort,
+              style: const TextStyle(color: AppColors.textGrey),
             ),
           ),
           TextButton(
             onPressed: () {
-              final Map<String, dynamic> msg = {DcMsg.Key: command};
-              if (args != null) msg.addAll(args);
-              widget.client.sendDcMsg(msg);
+              widget.client.sendDcMsg(command);
               Navigator.pop(context); // close dialog
               Navigator.pop(context); // close modal
             },
-            child: const Text(
-              "CONFIRM",
-              style: TextStyle(
+            child: Text(
+              l10n.confirm,
+              style: const TextStyle(
                 color: AppColors.errorRed,
                 fontWeight: FontWeight.bold,
               ),
@@ -455,29 +433,36 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
     );
   }
 
-  void _handleResponse(dynamic resp) {
+  void _handleResponse(HostMessage msg) {
     if (!mounted) return;
-    widget.client.log("AdMINmSG: $resp");
 
-    final data =
-        resp['type'] == DcMsg.HostResponse ||
-            resp['type'] == MediaDCMessage.MediaUpdate
-        ? resp['data']
-        : resp;
-    if (data == null || data is! Map) return;
+    Map<String, dynamic>? data;
+    if (msg is HostMsgResponse) {
+        data = msg.data is Map ? msg.data as Map<String, dynamic> : null;
+    } else if (msg is HostMsgMediaUpdate) {
+        setState(() {
+          _volume = msg.volume;
+        });
+        return;
+    } else if (msg is HostMsgUnknown) {
+        data = msg.raw;
+    }
 
-    if (data.containsKey('volume')) {
+    if (data == null) return;
+    final Map<String, dynamic> d = data;
+
+    if (d.containsKey('volume')) {
       setState(() {
-        _volume = (data['volume'] as num).toDouble();
+        _volume = (d['volume'] as num).toDouble();
       });
     }
 
-    if (data.containsKey('devices')) {
-      final devices = data['devices'] as List;
-      for (var d in devices) {
-        if (d['is_default'] == true || d['is_active'] == true) {
+    if (d.containsKey('devices')) {
+      final devices = d['devices'] as List;
+      for (var dev in devices) {
+        if (dev['is_default'] == true || dev['is_active'] == true) {
           setState(() {
-            final rawVol = (d['vol'] ?? d['volume'] ?? 50.0) as num;
+            final rawVol = (dev['vol'] ?? dev['volume'] ?? 50.0) as num;
             _volume = rawVol > 1.5
                 ? rawVol.toDouble() / 100.0
                 : rawVol.toDouble();
@@ -485,16 +470,16 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
           break;
         }
       }
-    } else if (data.containsKey('wifi_enabled')) {
+    } else if (d.containsKey('wifi_enabled')) {
       setState(() {
-        _wifiEnabled = data['wifi_enabled'] == true;
-        _btEnabled = data['bluetooth_enabled'] == true;
+        _wifiEnabled = d['wifi_enabled'] == true;
+        _btEnabled = d['bluetooth_enabled'] == true;
       });
     }
   }
 
   void _setVolume(double val) {
     setState(() => _volume = val);
-    widget.client.sendDcMsg({DcMsg.Key: DcMsg.SetVolume, "level": val});
+    widget.client.sendDcMsg(DcMsgSetVolume(level: val));
   }
 }
