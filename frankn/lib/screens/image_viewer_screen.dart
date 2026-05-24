@@ -44,13 +44,23 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
 
     // Listen for the specific completion of this file in the background
     _transferSub = client.transferProgressStream.listen((msg) {
-      if (msg is TransferProgressComplete && msg.fileName == widget.fileName) {
-        final String? path = msg.finalPath;
-        if (path != null && mounted) {
-          setState(() {
-            _imageFile = File(path);
-            _isInitialized = true;
-          });
+      if (msg is TransferProgressComplete) {
+        if (msg.id == _activeDownloadId || msg.fileName == widget.fileName) {
+          final String? path = msg.finalPath;
+          if (path != null && mounted) {
+            setState(() {
+              _imageFile = File(path);
+              _isInitialized = true;
+            });
+          }
+        }
+      } else if (msg is TransferProgressFailed) {
+        if (msg.id == _activeDownloadId) {
+          if (mounted) {
+            setState(() {
+              isLoading = false;
+            });
+          }
         }
       }
     });
@@ -77,7 +87,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
         IsolateAction.cancelTransfer,
         {'id': _activeDownloadId},
       );
-      client.log("IMAGE VIEWER: Cancelled background download due to exit");
+      client.log("IMAGE VIEWER: Cancelled background download for $_activeDownloadId due to exit");
     }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();

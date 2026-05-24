@@ -17,126 +17,33 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
 
   bool isLoading = false;
   String transferMsg = "";
-  double transferProgress = 0.0;
-
-  final Map<String, int> _totalSizes = {};
-  final Map<String, int> _downloadedSizes = {};
-  final Map<String, String> _downloadTargetDirs = {};
-  final Map<String, bool> _showNotificationMap = {};
-  final Map<String, Function(File)> _onFileReceived = {};
-  final Map<String, Timer> _transferTimeouts = {};
-  final Map<String, int> _downloadResumeOffsets = {};
-  final Map<String, String> _downloadFileNames = {};
-
-  /// Cleans up all tracking state for a transfer ID.
-  /// Called when a transfer completes or times out.
-  void _cleanupTransfer(String id) {
-    _totalSizes.remove(id);
-    _downloadedSizes.remove(id);
-    _downloadTargetDirs.remove(id);
-    _showNotificationMap.remove(id);
-    _onFileReceived.remove(id);
-    _transferTimeouts[id]?.cancel();
-    _transferTimeouts.remove(id);
-    _downloadResumeOffsets.remove(id);
-    _downloadFileNames.remove(id);
-  }
 
   void setupTransferListener() {
     client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
-
-      switch (msg) {
-        case HostMsgDownloadStart():
-          _onDownloadStart(msg);
-        case HostMsgDownloadEnd():
-          // download_end from new protocol — always trigger completion
-          _onDownloadComplete(msg);
-        case HostMsgTransferCancel():
-            _cleanupTransfer(msg.id);
-            setState(() {
-              isLoading = false;
-              transferMsg = "";
-            });
-        case HostMsgResponse():
-            final data = msg.data;
-            if (data is Map && data.containsKey('message')) {
-                _onGenericMessage(data['message'].toString());
-            }
-        default:
-          break;
+      if (msg is HostMsgResponse) {
+        final data = msg.data;
+        if (data is Map && data.containsKey('message')) {
+          _onGenericMessage(data['message'].toString());
+        }
       }
     });
 
     client.transferProgressStream.listen((event) {
       if (!mounted) return;
-
-      switch (event) {
-        case TransferProgressComplete():
-          setState(() {
-            isLoading = false;
-            transferMsg = "";
-          });
-          refreshDirectory();
-        case TransferProgressFailed():
-          setState(() {
-            isLoading = false;
-            transferMsg = "";
-          });
-        case TransferProgressUpdate():
-          // Safe progress update
-          setState(() {
-            transferProgress = event.progress;
-          });
-        case TransferProgressStart():
-            // Already handled by DownloadStart or ignore
-            break;
-      }
-    });
-  }
-
-  void _onDownloadStart(HostMsgDownloadStart msg) {
-    final id = msg.id;
-    _totalSizes[id] = msg.totalSize;
-
-    final hostOffset = msg.offset;
-    _downloadResumeOffsets[id] = hostOffset;
-    _downloadedSizes[id] = hostOffset;
-    _downloadFileNames[id] = msg.fileName;
-
-    _transferTimeouts[id]?.cancel();
-    _transferTimeouts[id] = Timer(const Duration(minutes: 5), () {
-      client.log("FS TIMEOUT: Download $id stalled — cleaning up.");
-      _cleanupTransfer(id);
-      if (mounted) {
+      if (event is TransferProgressComplete) {
+        setState(() {
+          isLoading = false;
+          transferMsg = "";
+        });
+        refreshDirectory();
+      } else if (event is TransferProgressFailed) {
         setState(() {
           isLoading = false;
           transferMsg = "";
         });
       }
     });
-
-    setState(() {
-      isLoading = true;
-      transferProgress = hostOffset / (_totalSizes[id] ?? 1);
-      transferMsg = "DOWNLOADING: ${msg.fileName}";
-    });
-  }
-
-  Future<void> _onDownloadComplete(HostMsgDownloadEnd msg) async {
-    final id = msg.id;
-
-    try {
-      setState(() => transferMsg = "DOWNLOAD COMPLETE");
-    } catch (e) {
-      client.log("FS ERROR: Notification failed: $e");
-    } finally {
-      _cleanupTransfer(id);
-      setState(() {
-        isLoading = false;
-        transferMsg = "";
-      });
-    }
   }
 
   void _onGenericMessage(String msg) {
@@ -160,7 +67,6 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
   Future<String> downloadFile(
     String remotePath, {
     int? size, // Pass size for stable ID/resume
-    Function(File)? onComplete,
     bool showNotification = true,
     bool isTemporary = false,
   }) async {
@@ -168,8 +74,6 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
     final requestId = size != null
         ? FileUtils.generateStableTransferId(remotePath, size)
         : const Uuid().v4();
-
-    _showNotificationMap[requestId] = showNotification;
 
     int resumeOffset = 0;
     final tempDir = globalTempDir;
@@ -179,9 +83,7 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       client.log("FS: Resuming download $requestId from offset $resumeOffset");
     }
 
-    if (onComplete != null || isTemporary) {
-      if (onComplete != null) _onFileReceived[requestId] = onComplete;
-      _downloadTargetDirs[requestId] = '';
+    if (isTemporary) {
       client.sendDownloadInit(
         id: requestId,
         path: remotePath,
@@ -197,7 +99,6 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
     );
 
     if (selectedDir == null) return requestId;
-    _downloadTargetDirs[requestId] = selectedDir;
 
     client.sendDownloadInit(
       id: requestId,
@@ -223,7 +124,6 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
     setState(() {
       isLoading = true;
       transferMsg = "PREPARING UPLOAD...";
-      transferProgress = 0.0;
     });
 
     final hash = await sha256.bind(tempFile.openRead()).first;
@@ -262,7 +162,6 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
     setState(() {
       isLoading = true;
       transferMsg = "PREPARING UPLOAD...";
-      transferProgress = 0.0;
     });
 
     final hash = await sha256.bind(file.openRead()).first;

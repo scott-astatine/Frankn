@@ -516,6 +516,8 @@ pub async fn start_media_sync(peer_map: PeerMap) {
 pub async fn get_all_audio_devices(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     #[cfg(target_os = "linux")]
     {
+        use serde_json::json;
+
         let mut devices = Vec::new();
 
         let default_sink = if let Ok(output) = Command::new("pactl")
@@ -551,7 +553,7 @@ pub async fn get_all_audio_devices(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> H
                     .parse::<f64>()
                     .unwrap_or(0.0)
                     / 100.0;
-                devices.push(serde_json::json!({
+                devices.push(json!({
                     "id": id,
                     "name": name,
                     "type": "sink",
@@ -563,7 +565,7 @@ pub async fn get_all_audio_devices(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> H
         HostMessage::Response {
             id: req_id.to_string(),
             status: Status::Success,
-            data: Some(serde_json::json!({ "devices": devices })),
+            data: Some(json!({ "devices": devices })),
             timestamp: crate::utils::get_timestamp(),
         }
     }

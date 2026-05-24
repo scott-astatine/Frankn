@@ -507,8 +507,12 @@ async fn parse_dc_msg(
                 crate::log!("FS: Transfer cancel for {}", id);
                 let resp = crate::fs_sync::transfer::handle_transfer_cancel(&id).await;
                 if let Ok(json) = serde_json::to_string(&resp) {
-                    let conn = rtc_conn.lock().await;
-                    let _ = conn.send_message(label, &Bytes::from(json)).await;
+                    let rtc_clone = Arc::clone(&rtc_conn);
+                    let label_clone = label.to_string();
+                    tokio::spawn(async move {
+                        let conn = rtc_clone.lock().await;
+                        let _ = conn.send_message(&label_clone, &Bytes::from(json)).await;
+                    });
                 }
             }
 
@@ -721,8 +725,12 @@ async fn parse_dc_msg(
                             )
                             .await;
                             if let Ok(json) = serde_json::to_string(&response) {
-                                let conn = rtc_conn.lock().await;
-                                let _ = conn.send_message(label, &Bytes::from(json)).await;
+                                let rtc_clone = Arc::clone(&rtc_conn);
+                                let label_clone = label.to_string();
+                                tokio::spawn(async move {
+                                    let conn = rtc_clone.lock().await;
+                                    let _ = conn.send_message(&label_clone, &Bytes::from(json)).await;
+                                });
                             }
                         }
                     }

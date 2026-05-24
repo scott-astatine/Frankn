@@ -49,8 +49,6 @@ class FileBrowserState with ChangeNotifier {
 
   // --- Status State ---
   bool _isLoading = false;
-  String _transferMessage = "";
-  double _transferProgress = 0.0;
 
   // ========== GETTERS ==========
 
@@ -63,8 +61,6 @@ class FileBrowserState with ChangeNotifier {
   String get searchQuery => _searchQuery;
   TextEditingController get searchController => _searchController;
   bool get isLoading => _isLoading;
-  String get transferMessage => _transferMessage;
-  double get transferProgress => _transferProgress;
 
   // ========== SETTERS WITH NOTIFICATION ==========
 
@@ -104,16 +100,6 @@ class FileBrowserState with ChangeNotifier {
 
   void setIsLoading(bool loading) {
     _isLoading = loading;
-    notifyListeners();
-  }
-
-  void setTransferMessage(String message) {
-    _transferMessage = message;
-    notifyListeners();
-  }
-
-  void setTransferProgress(double progress) {
-    _transferProgress = progress;
     notifyListeners();
   }
 
@@ -197,16 +183,6 @@ class FileBrowserState with ChangeNotifier {
         }
       } else if (msg is HostMsgUnknown && msg.raw.containsKey('entries')) {
         setEntries(msg.raw['entries']);
-      }
-      // Handle file transfer completion (from FileTransferMixin)
-      else if (msg is HostMsgDownloadEnd) {
-        setTransferMessage("");
-        setTransferProgress(0.0);
-        setIsLoading(false);
-      } else if (msg is HostMsgDownloadStart) {
-        setTransferMessage("DOWNLOADING: ${msg.fileName}");
-        setTransferProgress(0.0);
-        setIsLoading(true);
       }
     });
   }

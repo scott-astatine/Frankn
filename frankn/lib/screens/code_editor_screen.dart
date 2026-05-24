@@ -60,10 +60,20 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
     
     // Listen for the specific completion of this file in the background
     _transferSub = client.transferProgressStream.listen((msg) {
-      if (msg is TransferProgressComplete && msg.fileName == widget.fileName) {
-        final String? path = msg.finalPath;
-        if (path != null) {
-          _readLocalFile(path);
+      if (msg is TransferProgressComplete) {
+        if (msg.id == _activeDownloadId || msg.fileName == widget.fileName) {
+          final String? path = msg.finalPath;
+          if (path != null) {
+            _readLocalFile(path);
+          }
+        }
+      } else if (msg is TransferProgressFailed) {
+        if (msg.id == _activeDownloadId) {
+          if (mounted) {
+            setState(() {
+              isLoading = false;
+            });
+          }
         }
       }
     });

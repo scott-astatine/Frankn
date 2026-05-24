@@ -94,7 +94,7 @@ flutter run
 - [x] Media Sync & Notification Mirroring
 - [ ] Neural Chat & Local LLM Integration [WIP]
 - [x] High-performance Remote Trackpad & Virtual Keyboard
-- [ ] Bidirectional Folder Sync
+- [x] Bidirectional Folder Sync [WIP]
 - [ ] Mobile-as-Host (Control the phone from the PC)
 
 **The End Goal:** A fully decentralized, low-latency ecosystem where I can manage my entire digital footprint from a single mobile interface, regardless of where I am or how bad my internet is.

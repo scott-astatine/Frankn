@@ -42,26 +42,42 @@ mixin RtcMessageHandler on RtcClientBase {
     final magic = chunk[0];
     if (magic != 0x01) return;
 
+    // Fixed 50-byte header format:
+    // [magic:1][id:36][offset:8][seq:4][flags:1][data:...]
+    if (chunk.length < 50) return;
+
     final idBytes = chunk.sublist(1, 37);
     final id = ascii.decode(idBytes);
-    final data = chunk.sublist(37);
+
+    // Parse absolute offset and sequence for progress tracking
+    final offsetBytes = chunk.sublist(37, 45);
+    final offset = ByteData.view(offsetBytes.buffer).getUint64(0);
+
+    // final seqBytes = chunk.sublist(45, 49);
+    // final seq = ByteData.view(seqBytes.buffer).getUint32(0);
+
+    // final flags = chunk[49];
+    final data = chunk.sublist(50);
 
     final sink = _activeSinks[id];
     if (sink != null) {
       sink.add(data);
-      _receivedSizes[id] = (_receivedSizes[id] ?? 0) + data.length;
+      _receivedSizes[id] = offset + data.length;
 
       final currentTotal = _receivedSizes[id]!;
       final totalSize = _totalSizes[id] ?? 1;
       final progress = (currentTotal / totalSize).clamp(0.0, 1.0);
 
-      // Emit progress event
-      transferProgressController.add(TransferProgressUpdate(
-        id: id,
-        progress: progress,
-        bytesSent: currentTotal,
-        totalBytes: totalSize,
-      ));
+      // Throttled UI Update: Only emit progress every 1MB or on completion
+      if (currentTotal % (1024 * 1024) < chunk.length ||
+          currentTotal == totalSize) {
+        transferProgressController.add(TransferProgressUpdate(
+          id: id,
+          progress: progress,
+          bytesSent: currentTotal,
+          totalBytes: totalSize,
+        ));
+      }
 
       // Update notification every 1MB or on completion
       if ((_showNotificationMap[id] ?? true) &&
@@ -73,7 +89,7 @@ mixin RtcMessageHandler on RtcClientBase {
           id.hashCode.abs() % 100000,
           "Downloading '${activeFileNames[id] ?? 'File'}'...",
           "$sizeInfo (${(progress * 100).toStringAsFixed(1)}%)",
-          progress,
+          progress * 100,
           transferId: id,
         );
       }
@@ -132,15 +148,21 @@ mixin RtcMessageHandler on RtcClientBase {
       }
     }
 
-    // Success! Relocate to final destination
+    // Success! Relocate to final destination if a target directory was provided
     final targetDir = _downloadTargetDirs.remove(transferId);
     String finalPath = tempPath;
 
-    if (targetDir != null) {
+    if (targetDir != null && targetDir.isNotEmpty) {
       final destPath = "$targetDir/$fileName";
-      await _moveFile(file, destPath);
-      finalPath = destPath;
-      log("FS: Download Complete. File saved to: $finalPath");
+      try {
+        await _moveFile(file, destPath);
+        finalPath = destPath;
+        log("FS: Download Complete. File saved to: $finalPath");
+      } catch (e) {
+        log("FS ERROR: Failed to relocate $fileName to $destPath: $e");
+      }
+    } else {
+      log("FS: Temporary Download Complete. File kept at: $finalPath");
     }
 
     if (_showNotificationMap.remove(transferId) ?? true) {
@@ -352,18 +374,35 @@ mixin RtcMessageHandler on RtcClientBase {
         case HostMsgTransferCancel():
           final id = msg.id;
           final sink = _activeSinks.remove(id);
-          sink?.close();
+
+          // Safe async cleanup
+          if (sink != null) {
+            try {
+              await sink.flush();
+              await sink.close();
+            } catch (e) {
+              log("FS: Error closing sink for $id during cancel: $e");
+            }
+          }
+
           final path = _tempPaths.remove(id);
           if (path != null) {
-            final file = File(path);
-            if (file.existsSync()) file.deleteSync();
+            try {
+              final file = File(path);
+              if (await file.exists()) {
+                await file.delete();
+                log("FS: Partial file for $id cleaned up.");
+              }
+            } catch (e) {
+              log("FS: Failed to delete partial file $path: $e");
+            }
           }
+
           // Emit a failed event so the UI stops loading
           transferProgressController.add(
             TransferProgressFailed(id: id, error: 'Transfer cancelled by host'),
           );
-          genDcMsgController.add(msg);
-        case HostMsgUnknown():
+          genDcMsgController.add(msg);        case HostMsgUnknown():
           log("Unknown host message type: ${msg.type}");
       }
     } catch (e, stack) {

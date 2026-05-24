@@ -68,28 +68,6 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
               color: AppColors.neonCyan,
               backgroundColor: Colors.transparent,
             ),
-          if (isLoading)
-            Column(
-              children: [
-                LinearProgressIndicator(
-                  value: transferProgress,
-                  minHeight: 4,
-                  color: AppColors.neonPink,
-                  backgroundColor: AppColors.deepSpace,
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(4.0),
-                  child: Text(
-                    transferMsg,
-                    style: const TextStyle(
-                      color: AppColors.neonPink,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           Expanded(child: _buildMainContent(l10n)),
         ],
       ),
@@ -116,10 +94,7 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
 
   Widget _buildItem(dynamic rawEntry, bool isGrid) {
     final entry = RemoteEntry.fromJson(Map<String, dynamic>.from(rawEntry));
-    final fullPath = PathHelper.join(
-      _browserState.currentPath,
-      entry.name,
-    );
+    final fullPath = PathHelper.join(_browserState.currentPath, entry.name);
     return FileBrowserItem(
       entry: entry,
       isGrid: isGrid,
@@ -167,8 +142,7 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
         }
       },
       onLongPress: () => _browserState.toggleSelection(fullPath),
-      onDelete: (path) =>
-          widget.client.sendDcMsg(DcMsgDeleteFile(path: path)),
+      onDelete: (path) => widget.client.sendDcMsg(DcMsgDeleteFile(path: path)),
       onDownload: (path, size) => downloadFile(path, size: size),
       onEdit: (path, name) => Navigator.push(
         context,
@@ -248,8 +222,8 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
         orElse: () => null,
       );
       if (rawEntry != null) {
-          final entry = RemoteEntry.fromJson(Map<String, dynamic>.from(rawEntry));
-          downloadFile(path, size: entry.size);
+        final entry = RemoteEntry.fromJson(Map<String, dynamic>.from(rawEntry));
+        downloadFile(path, size: entry.size);
       }
     }
     _browserState.clearSelection();

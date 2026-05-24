@@ -24,7 +24,6 @@ use std::sync::LazyLock;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::Mutex;
-use tokio::task::AbortHandle;
 use tokio_tungstenite::tungstenite::Bytes;
 
 /// Partial transfer state persisted alongside the `.part` file.
@@ -38,6 +37,8 @@ struct TransferState {
     #[serde(default)]
     last_seq: u32,
 }
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Writable session state for an active upload.
 struct UploadSession {
@@ -53,8 +54,8 @@ struct UploadSession {
 static UPLOAD_SESSIONS: LazyLock<Mutex<HashMap<String, Arc<Mutex<UploadSession>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Global registry for active download tasks to enable instant cancellation via AbortHandle.
-static DOWNLOAD_TASKS: LazyLock<Mutex<HashMap<String, AbortHandle>>> =
+/// Global registry for active download tasks to enable graceful cancellation.
+static DOWNLOAD_TASKS: LazyLock<Mutex<HashMap<String, Arc<AtomicBool>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 // ── Binary frame constants ─────────────────────────────────────────────────
@@ -258,15 +259,15 @@ pub async fn handle_transfer_cancel(id: &str) -> HostMessage {
         crate::log!("FS: Upload transfer {} cancelled, partial cleaned up", id);
     }
 
-    // 2. Clean up downloads (kill zombie tasks instantly)
-    let abort_handle = {
+    // 2. Clean up downloads (signal graceful shutdown)
+    let cancel_flag = {
         let mut tasks = DOWNLOAD_TASKS.lock().await;
         tasks.remove(id)
     };
 
-    if let Some(handle) = abort_handle {
-        handle.abort();
-        crate::log!("FS: Download task {} forcefully terminated by user", id);
+    if let Some(flag) = cancel_flag {
+        flag.store(true, Ordering::Relaxed);
+        crate::log!("FS: Download task {} gracefully cancelled by user", id);
     }
 
     HostMessage::TransferCancel {
@@ -546,11 +547,26 @@ pub async fn handle_download_init(
     let transfer_id = id.to_string();
     let label = channel_label.to_string();
     let conn_for_download = Arc::clone(&rtc_conn);
-    let handle = tokio::spawn(async move {
-        let _ = stream_download(f, transfer_id, label, full_hash, conn_for_download).await;
+
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let cancel_flag_clone = Arc::clone(&cancel_flag);
+
+    tokio::spawn(async move {
+        let _ = stream_download(
+            f,
+            transfer_id,
+            label,
+            full_hash,
+            conn_for_download,
+            cancel_flag_clone,
+        )
+        .await;
     });
 
-    DOWNLOAD_TASKS.lock().await.insert(id.to_string(), handle.abort_handle());
+    DOWNLOAD_TASKS
+        .lock()
+        .await
+        .insert(id.to_string(), cancel_flag);
 
     HostMessage::Response {
         id: id.to_string(),
@@ -572,6 +588,7 @@ async fn stream_download(
     channel_label: String,
     full_hash: String,
     rtc_conn: Arc<Mutex<RTCConn>>,
+    cancel_flag: Arc<AtomicBool>,
 ) -> Result<(), std::io::Error> {
     const CHUNK_SIZE: usize = 61440; // 60KB
     let mut buffer = vec![0u8; CHUNK_SIZE];
@@ -582,6 +599,12 @@ async fn stream_download(
     let mut offset = start_offset;
 
     loop {
+        // Check for graceful cancellation
+        if cancel_flag.load(Ordering::Relaxed) {
+            crate::log!("FS: Download task {} exited gracefully.", id);
+            return Ok(());
+        }
+
         let n = file.read(&mut buffer).await?;
         if n == 0 {
             break;
