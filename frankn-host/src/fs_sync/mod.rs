@@ -1,11 +1,64 @@
 use crate::{HostMessage, utils::Status};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 pub mod transfer;
 pub mod sync;
 
+/// Restricts path access to a specific base directory (sandbox root)
+pub fn check_sandbox(base_dir: &Path, user_path: &str, allow_parent: bool) -> Result<PathBuf, String> {
+    let combined = base_dir.join(user_path);
+    
+    // Check if the path exists to canonicalize. If not, canonicalize its parent.
+    let canonical = match combined.canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            // If the target path doesn't exist (e.g. for mkdir or fresh upload),
+            // we canonicalize its parent directory to ensure it is in the sandbox.
+            if let Some(parent) = combined.parent() {
+                match parent.canonicalize() {
+                    Ok(mut p) => {
+                        if let Some(file_name) = combined.file_name() {
+                            p.push(file_name);
+                        }
+                        p
+                    }
+                    Err(e) => return Err(format!("Parent directory does not exist or invalid: {}", e)),
+                }
+            } else {
+                return Err("Path has no parent and does not exist".to_string());
+            }
+        }
+    };
+    
+    let base_canonical = base_dir.canonicalize()
+        .map_err(|e| format!("Base sandbox error: {}", e))?;
+        
+    if canonical.starts_with(&base_canonical) || (allow_parent && base_canonical.starts_with(&canonical)) {
+        Ok(canonical)
+    } else {
+        Err("Access Denied: Path resides outside sandbox.".to_string())
+    }
+}
+
+/// Helper that restricts paths to the user's home directory by default
+pub fn check_sandbox_default(user_path: &str, allow_parent: bool) -> Result<PathBuf, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Home directory not found".to_string())?;
+    check_sandbox(&home, user_path, allow_parent)
+}
+
 pub fn ls(id: &str, path: &str, sort_by: Option<String>, show_hidden: Option<bool>) -> HostMessage {
-    let entries = fs::read_dir(path);
+    let sandbox_path = match check_sandbox_default(path, true) {
+        Ok(p) => p,
+        Err(e) => return HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Error(e),
+            data: None,
+            timestamp: crate::utils::get_timestamp(),
+        },
+    };
+
+    let entries = fs::read_dir(sandbox_path);
     match entries {
         Ok(read_dir) => {
             let mut list = Vec::new();
@@ -72,48 +125,68 @@ pub fn ls(id: &str, path: &str, sort_by: Option<String>, show_hidden: Option<boo
                 id: id.to_string(),
                 status: Status::Success,
                 data: Some(serde_json::json!({ "entries": list })),
-                timestamp: 0,
+                timestamp: crate::utils::get_timestamp(),
             }
         }
         Err(e) => HostMessage::Response {
             id: id.to_string(),
             status: Status::Error(e.to_string()),
             data: None,
-            timestamp: 0,
+            timestamp: crate::utils::get_timestamp(),
         },
     }
 }
 
 pub fn delete_file(id: &str, path: &str) -> HostMessage {
-    match fs::remove_file(path) {
+    let sandbox_path = match check_sandbox_default(path, false) {
+        Ok(p) => p,
+        Err(e) => return HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Error(e),
+            data: None,
+            timestamp: crate::utils::get_timestamp(),
+        },
+    };
+
+    match fs::remove_file(sandbox_path) {
         Ok(_) => HostMessage::Response {
             id: id.into(),
             status: Status::Success,
             data: None,
-            timestamp: 0,
+            timestamp: crate::utils::get_timestamp(),
         },
         Err(e) => HostMessage::Response {
             id: id.into(),
             status: Status::Error(e.to_string()),
             data: None,
-            timestamp: 0,
+            timestamp: crate::utils::get_timestamp(),
         },
     }
 }
 
 pub fn mkdir(id: &str, path: &str) -> HostMessage {
-    match fs::create_dir_all(path) {
+    let sandbox_path = match check_sandbox_default(path, false) {
+        Ok(p) => p,
+        Err(e) => return HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Error(e),
+            data: None,
+            timestamp: crate::utils::get_timestamp(),
+        },
+    };
+
+    match fs::create_dir_all(sandbox_path) {
         Ok(_) => HostMessage::Response {
             id: id.into(),
             status: Status::Success,
             data: None,
-            timestamp: 0,
+            timestamp: crate::utils::get_timestamp(),
         },
         Err(e) => HostMessage::Response {
             id: id.into(),
             status: Status::Error(e.to_string()),
             data: None,
-            timestamp: 0,
+            timestamp: crate::utils::get_timestamp(),
         },
     }
 }

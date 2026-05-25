@@ -134,14 +134,6 @@ impl RTCConn {
         }
     }
 
-    pub async fn get_buffered_amount(&self, label: &str) -> usize {
-        let map = self.data_channels.lock().await;
-        if let Some(dc) = map.get(label) {
-            dc.buffered_amount().await
-        } else {
-            0
-        }
-    }
 
     pub async fn add_remote_candidate(
         &self,

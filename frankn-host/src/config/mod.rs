@@ -13,6 +13,8 @@ pub struct HostConfig {
     pub host_id: String,
     pub host_name: String,
     pub password_hash: String,
+    #[serde(default)]
+    pub salt: String,
     pub signaling_url: String,
     pub is_public: bool,
     pub restricted_cmds: Vec<String>,
@@ -53,6 +55,24 @@ impl HostConfig {
                 Ok(content) => match toml::from_str::<HostConfig>(&content) {
                     Ok(mut config) => {
                         config.custom_config_path = custom_path;
+                        // Transparently upgrade old Argon2 PHC formats to the secure double-hashed SHA-256 verifier
+                        if config.password_hash.starts_with("$argon2id$") {
+                            crate::log!("UPGRADE: Old Argon2 password hash format detected. Upgrading to secure SHA-256 verifier hash...");
+                            let old_hash = config.password_hash.clone();
+                            // Extract salt from old hash
+                            let salt = old_hash.split('$').nth(4).unwrap_or("").to_string();
+                            
+                            use sha2::Digest;
+                            let mut hasher = sha2::Sha256::new();
+                            hasher.update(old_hash.as_bytes());
+                            let new_hash = format!("{:x}", hasher.finalize());
+                            
+                            config.password_hash = new_hash;
+                            config.salt = salt;
+                            // Save config to persist upgraded format
+                            config.save().await;
+                            crate::log!("UPGRADE: Successful.");
+                        }
                         return config;
                     }
                     Err(e) => {
@@ -130,11 +150,13 @@ impl HostConfig {
             // Hash the password using existing AuthManager logic
             let auth_manager = AuthManager::new(&password);
             let password_hash = auth_manager.password_hash.clone();
+            let salt = auth_manager.salt.clone();
 
             HostConfig {
                 host_id,
                 host_name,
                 password_hash,
+                salt,
                 signaling_url,
                 is_public,
                 restricted_cmds: Vec::new(),

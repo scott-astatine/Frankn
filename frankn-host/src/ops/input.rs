@@ -146,10 +146,10 @@ impl InputManager {
         };
 
         if let Some((code, shift)) = mapping {
-            if shift { self.keyboard.write(1, 42, 1).unwrap(); } // L_SHIFT Down
+            if shift { let _ = self.keyboard.write(1, 42, 1); } // L_SHIFT Down
             let _ = self.keyboard.write(1, code, 1);
             let _ = self.keyboard.write(1, code, 0);
-            if shift { self.keyboard.write(1, 42, 0).unwrap(); } // L_SHIFT Up
+            if shift { let _ = self.keyboard.write(1, 42, 0); } // L_SHIFT Up
             let _ = self.keyboard.synchronize();
         }
     }

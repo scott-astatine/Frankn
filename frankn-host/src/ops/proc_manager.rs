@@ -1,7 +1,6 @@
 use crate::{utils::Status, HostMessage, ops::rtc::RTCConn};
 use std::collections::HashMap;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System, MemoryRefreshKind};
-use tokio::process::Command;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -130,24 +129,56 @@ pub async fn list_processes(
 }
 
 pub async fn kill_process(id: &str, proc: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
-    let output = if let Ok(_pid) = proc.parse::<i32>() {
-        #[cfg(target_os = "linux")]
-        Command::new("kill").arg("-9").arg(proc).output().await
-    } else {
-        #[cfg(target_os = "linux")]
-        Command::new("pkill").arg("-9").arg(proc).output().await
-    };
+    let mut sys = System::new_with_specifics(
+        RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
+    );
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
-    match output {
-        Ok(_) => HostMessage::Response {
+    let mut killed_any = false;
+    let mut errors = Vec::new();
+
+    if let Ok(pid_val) = proc.parse::<u32>() {
+        let pid = sysinfo::Pid::from(pid_val as usize);
+        if let Some(process) = sys.process(pid) {
+            if process.kill() {
+                killed_any = true;
+            } else {
+                errors.push(format!("Process with PID {} found but kill signal failed", pid_val));
+            }
+        } else {
+            errors.push(format!("Process with PID {} not found", pid_val));
+        }
+    } else {
+        // proc is a name
+        let target_name = proc.to_lowercase();
+        for p in sys.processes().values() {
+            let name = p.name().to_string_lossy().to_lowercase();
+            if name == target_name {
+                if p.kill() {
+                    killed_any = true;
+                } else {
+                    errors.push(format!("Failed to kill process '{}' (PID {})", p.name().to_string_lossy(), p.pid()));
+                }
+            }
+        }
+    }
+
+    if killed_any {
+        HostMessage::Response {
             id: id.to_string(),
             status: Status::Success,
             data: Some(serde_json::json!({ "message": format!("Terminated {}", proc) })),
             timestamp: crate::utils::get_timestamp(),
-        },
-        Err(e) => HostMessage::Response {
+        }
+    } else {
+        let error_msg = if errors.is_empty() {
+            format!("No process matching '{}' was found", proc)
+        } else {
+            errors.join("; ")
+        };
+        HostMessage::Response {
             id: id.to_string(),
-            status: Status::Error(format!("Failed to kill {}: {}", proc, e)),
+            status: Status::Error(error_msg),
             data: None,
             timestamp: crate::utils::get_timestamp(),
         }

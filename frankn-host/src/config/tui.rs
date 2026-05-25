@@ -123,7 +123,7 @@ impl App {
                 self.input_mode = InputMode::Normal;
             }
             InputMode::VerifyingPassword => {
-                if AuthManager::verify_password(&self.input, &self.config.password_hash) {
+                if AuthManager::verify_password(&self.input, &self.config.password_hash, &self.config.salt) {
                     self.input_mode = InputMode::SettingNewPassword;
                     self.error_msg = None;
                 } else {
@@ -134,6 +134,7 @@ impl App {
             InputMode::SettingNewPassword => {
                 let auth = AuthManager::new(&self.input);
                 self.config.password_hash = auth.password_hash;
+                self.config.salt = auth.salt;
                 self.input_mode = InputMode::Normal;
                 self.error_msg = Some("Passcode updated successfully.".to_string());
             }

@@ -103,7 +103,8 @@ pub async fn seek(id: &str, position: &u64, _rtc: Arc<Mutex<RTCConn>>) -> HostMe
 }
 
 pub async fn set_volume(id: &str, level: &f64, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
-    let vol_str = format!("{:.2}", level);
+    let clamped_level = level.clamp(0.0, 1.0);
+    let vol_str = format!("{:.2}", clamped_level);
     #[cfg(target_os = "linux")]
     let _ = Command::new("wpctl")
         .args(["set-volume", "@DEFAULT_AUDIO_SINK@", &vol_str])
@@ -599,7 +600,8 @@ pub async fn set_specific_device_volume(
     volume: &f64,
     _rtc: Arc<Mutex<RTCConn>>,
 ) -> HostMessage {
-    let vol_percent = format!("{}%", (volume * 100.0).round() as i64);
+    let clamped_volume = volume.clamp(0.0, 1.0);
+    let vol_percent = format!("{}%", (clamped_volume * 100.0).round() as i64);
     #[cfg(target_os = "linux")]
     {
         let _ = Command::new("pactl")

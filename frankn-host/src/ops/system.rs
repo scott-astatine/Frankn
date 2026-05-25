@@ -20,11 +20,11 @@ pub async fn shutdown(id: &str, _args: &String, _rtc: Arc<Mutex<RTCConn>>) -> Ho
     #[cfg(target_os = "linux")]
     let result = Command::new("systemctl").arg("poweroff").output().await;
     #[cfg(target_os = "windows")]
-    let result = Command::new("shutdown").args(["/s", "/t", "0"]).output();
+    let result = Command::new("shutdown").args(["/s", "/t", "0"]).output().await;
     #[cfg(target_os = "macos")]
     let result = Command::new("sudo")
         .args(["shutdown", "-h", "now"])
-        .output();
+        .output().await;
 
     handle_res(id, result)
 }
@@ -33,11 +33,11 @@ pub async fn reboot(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     #[cfg(target_os = "linux")]
     let result = Command::new("systemctl").arg("reboot").output().await;
     #[cfg(target_os = "windows")]
-    let result = Command::new("shutdown").args(["/r", "/t", "0"]).output();
+    let result = Command::new("shutdown").args(["/r", "/t", "0"]).output().await;
     #[cfg(target_os = "macos")]
     let result = Command::new("sudo")
         .args(["shutdown", "-r", "now"])
-        .output();
+        .output().await;
 
     handle_res(id, result)
 }
@@ -46,19 +46,20 @@ pub async fn lock_screen(id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
     #[cfg(target_os = "linux")]
     {
         let _ = Command::new("loginctl").arg("lock-session").output().await;
-        let result = Command::new("hyprlock").output().await;
-        handle_res(id, result)
+        // Spawn screen locker detached (do not await) to prevent event loop blocking
+        let result = Command::new("hyprlock").spawn();
+        handle_spawn_res(id, result)
     }
     #[cfg(target_os = "windows")]
     {
         let result = Command::new("rundll32.exe")
             .args(["user32.dll,LockWorkStation"])
-            .output();
+            .output().await;
         handle_res(id, result)
     }
     #[cfg(target_os = "macos")]
     {
-        let result = Command::new("pmset").args(["displaysleepnow"]).output();
+        let result = Command::new("pmset").args(["displaysleepnow"]).output().await;
         handle_res(id, result)
     }
 }
@@ -104,6 +105,23 @@ fn handle_res(id: &str, result: std::io::Result<std::process::Output>) -> HostMe
         Err(e) => HostMessage::Response {
             id: id.to_string(),
             status: Status::Error(format!("Failed to execute process: {}", e)),
+            data: None,
+            timestamp: get_timestamp(),
+        },
+    }
+}
+
+fn handle_spawn_res(id: &str, result: std::io::Result<tokio::process::Child>) -> HostMessage {
+    match result {
+        Ok(_) => HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Success,
+            data: Some(serde_json::json!({ "message": "Command successfully spawned in background" })),
+            timestamp: get_timestamp(),
+        },
+        Err(e) => HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Error(format!("Failed to spawn process: {}", e)),
             data: None,
             timestamp: get_timestamp(),
         },

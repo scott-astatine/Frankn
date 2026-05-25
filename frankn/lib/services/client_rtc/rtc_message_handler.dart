@@ -458,4 +458,20 @@ mixin RtcMessageHandler on RtcClientBase {
       }
     }
   }
+
+  void clearActiveTransfers() {
+    for (final entry in _activeSinks.entries) {
+      try {
+        entry.value.close();
+      } catch (e) {
+        log("Error closing leaked IOSink for transfer ${entry.key}: $e");
+      }
+    }
+    _activeSinks.clear();
+    _totalSizes.clear();
+    _receivedSizes.clear();
+    _tempPaths.clear();
+    _expectedHashes.clear();
+    _downloadTargetDirs.clear();
+  }
 }

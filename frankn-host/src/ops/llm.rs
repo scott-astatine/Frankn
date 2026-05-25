@@ -266,9 +266,8 @@ impl LlmManager {
         Self::send_msg(response, &rtc_conn, &label).await;
 
         let cid = chat_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let mut req_messages = Vec::new();
 
-        {
+        let req_messages = {
             let mut c = chats.lock().await;
             let session = c.entry(cid.clone()).or_insert_with(|| ChatSession {
                 id: cid.clone(),
@@ -297,7 +296,7 @@ impl LlmManager {
             });
             session.updated_at = crate::utils::get_timestamp();
 
-            req_messages = session
+            let msgs = session
                 .messages
                 .iter()
                 .map(|m| {
@@ -306,10 +305,11 @@ impl LlmManager {
                         "content": m.content
                     })
                 })
-                .collect();
+                .collect::<Vec<serde_json::Value>>();
 
             Self::save_chats(&c).await;
-        }
+            msgs
+        };
 
         let request_body = serde_json::json!({
             "messages": req_messages,

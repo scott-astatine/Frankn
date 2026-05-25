@@ -85,7 +85,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
     // =============================================================================
     // CORE SERVICES INITIALIZATION
     // =============================================================================
-    let auth_manager = Arc::new(AuthManager::from_hash(&config.password_hash));
+    let auth_manager = Arc::new(AuthManager::from_hash(&config.password_hash, &config.salt));
     let peer_map: PeerMap = Arc::new(Mutex::new(HashMap::new()));
     let llm_manager = Arc::new(Mutex::new(LlmManager::new()));
     let input_manager = match crate::ops::input::InputManager::new() {
@@ -243,8 +243,8 @@ async fn handle_new_connection(
     llm_manager: Arc<Mutex<LlmManager>>,
     input_manager: Option<Arc<Mutex<crate::ops::input::InputManager>>>,
     config: Arc<config::HostConfig>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let rtc_conn = Arc::new(Mutex::new(RTCConn::new().await?));
+) -> Result<(), String> {
+    let rtc_conn = Arc::new(Mutex::new(RTCConn::new().await.map_err(|e| e.to_string())?));
 
     // Manage sessions
     {
@@ -341,14 +341,32 @@ async fn handle_new_connection(
         .await;
     }
 
-    let offer = RTCSessionDescription::offer(sdp_offer)?;
-    let answer = {
-        let conn = rtc_conn.lock().await;
-        conn.set_remote_description(offer).await?;
-        conn.create_answer().await?
-    };
+    let handshake_res = async {
+        let offer = RTCSessionDescription::offer(sdp_offer).map_err(|e| e.to_string())?;
+        let answer = {
+            let conn = rtc_conn.lock().await;
+            conn.set_remote_description(offer).await.map_err(|e| e.to_string())?;
+            conn.create_answer().await.map_err(|e| e.to_string())?
+        };
 
-    signaling_client.send_answer(&client_id, answer.sdp).await?;
+        signaling_client.send_answer(&client_id, answer.sdp).await.map_err(|e| e.to_string())?;
+        Ok::<(), String>(())
+    }.await;
+
+    if let Err(e) = handshake_res {
+        crate::elog!("CORE: Handshake failed for client {}: {}", client_id, e);
+        {
+            let mut map = peer_map.lock().await;
+            if let Some(current) = map.get(&client_id)
+                && Arc::ptr_eq(current, &rtc_conn)
+            {
+                map.remove(&client_id);
+            }
+        }
+        let conn = rtc_conn.lock().await;
+        let _ = conn.close().await;
+        return Err(e);
+    }
 
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     {
@@ -383,6 +401,9 @@ async fn handle_new_connection(
         let conn = rtc_conn.lock().await;
         let _ = conn.close().await;
     }
+
+    // Clean up active upload sessions for this client to prevent file descriptor leaks
+    crate::fs_sync::transfer::cleanup_client_uploads(&client_id).await;
 
     crate::log!("UPLINK: Session terminated for {}.", client_id);
     Ok(())
@@ -499,6 +520,7 @@ async fn parse_dc_msg(
                     resume_offset,
                     Arc::clone(&rtc_conn),
                     label,
+                    client_id,
                 )
                 .await;
             }

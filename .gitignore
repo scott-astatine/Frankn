@@ -29,8 +29,7 @@ temp/
 .opencode/
 notes.md
 GEMINI.md
-scp.go
-
+analysis_results.md
 # Git Worktrees
 .worktrees/
 

@@ -109,12 +109,16 @@ pub async fn handle_ssh_channel(
     };
 
     let (mut ri, mut wi) = stream.into_split();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(1000);
     let notify_close = Arc::new(tokio::sync::Notify::new());
 
+    let tx_clone = tx.clone();
     dc.on_message(Box::new(move |msg: DataChannelMessage| {
-        let _ = tx.send(msg.data.to_vec());
-        Box::pin(async { {} })
+        let tx = tx_clone.clone();
+        let data = msg.data.to_vec();
+        Box::pin(async move {
+            let _ = tx.send(data).await;
+        })
     }));
 
     let n_close_event = Arc::clone(&notify_close);

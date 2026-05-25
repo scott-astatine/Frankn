@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:isolate';
+import 'dart:ui';
+
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/isolate_protocol.dart';
@@ -17,11 +21,35 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
+  static ReceivePort? _receivePort;
+
   /// Initializes the Awesome Notifications plugin.
   ///
   /// Sets up the notification channels, groups, and action listeners.
   /// Requests permission if not already granted.
   Future<void> initialize({bool requestPermissions = true}) async {
+    if (_receivePort == null) {
+      _receivePort = ReceivePort();
+      IsolateNameServer.removePortNameMapping('frankn_notification_action_port');
+      IsolateNameServer.registerPortWithName(
+        _receivePort!.sendPort,
+        'frankn_notification_action_port',
+      );
+      _receivePort!.listen((message) {
+        if (message is String) {
+          try {
+            final Map<String, dynamic> payload = Map<String, dynamic>.from(jsonDecode(message));
+            final filePath = payload['file_path'];
+            if (filePath != null) {
+              OpenFilex.open(filePath);
+            }
+          } catch (e) {
+            print("UI Isolate Notification open error: $e");
+          }
+        }
+      });
+    }
+
     await AwesomeNotifications().initialize(
       'resource://drawable/ic_notification',
       [
@@ -243,7 +271,13 @@ Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
           receivedAction.payload?.containsKey('file_path') == true)) {
     final filePath = receivedAction.payload?['file_path'];
     if (filePath != null) {
-      await OpenFilex.open(filePath);
+      final SendPort? sendPort = IsolateNameServer.lookupPortByName('frankn_notification_action_port');
+      if (sendPort != null) {
+        sendPort.send(jsonEncode({'file_path': filePath}));
+      } else {
+        // Fallback: If SendPort is not ready or we are in the main isolate, open directly
+        await OpenFilex.open(filePath);
+      }
     }
   }
 }

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:crypto/crypto.dart';
 import 'package:pointycastle/export.dart';
 
 class AuthService {
@@ -13,6 +12,10 @@ class AuthService {
 
   void setToken(String token) {
     _sessionToken = token;
+  }
+
+  void clearToken() {
+    _sessionToken = null;
   }
 
   /// Computes the Argon2 hash of the password using the provided salt.
@@ -49,10 +52,8 @@ class AuthService {
     return "\$argon2id\$v=19\$m=19456,t=2,p=1\$$b64Salt\$$b64Hash";
   }
 
-  /// Computes Hex(Sha256(Argon2Hash + Challenge))
+  /// Computes Hex(Sha256(Argon2Hash + Challenge)) - Now returns Argon2Hash directly for secure verifier protocol
   String computeResponse(String argon2Hash, String challenge) {
-    final bytes = utf8.encode(argon2Hash + challenge);
-    final digest = sha256.convert(bytes);
-    return digest.toString();
+    return argon2Hash;
   }
 }

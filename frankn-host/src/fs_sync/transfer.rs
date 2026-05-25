@@ -18,7 +18,6 @@ use crate::{HostMessage, ops::rtc::RTCConn, utils::Status};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::SeekFrom;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use tokio::fs::File;
@@ -48,6 +47,7 @@ struct UploadSession {
     total_size: u64,
     last_seq: u32,
     path: String,
+    client_id: String,
 }
 
 /// Global upload session registry.
@@ -106,6 +106,7 @@ pub async fn handle_transfer_init(
     resume_offset: u64,
     rtc_conn: Arc<Mutex<RTCConn>>,
     channel_label: &str,
+    client_id: &str,
 ) -> HostMessage {
     crate::log!(
         "FS: Transfer init for {} — path={}, size={}, resume_offset={}",
@@ -115,12 +116,26 @@ pub async fn handle_transfer_init(
         resume_offset
     );
 
+    // Apply strict path sandboxing
+    let sandbox_path = match crate::fs_sync::check_sandbox_default(path, false) {
+        Ok(p) => p,
+        Err(e) => {
+            return HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Error(e),
+                data: None,
+                timestamp: crate::utils::get_timestamp(),
+            };
+        }
+    };
+    let path_str = sandbox_path.to_string_lossy().to_string();
+
     // Ensure parent directories exist
-    if let Some(parent) = Path::new(path).parent() {
+    if let Some(parent) = sandbox_path.parent() {
         let _ = tokio::fs::create_dir_all(parent).await;
     }
 
-    let part = part_path(path);
+    let part = part_path(&path_str);
 
     // Check if we're resuming and the partial file is valid
     let mut actual_offset = 0u64;
@@ -204,19 +219,20 @@ pub async fn handle_transfer_init(
         current_offset: actual_offset,
         total_size,
         last_seq: 0,
-        path: path.to_string(),
+        path: path_str.clone(),
+        client_id: client_id.to_string(),
     };
 
     // Write initial state file
     let state = TransferState {
         transfer_id: id.to_string(),
-        path: path.to_string(),
+        path: path_str.clone(),
         total_size,
         current_offset: actual_offset,
         expected_hash: hash.clone(),
         last_seq: 0,
     };
-    if let Err(e) = write_state(path, &state).await {
+    if let Err(e) = write_state(&path_str, &state).await {
         crate::elog!("FS: Failed to write state for {}: {}", id, e);
     }
 
@@ -453,7 +469,20 @@ pub async fn handle_download_init(
     rtc_conn: Arc<Mutex<RTCConn>>,
     channel_label: &str,
 ) -> HostMessage {
-    let file = match File::open(path).await {
+    // Apply strict path sandboxing
+    let sandbox_path = match crate::fs_sync::check_sandbox_default(path, false) {
+        Ok(p) => p,
+        Err(e) => {
+            return HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Error(e),
+                data: None,
+                timestamp: crate::utils::get_timestamp(),
+            };
+        }
+    };
+
+    let file = match File::open(&sandbox_path).await {
         Ok(f) => f,
         Err(e) => {
             return HostMessage::Response {
@@ -480,35 +509,18 @@ pub async fn handle_download_init(
     let total_size = metadata.len();
     let actual_offset = resume_offset.min(total_size);
 
-    let file_name = Path::new(path)
+    let file_name = sandbox_path
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    // Compute hash of the full file (for client-side integrity check)
-    let mut hasher = Sha256::new();
-    {
-        let mut f = file.try_clone().await.unwrap();
-        use tokio::io::AsyncReadExt;
-        let mut buf = vec![0u8; 65536];
-        loop {
-            let n = match f.read(&mut buf).await {
-                Ok(0) => break,
-                Ok(n) => n,
-                Err(_) => break,
-            };
-            hasher.update(&buf[..n]);
-        }
-    }
-    let full_hash = hex::encode(hasher.finalize());
-
-    // Send download_start
+    // Send download_start without pre-computing the hash
     let start_msg = HostMessage::DownloadStart {
         id: id.to_string(),
         file_name,
         total_size,
         offset: actual_offset,
-        hash: Some(full_hash.clone()),
+        hash: None, // Will be computed on the fly and sent in DownloadEnd
         timestamp: crate::utils::get_timestamp(),
     };
 
@@ -546,22 +558,30 @@ pub async fn handle_download_init(
     // Spawn the actual streaming in a background task
     let transfer_id = id.to_string();
     let label = channel_label.to_string();
-    let conn_for_download = Arc::clone(&rtc_conn);
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
     let cancel_flag_clone = Arc::clone(&cancel_flag);
 
-    tokio::spawn(async move {
-        let _ = stream_download(
-            f,
-            transfer_id,
-            label,
-            full_hash,
-            conn_for_download,
-            cancel_flag_clone,
-        )
-        .await;
-    });
+    // Retrieve specific RTCDataChannel directly to bypass global connection Mutex locks in streaming loop
+    let dc = {
+        let conn = rtc_conn.lock().await;
+        let channels = conn.data_channels.lock().await;
+        channels.get(&label).cloned()
+    };
+
+    if let Some(dc_arc) = dc {
+        tokio::spawn(async move {
+            let _ = stream_download(
+                f,
+                transfer_id,
+                dc_arc,
+                cancel_flag_clone,
+            )
+            .await;
+        });
+    } else {
+        crate::elog!("FS: Data channel {} not found for download!", label);
+    }
 
     DOWNLOAD_TASKS
         .lock()
@@ -585,14 +605,14 @@ pub async fn handle_download_init(
 async fn stream_download(
     mut file: File,
     id: String,
-    channel_label: String,
-    full_hash: String,
-    rtc_conn: Arc<Mutex<RTCConn>>,
+    dc: Arc<webrtc::data_channel::RTCDataChannel>,
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<(), std::io::Error> {
     const CHUNK_SIZE: usize = 61440; // 60KB
     let mut buffer = vec![0u8; CHUNK_SIZE];
     let mut seq: u32 = 0;
+
+    let mut hasher = Sha256::new(); // On-the-fly SHA-256 hasher
 
     // Get starting offset for frame headers
     let start_offset = file.stream_position().await?;
@@ -611,6 +631,7 @@ async fn stream_download(
         }
 
         let chunk = &buffer[..n];
+        hasher.update(chunk); // Update hash chunk by chunk
         seq += 1;
 
         // Build binary frame: [magic][id][offset][seq][flags][data]
@@ -638,12 +659,15 @@ async fn stream_download(
         // Data
         frame.extend_from_slice(chunk);
 
-        // Backpressure check (simple spin wait to avoid blowing up memory)
+        // Backpressure check (no Mutex locks on the global connection!)
         loop {
-            let buffered = {
-                let conn = rtc_conn.lock().await;
-                conn.get_buffered_amount(&channel_label).await
-            };
+            // Check for graceful cancellation inside loop
+            if cancel_flag.load(Ordering::Relaxed) {
+                crate::log!("FS: Download task {} exited gracefully.", id);
+                return Ok(());
+            }
+
+            let buffered = dc.buffered_amount().await;
             if buffered < 1024 * 1024 {
                 // 1MB buffer limit
                 break;
@@ -651,36 +675,49 @@ async fn stream_download(
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
 
-        // Send the binary frame
+        // Send the binary frame directly
+        if let Err(e) = dc
+            .send(&tokio_tungstenite::tungstenite::Bytes::from(frame))
+            .await
         {
-            let conn = rtc_conn.lock().await;
-            if let Err(e) = conn
-                .send_message(
-                    &channel_label,
-                    &tokio_tungstenite::tungstenite::Bytes::from(frame),
-                )
-                .await
-            {
-                crate::elog!("FS: Failed to send chunk {}: {}", seq, e);
-                break;
-            }
+            crate::elog!("FS: Failed to send chunk {}: {}", seq, e);
+            break;
         }
 
         offset += n as u64;
     }
 
-    // Send download_end
+    let full_hash = hex::encode(hasher.finalize()); // Finalize SHA-256 hash
+
+    // Send download_end with the finalized hash
     let end_msg = HostMessage::DownloadEnd {
         id,
         hash: full_hash,
         timestamp: crate::utils::get_timestamp(),
     };
     if let Ok(json) = serde_json::to_string(&end_msg) {
-        let conn = rtc_conn.lock().await;
-        let _ = conn.send_message(&channel_label, &Bytes::from(json)).await;
+        let _ = dc.send(&Bytes::from(json)).await;
     }
 
     crate::log!("FS: Download stream finished");
-
     Ok(())
+}
+
+/// Clean up any active upload sessions for a specific client to prevent leaks.
+pub async fn cleanup_client_uploads(client_id: &str) {
+    let mut sessions = UPLOAD_SESSIONS.lock().await;
+    let mut to_remove = Vec::new();
+    for (id, session_arc) in sessions.iter() {
+        let session = session_arc.lock().await;
+        if session.client_id == client_id {
+            to_remove.push(id.clone());
+        }
+    }
+    for id in to_remove {
+        if let Some(session_arc) = sessions.remove(&id) {
+            let _session = session_arc.lock().await;
+            crate::log!("FS: Cleaned up orphaned upload session {} for client {}", id, client_id);
+            // file and hasher drop here, releasing resources
+        }
+    }
 }

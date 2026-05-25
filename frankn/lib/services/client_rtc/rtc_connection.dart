@@ -275,26 +275,35 @@ mixin RtcConnection on RtcClientBase {
             log(
               "Neural link unstable. Retrying... (${_reconnectWindowSeconds - elapsed}s remaining)",
             );
-            client.currentHostState = HostConnectionState.connecting;
-            hostStateController.add(HostConnectionState.connecting);
-
+            newState = HostConnectionState.connecting;
             _clearHostConnections();
 
             // Cancel any pending reconnect timer before scheduling a new one
             _reconnectTimer?.cancel();
-            _reconnectTimer = Timer(const Duration(seconds: 3), () {
+            _reconnectTimer = Timer(const Duration(seconds: 3), () async {
               _reconnectTimer = null;
               if (currentHostId != null && !isIntentionalDisconnect) {
-                connectToHost(currentHostId!);
+                final client = this as RtcClient;
+                if (client.sigState != SignalConnectionState.connected) {
+                  log("UPLINK: Signaling server offline. Postponing neural P2P link retry.");
+                  _reconnectTimer = Timer(const Duration(seconds: 2), () async {
+                    if (currentHostId != null && !isIntentionalDisconnect) {
+                      await _clearHostConnections();
+                      connectToHost(currentHostId!);
+                    }
+                  });
+                } else {
+                  await _clearHostConnections();
+                  connectToHost(currentHostId!);
+                }
               }
             });
-            return;
           } else {
             log("Uplink timeout. Threshold exceeded.");
             firstDisconnectTime = null;
             currentHostId = null;
           }
-        } // If diconnection is intentional
+        } // If disconnection is intentional
         else {
           firstDisconnectTime = null;
           if (isIntentionalDisconnect) {
@@ -347,6 +356,14 @@ mixin RtcConnection on RtcClientBase {
   /// Nullifies all connection objects to prevent reuse.
   /// Used both during reconnection and final disconnection.
   Future<void> _clearHostConnections() async {
+    // 1. Invalidate session token to prevent stale transmission
+    AuthService().clearToken();
+
+    // 2. Ensure active file transfer streams and maps are closed and purged
+    if (this is RtcMessageHandler) {
+      (this as RtcMessageHandler).clearActiveTransfers();
+    }
+
     // Cancel any pending reconnect timer
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
