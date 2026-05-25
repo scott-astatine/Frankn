@@ -254,7 +254,9 @@ pub async fn handle_transfer_init(
     };
     if let Ok(json) = serde_json::to_string(&resp) {
         let conn = rtc_conn.lock().await;
-        let _ = conn.send_message(channel_label, &Bytes::from(json)).await;
+        if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
+            crate::elog!("FS ERROR: Failed to send transfer_init response: {}", e);
+        }
     }
 
     resp
@@ -403,7 +405,9 @@ pub async fn handle_transfer_chunk_raw(
         };
         if let Ok(json) = serde_json::to_string(&ack) {
             let conn = rtc_conn.lock().await;
-            let _ = conn.send_message(channel_label, &Bytes::from(json)).await;
+            if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
+                crate::elog!("FS ERROR: Failed to send transfer_ack: {}", e);
+            }
         }
     }
 
@@ -454,7 +458,9 @@ async fn finalize_upload(id: &str, rtc_conn: Arc<Mutex<RTCConn>>, channel_label:
     };
     if let Ok(json) = serde_json::to_string(&complete) {
         let conn = rtc_conn.lock().await;
-        let _ = conn.send_message(channel_label, &Bytes::from(json)).await;
+        if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
+            crate::elog!("FS ERROR: Failed to send transfer_complete: {}", e);
+        }
     }
 
     crate::log!("FS: Transfer {} completed", id);
@@ -526,7 +532,9 @@ pub async fn handle_download_init(
 
     if let Ok(json) = serde_json::to_string(&start_msg) {
         let conn = rtc_conn.lock().await;
-        let _ = conn.send_message(channel_label, &Bytes::from(json)).await;
+        if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
+            crate::elog!("FS ERROR: Failed to send download_start: {}", e);
+        }
     }
 
     // Stream the file from the resume offset
@@ -540,12 +548,15 @@ pub async fn handle_download_init(
         };
         if let Ok(json) = serde_json::to_string(&end_msg) {
             let conn = rtc_conn.lock().await;
-            let _ = conn
+            if let Err(e) = conn
                 .send_message(
                     channel_label,
                     &tokio_tungstenite::tungstenite::Bytes::from(json),
                 )
-                .await;
+                .await
+            {
+                crate::elog!("FS ERROR: Failed to send download_end seek error: {}", e);
+            }
         }
         return HostMessage::Response {
             id: id.to_string(),

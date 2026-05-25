@@ -52,6 +52,7 @@ class IsolateAction {
   static const triggerBackgroundSync = "trigger_background_sync";
   static const stopSync = "stop_sync";
   static const cancelTransfer = "cancel_transfer";
+  static const checkSyncStatus = "check_sync_status";
 
   // State & Event Actions (Background -> UI)
   static const hostState = "host_state";

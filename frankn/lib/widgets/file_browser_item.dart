@@ -14,6 +14,7 @@ class FileBrowserItem extends StatelessWidget {
   final VoidCallback onLongPress;
   final Function(String) onDelete;
   final Function(String, int) onDownload;
+  final Function(String, int) onSaveAs;
   final Function(String, String) onEdit;
   final Function(String, String) onViewImage;
 
@@ -27,6 +28,7 @@ class FileBrowserItem extends StatelessWidget {
     required this.onLongPress,
     required this.onDelete,
     required this.onDownload,
+    required this.onSaveAs,
     required this.onEdit,
     required this.onViewImage,
   });
@@ -64,49 +66,68 @@ class FileBrowserItem extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            Row(
+            Column(
               children: [
                 if (!isDir) ...[
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: CyberButton(
-                        text: l10n.download.toUpperCase(),
-                        isSmall: true,
-                        onPressed: () {
-                          Navigator.pop(context);
-                          onDownload(fullPath, size);
-                        },
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: CyberButton(
+                            text: l10n.download.toUpperCase(),
+                            isSmall: true,
+                            onPressed: () {
+                              Navigator.pop(context);
+                              onDownload(fullPath, size);
+                            },
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: CyberButton(
-                        text: l10n.edit.toUpperCase(),
-                        isSmall: true,
-                        onPressed: () {
-                          Navigator.pop(context);
-                          onEdit(fullPath, name);
-                        },
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: CyberButton(
+                            text: l10n.saveAs.toUpperCase(),
+                            isSmall: true,
+                            onPressed: () {
+                              Navigator.pop(context);
+                              onSaveAs(fullPath, size);
+                            },
+                          ),
+                        ),
                       ),
-                    ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: CyberButton(
+                            text: l10n.edit.toUpperCase(),
+                            isSmall: true,
+                            onPressed: () {
+                              Navigator.pop(context);
+                              onEdit(fullPath, name);
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 12),
                 ],
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(left: isDir ? 0 : 4),
-                    child: CyberButton(
-                      text: l10n.delete.toUpperCase(),
-                      variant: CyberButtonVariant.destructive,
-                      isSmall: true,
-                      onPressed: () {
-                        Navigator.pop(context);
-                        onDelete(fullPath);
-                      },
+                Row(
+                  children: [
+                    Expanded(
+                      child: CyberButton(
+                        text: l10n.delete.toUpperCase(),
+                        variant: CyberButtonVariant.destructive,
+                        isSmall: true,
+                        onPressed: () {
+                          Navigator.pop(context);
+                          onDelete(fullPath);
+                        },
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),

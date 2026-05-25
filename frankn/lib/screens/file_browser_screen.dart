@@ -144,6 +144,7 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
       onLongPress: () => _browserState.toggleSelection(fullPath),
       onDelete: (path) => widget.client.sendDcMsg(DcMsgDeleteFile(path: path)),
       onDownload: (path, size) => downloadFile(path, size: size),
+      onSaveAs: (path, size) => downloadFile(path, size: size, promptDir: true),
       onEdit: (path, name) => Navigator.push(
         context,
         MaterialPageRoute(

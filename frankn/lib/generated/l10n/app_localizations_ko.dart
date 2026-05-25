@@ -489,4 +489,31 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get aliasHint => '예: 작업-컴퓨터';
+
+  @override
+  String get defaultDownloadDir => '기본 다운로드 디렉터리';
+
+  @override
+  String get chooseOnDownload => '다운로드 시 선택';
+
+  @override
+  String get downloadFolder => '다운로드 폴더';
+
+  @override
+  String get noDefaultFolderConfigured =>
+      '아직 기본 다운로드 폴더가 설정되지 않았습니다. 첫 다운로드 시 자동으로 설정되거나 아래에서 선택할 수 있습니다.';
+
+  @override
+  String currentFolder(String folderPath) {
+    return '현재 폴더: $folderPath\n\n이 폴더를 지우거나 새로운 폴더를 선택하시겠습니까?';
+  }
+
+  @override
+  String get clearDefault => '기본값 지우기';
+
+  @override
+  String get chooseFolder => '폴더 선택';
+
+  @override
+  String get saveAs => '다른 이름으로 저장';
 }

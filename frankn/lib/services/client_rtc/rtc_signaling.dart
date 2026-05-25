@@ -186,7 +186,7 @@ mixin RtcSignaling on RtcClientBase {
         notificationButtons: [
           const NotificationButton(
             id: 'disconnect',
-            text: '🛑 Severe',
+            text: '🛑 DISCONNECT',
             textColor: AppColors.errorRed,
           ),
         ],

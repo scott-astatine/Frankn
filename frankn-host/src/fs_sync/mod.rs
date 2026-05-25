@@ -9,24 +9,28 @@ pub mod sync;
 pub fn check_sandbox(base_dir: &Path, user_path: &str, allow_parent: bool) -> Result<PathBuf, String> {
     let combined = base_dir.join(user_path);
     
-    // Check if the path exists to canonicalize. If not, canonicalize its parent.
+    // Check if the path exists to canonicalize. If not, find the first existing ancestor.
     let canonical = match combined.canonicalize() {
         Ok(p) => p,
         Err(_) => {
-            // If the target path doesn't exist (e.g. for mkdir or fresh upload),
-            // we canonicalize its parent directory to ensure it is in the sandbox.
-            if let Some(parent) = combined.parent() {
-                match parent.canonicalize() {
-                    Ok(mut p) => {
-                        if let Some(file_name) = combined.file_name() {
-                            p.push(file_name);
-                        }
-                        p
-                    }
-                    Err(e) => return Err(format!("Parent directory does not exist or invalid: {}", e)),
+            // Find the first parent directory that actually exists on the filesystem
+            let mut ancestor = combined.clone();
+            while let Some(parent) = ancestor.parent() {
+                if parent.exists() {
+                    ancestor = parent.to_path_buf();
+                    break;
                 }
-            } else {
-                return Err("Path has no parent and does not exist".to_string());
+                ancestor = parent.to_path_buf();
+            }
+            match ancestor.canonicalize() {
+                Ok(mut p) => {
+                    // Re-append the non-existent relative parts to reconstruct the target path
+                    if let Ok(rel) = combined.strip_prefix(&ancestor) {
+                        p.push(rel);
+                    }
+                    p
+                }
+                Err(e) => return Err(format!("Existing ancestor directory invalid: {}", e)),
             }
         }
     };

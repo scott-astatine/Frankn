@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:ui';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/screens/sync_manager_screen.dart';
@@ -8,6 +10,7 @@ import 'package:frankn/utils/utils.dart';
 import 'package:frankn/main.dart';
 import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/widgets/dohee_chat/model_selector_dialog.dart';
+import 'package:frankn/widgets/settings/local_dir_selector.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -66,19 +69,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSelectorTile(String label, bool isSelected, VoidCallback onTap) {
-    return ListTile(
-      title: Text(
-        label,
-        style: const TextStyle(
-          fontWeight: FontWeight.w900,
-          fontSize: 14,
-          letterSpacing: 1,
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        title: Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+            letterSpacing: 1,
+          ),
         ),
+        trailing: isSelected
+            ? const Icon(Icons.check, color: AppColors.neonPink)
+            : null,
+        onTap: onTap,
       ),
-      trailing: isSelected
-          ? const Icon(Icons.check, color: AppColors.neonPink)
-          : null,
-      onTap: onTap,
     );
   }
 
@@ -103,23 +109,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [8, 9, 10, 12, 13, 14, 16, 18, 20]
               .map(
-                (size) => ListTile(
-                  title: Text(
-                    l10n.pixels(size),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'JetBrainsMonoNerdFont',
+                (size) => Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                    title: Text(
+                      l10n.pixels(size),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'JetBrainsMonoNerdFont',
+                      ),
                     ),
+                    trailing: _settings.terminalFontSize == size.toDouble()
+                        ? const Icon(Icons.check, color: AppColors.neonPink)
+                        : null,
+                    onTap: () async {
+                      await _settings.setTerminalFontSize(size.toDouble());
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      setState(() {});
+                    },
                   ),
-                  trailing: _settings.terminalFontSize == size.toDouble()
-                      ? const Icon(Icons.check, color: AppColors.neonPink)
-                      : null,
-                  onTap: () async {
-                    await _settings.setTerminalFontSize(size.toDouble());
-                    if (!context.mounted) return;
-                    Navigator.pop(context);
-                    setState(() {});
-                  },
                 ),
               )
               .toList(),
@@ -149,23 +158,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
               .map(
-                (size) => ListTile(
-                  title: Text(
-                    l10n.multiplier(size),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'JetBrainsMonoNerdFont',
+                (size) => Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                    title: Text(
+                      l10n.multiplier(size),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'JetBrainsMonoNerdFont',
+                      ),
                     ),
+                    trailing: _settings.trackpadSensitivity == size
+                        ? const Icon(Icons.check, color: AppColors.neonPink)
+                        : null,
+                    onTap: () async {
+                      await _settings.setTrackpadSensitivity(size);
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      setState(() {});
+                    },
                   ),
-                  trailing: _settings.trackpadSensitivity == size
-                      ? const Icon(Icons.check, color: AppColors.neonPink)
-                      : null,
-                  onTap: () async {
-                    await _settings.setTrackpadSensitivity(size);
-                    if (!context.mounted) return;
-                    Navigator.pop(context);
-                    setState(() {});
-                  },
                 ),
               )
               .toList(),
@@ -380,6 +392,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.cell_tower_rounded,
                 iconColor: Colors.pinkAccent,
                 onTap: _editSignalingUrl,
+              ),
+              _buildSettingsItem(
+                title: l10n.defaultDownloadDir,
+                value: _settings.defaultDownloadDir == null
+                    ? l10n.chooseOnDownload
+                    : _settings.defaultDownloadDir!.split('/').last,
+                icon: Icons.download_for_offline_rounded,
+                iconColor: Colors.amber,
+                onTap: () async {
+                  final action = await showDialog<String>(
+                    context: context,
+                    builder: (context) => CyberAlertDialog(
+                      title: l10n.downloadFolder,
+                      content: Text(
+                        _settings.defaultDownloadDir == null
+                            ? l10n.noDefaultFolderConfigured
+                            : l10n.currentFolder(_settings.defaultDownloadDir!),
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'CLOSE'),
+                          child: Text(l10n.close, style: const TextStyle(color: AppColors.textGrey)),
+                        ),
+                        if (_settings.defaultDownloadDir != null)
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, 'CLEAR'),
+                            child: Text(
+                              l10n.clearDefault,
+                              style: const TextStyle(
+                                color: AppColors.errorRed,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'CHOOSE'),
+                          child: Text(
+                            l10n.chooseFolder,
+                            style: const TextStyle(
+                              color: AppColors.neonCyan,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (action == 'CLEAR') {
+                    await _settings.setDefaultDownloadDir(null);
+                    setState(() {});
+                  } else if (action == 'CHOOSE') {
+                    String? selected;
+                    if (Platform.isAndroid) {
+                      if (!context.mounted) return;
+                      selected = await showModalBottomSheet<String>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => const LocalDirSelector(pickFiles: false),
+                      );
+                    } else {
+                      selected = await FilePicker.platform.getDirectoryPath(
+                        dialogTitle: "Select Destination",
+                      );
+                    }
+
+                    if (selected != null) {
+                      await _settings.setDefaultDownloadDir(selected);
+                      setState(() {});
+                    }
+                  }
+                },
               ),
               if (_client.currentHostId != null)
                 _buildSettingsItem(

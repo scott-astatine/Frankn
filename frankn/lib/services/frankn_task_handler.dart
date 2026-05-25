@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:frankn/services/client_rtc/rtc.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/notification_service.dart';
@@ -19,6 +20,8 @@ import 'package:path_provider/path_provider.dart';
 
 class FranknTaskHandler extends TaskHandler {
   static final Map<String, TransferEngine> _activeEngines = {};
+  static final Map<String, int> _uploadStartTimes = {};
+  static final Map<String, int> _lastUploadNotificationTimes = {};
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool? sendPort) async {
@@ -299,6 +302,8 @@ class FranknTaskHandler extends TaskHandler {
     final localPath = msg.payload['local_path'];
     final bool showNotif = msg.payload['show_notification'] ?? true;
 
+    _uploadStartTimes[id] = DateTime.now().millisecondsSinceEpoch;
+
     // Show initial notification if requested
     if (showNotif) {
        final file = File(localPath);
@@ -306,8 +311,8 @@ class FranknTaskHandler extends TaskHandler {
           final size = file.lengthSync();
           NotificationService().showProgressNotification(
             id.hashCode.abs() % 100000,
-            "Uploading '$fileName'...",
-            "0 B / ${FileUtils.formatSize(size)} (0.0%)",
+            "⇧ [UPLD_RUN] // 0.0% Completed [□□□□□□□□□□]",
+            "⇄ 0 B/s  |  ⧗ Calculating...  |  ⛃ 0 B / ${FileUtils.formatSize(size)}",
             0.0,
             transferId: id,
           );
@@ -346,23 +351,53 @@ class FranknTaskHandler extends TaskHandler {
                 _broadcastToMain(progMsg);
                 RtcThinClient().handleMsg(progMsg);
 
-                if (showNotif &&
-                    (bytesTransferred % (1024 * 1024) < 61440 ||
-                        bytesTransferred == totalBytes)) {
-                  final String sizeInfo = "${FileUtils.formatSize(bytesTransferred)} / ${FileUtils.formatSize(totalBytes)}";
-                  NotificationService().showProgressNotification(
-                    id.hashCode.abs() % 100000,
-                    "Uploading '$fileName'...",
-                    "$sizeInfo (${(progress * 100).toStringAsFixed(1)}%)",
-                    progress * 100,
-                    transferId: id,
-                  );
+                if (showNotif) {
+                  final now = DateTime.now().millisecondsSinceEpoch;
+                  final lastUpdate = _lastUploadNotificationTimes[id] ?? 0;
+                  final isComplete = bytesTransferred == totalBytes;
+
+                  if (isComplete || now - lastUpdate > 500) {
+                    _lastUploadNotificationTimes[id] = now;
+
+                    final startTime = _uploadStartTimes[id] ?? now;
+                    final timeDiffSec = (now - startTime) / 1000.0;
+                    
+                    final double speed = timeDiffSec > 0.1 ? bytesTransferred / timeDiffSec : 0.0;
+                    final double etaSec = speed > 1024 ? (totalBytes - bytesTransferred) / speed : 0.0;
+
+                    String etaStr = "Calculating...";
+                    if (etaSec > 0) {
+                      if (etaSec < 60) {
+                        etaStr = "⧗ ${etaSec.toStringAsFixed(0)}s remaining";
+                      } else {
+                        final minutes = etaSec ~/ 60;
+                        final seconds = (etaSec % 60).toInt();
+                        etaStr = "⧗ ${minutes}m ${seconds}s remaining";
+                      }
+                    } else if (isComplete) {
+                      etaStr = "⧗ Complete";
+                    }
+
+                    final String speedStr = "${FileUtils.formatSize(speed.toInt())}/s";
+                    final String sizeInfo = "${FileUtils.formatSize(bytesTransferred)} / ${FileUtils.formatSize(totalBytes)}";
+
+                    NotificationService().showProgressNotification(
+                      id.hashCode.abs() % 100000,
+                      "⇧ [UPLD_RUN] // ${(progress * 100).toStringAsFixed(1)}%",
+                      "⇄ $speedStr  |  ⧗ $etaStr  |  ⛃ $sizeInfo",
+                      progress * 100,
+                      transferId: id,
+                    );
+                  }
                 }
               },
         )
         .then((_) {
           engine.dispose();
           _activeEngines.remove(id);
+          _uploadStartTimes.remove(id);
+          _lastUploadNotificationTimes.remove(id);
+          
           final okMsg = IsolateMsg(
             type: IsolateType.event,
             action: IsolateAction.transferComplete,
@@ -375,17 +410,27 @@ class FranknTaskHandler extends TaskHandler {
           RtcThinClient().handleMsg(okMsg);
 
           if (showNotif) {
-            NotificationService().showProgressNotification(
-              id.hashCode.abs() % 100000,
-              "Upload Complete",
-              "'$fileName' uploaded successfully.",
-              100.0,
+            NotificationService().dismiss(id.hashCode.abs() % 100000);
+            AwesomeNotifications().createNotification(
+              content: NotificationContent(
+                id: id.hashCode.abs() % 100000,
+                channelKey: 'frankn_host_alerts',
+                title: "◈ [UPLD_DONE] // $fileName",
+                body: "'$fileName' uploaded successfully.",
+                notificationLayout: NotificationLayout.Default,
+                category: NotificationCategory.Status,
+                color: AppColors.matrixGreen,
+                backgroundColor: AppColors.panelGrey,
+              ),
             );
           }
         })
         .catchError((e) {
           engine.dispose();
           _activeEngines.remove(id);
+          _uploadStartTimes.remove(id);
+          _lastUploadNotificationTimes.remove(id);
+          
           final failMsg = IsolateMsg(
             type: IsolateType.event,
             action: IsolateAction.transferFailed,
@@ -398,11 +443,18 @@ class FranknTaskHandler extends TaskHandler {
           RtcThinClient().handleMsg(failMsg);
 
           if (showNotif) {
-            NotificationService().showProgressNotification(
-              id.hashCode.abs() % 100000,
-              "Upload Failed",
-              "'$fileName' failed to upload.",
-              100.0,
+            NotificationService().dismiss(id.hashCode.abs() % 100000);
+            AwesomeNotifications().createNotification(
+              content: NotificationContent(
+                id: id.hashCode.abs() % 100000,
+                channelKey: 'frankn_host_alerts',
+                title: "⚠ [UPLD_ERR] // $fileName",
+                body: "'$fileName' failed to upload.",
+                notificationLayout: NotificationLayout.Default,
+                category: NotificationCategory.Status,
+                color: AppColors.errorRed,
+                backgroundColor: AppColors.panelGrey,
+              ),
             );
           }
         });
@@ -473,8 +525,15 @@ class FranknTaskHandler extends TaskHandler {
         final pair = SyncPair.fromJson(msg.payload);
         SyncService().performFullSync(pair);
         break;
+      case IsolateAction.checkSyncStatus:
+        final pair = SyncPair.fromJson(msg.payload);
+        SyncService().checkSyncStatus(pair);
+        break;
       case IsolateAction.stopSync:
-        SyncService().stopSync();
+        final folderPath = msg.payload.containsKey('id')
+            ? msg.payload['id']
+            : null;
+        SyncService().stopSync(folderPath);
         break;
       case IsolateAction.cancelTransfer:
         final tid = msg.payload['id'];

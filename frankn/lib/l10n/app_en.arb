@@ -202,5 +202,18 @@
   "connected": "Connected",
   "importFromImage": "Import From Image",
   "hostIdHint": "e.g. 550e8400-e29b...",
-  "aliasHint": "e.g. WORK-RIG"
+  "aliasHint": "e.g. WORK-RIG",
+  "defaultDownloadDir": "Default Download Dir",
+  "chooseOnDownload": "Choose on Download",
+  "downloadFolder": "Download Folder",
+  "noDefaultFolderConfigured": "No default landing folder has been configured yet. It will be set automatically on your first download, or you can choose one below.",
+  "currentFolder": "Current Folder: {folderPath}\n\nWould you like to clear this or choose a new folder?",
+  "@currentFolder": {
+    "placeholders": {
+      "folderPath": { "type": "String" }
+    }
+  },
+  "clearDefault": "CLEAR DEFAULT",
+  "chooseFolder": "CHOOSE FOLDER",
+  "saveAs": "Save As"
 }

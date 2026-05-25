@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:isolate';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:flutter/material.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
@@ -38,13 +38,28 @@ class NotificationService {
       _receivePort!.listen((message) {
         if (message is String) {
           try {
-            final Map<String, dynamic> payload = Map<String, dynamic>.from(jsonDecode(message));
-            final filePath = payload['file_path'];
-            if (filePath != null) {
-              OpenFilex.open(filePath);
+            final Map<String, dynamic> msgMap = Map<String, dynamic>.from(jsonDecode(message));
+            final String? action = msgMap['action'];
+            final Map<String, dynamic>? payload = msgMap['payload'] != null 
+                ? Map<String, dynamic>.from(msgMap['payload']) 
+                : null;
+
+            if (action == 'OPEN_FILE' || msgMap.containsKey('file_path')) {
+              final filePath = payload?['file_path'] ?? msgMap['file_path'];
+              if (filePath != null) {
+                OpenFilex.open(filePath);
+              }
+            } else if (action == 'CANCEL_TRANSFER') {
+              final tid = payload?['transfer_id'];
+              if (tid != null) {
+                RtcThinClient().sendIntent(IsolateAction.cancelTransfer, {'id': tid});
+              }
+            } else if (action == 'CANCEL_SYNC') {
+              final pairId = payload?['sync_pair_id'];
+              RtcThinClient().sendIntent(IsolateAction.stopSync, {'id': pairId});
             }
           } catch (e) {
-            print("UI Isolate Notification open error: $e");
+            print("UI Isolate Notification action error: $e");
           }
         }
       });
@@ -59,7 +74,12 @@ class NotificationService {
           channelName: 'Host Alerts',
           channelDescription: 'Notifications mirrored from the Frankn Host',
           defaultColor: AppColors.neonCyan,
-          ledColor: Colors.white,
+          ledColor: AppColors.neonCyan,
+          ledOnMs: 150,
+          ledOffMs: 300,
+          enableLights: true,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList([0, 120, 80, 120, 80, 250]),
           importance: NotificationImportance.High,
           channelShowBadge: true,
         ),
@@ -68,6 +88,10 @@ class NotificationService {
         NotificationChannelGroup(
           channelGroupKey: 'frankn_channel_group',
           channelGroupName: 'Frankn Group',
+        ),
+        NotificationChannelGroup(
+          channelGroupKey: 'frankn_active_transfers_group',
+          channelGroupName: 'Active Transfers',
         ),
       ],
       debug: false,
@@ -130,6 +154,7 @@ Future<void> showProgressNotification(
     content: NotificationContent(
       id: id,
       channelKey: 'frankn_host_alerts',
+      groupKey: 'frankn_active_transfers_group',
       title: title,
       body: body,
       notificationLayout: progress >= 100
@@ -161,43 +186,55 @@ Future<void> showProgressNotification(
   );
 }
 
-  /// Shows a notification when a file download completes.
-  ///
-  /// Includes an "OPEN" action button that triggers [onActionReceivedMethod]
-  /// to open the file using the system's default handler.
   Future<void> showDownloadComplete(
     int id,
     String fileName,
-    String filePath,
-  ) async {
+    String filePath, {
+    bool isFailed = false,
+    String? customBody,
+  }) async {
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: id,
         channelKey: 'frankn_host_alerts',
-        title: "Download Complete",
-        body: "'$fileName' downloaded successfully.",
+        title: isFailed ? "⚠ [DNLD_ERR] // $fileName" : "◈ [DNLD_DONE] // $fileName",
+        body: customBody ?? (isFailed
+            ? "Integrity check failed for '$fileName'."
+            : "'$fileName' downloaded successfully."),
         notificationLayout: NotificationLayout.Default,
         category: NotificationCategory.Status,
         payload: {'file_path': filePath},
-        color: AppColors.matrixGreen,
+        color: isFailed ? AppColors.errorRed : AppColors.matrixGreen,
         backgroundColor: AppColors.panelGrey,
       ),
-      actionButtons: [
-        NotificationActionButton(
-          key: 'OPEN_FILE',
-          label: 'OPEN',
-          actionType: ActionType.Default,
-        ),
-        NotificationActionButton(
-          key: 'DISMISS',
-          label: 'DISMISS',
-          actionType: ActionType.DismissAction,
-        ),
-      ],
+      actionButtons: isFailed
+          ? [
+              NotificationActionButton(
+                key: 'DISMISS',
+                label: 'DISMISS',
+                actionType: ActionType.DismissAction,
+              ),
+            ]
+          : [
+              NotificationActionButton(
+                key: 'OPEN_FILE',
+                label: 'OPEN',
+                actionType: ActionType.Default,
+              ),
+              NotificationActionButton(
+                key: 'DISMISS',
+                label: 'DISMISS',
+                actionType: ActionType.DismissAction,
+              ),
+            ],
     );
   }
 
   /// Shows or updates a progress bar notification for a folder sync session.
+  Future<void> dismiss(int id) async {
+    await AwesomeNotifications().dismiss(id);
+  }
+
   Future<void> showSyncNotification({
     required int id,
     required String folderName,
@@ -213,7 +250,8 @@ Future<void> showProgressNotification(
       content: NotificationContent(
         id: id,
         channelKey: 'frankn_host_alerts',
-        title: isComplete ? "✅ SYNC_COMPLETE: $folderName" : "🔄 SYNCING: $folderName",
+        groupKey: 'frankn_active_transfers_group',
+        title: isComplete ? "◈ [SYNC_DONE] // $folderName" : "⇅ [SYNC_RUN] // $folderName",
         body: isComplete
             ? "$totalItems items synced ($totalSize)"
             : "${(progress * 100).toStringAsFixed(1)}% ($completedItems/$totalItems) - $currentFile",
@@ -227,6 +265,7 @@ Future<void> showProgressNotification(
         color: isComplete ? AppColors.matrixGreen : AppColors.neonCyan,
         backgroundColor: AppColors.panelGrey,
         locked: !isComplete,
+        payload: {'sync_pair_id': folderPath},
       ),
       actionButtons: isComplete
           ? [
@@ -255,27 +294,33 @@ Future<void> showProgressNotification(
 /// using the [OpenFilex] plugin.
 @pragma("vm:entry-point")
 Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
-  if (receivedAction.buttonKeyPressed == 'CANCEL_SYNC') {
-    RtcThinClient().sendIntent(IsolateAction.stopSync);
-  }
+  final SendPort? sendPort = IsolateNameServer.lookupPortByName('frankn_notification_action_port');
 
-  if (receivedAction.buttonKeyPressed == 'CANCEL_TRANSFER') {
-    final tid = receivedAction.payload?['transfer_id'];
-    if (tid != null) {
-      RtcThinClient().sendIntent(IsolateAction.cancelTransfer, {'id': tid});
+  if (sendPort != null) {
+    sendPort.send(jsonEncode({
+      'action': receivedAction.buttonKeyPressed,
+      'payload': receivedAction.payload,
+      'id': receivedAction.id,
+    }));
+  } else {
+    // Fallback: If SendPort is not ready or main isolate is terminated
+    if (receivedAction.buttonKeyPressed == 'CANCEL_SYNC') {
+      final pairId = receivedAction.payload?['sync_pair_id'];
+      RtcThinClient().sendIntent(IsolateAction.stopSync, {'id': pairId});
     }
-  }
 
-  if (receivedAction.buttonKeyPressed == 'OPEN_FILE' ||
-      (receivedAction.channelKey == 'frankn_host_alerts' &&
-          receivedAction.payload?.containsKey('file_path') == true)) {
-    final filePath = receivedAction.payload?['file_path'];
-    if (filePath != null) {
-      final SendPort? sendPort = IsolateNameServer.lookupPortByName('frankn_notification_action_port');
-      if (sendPort != null) {
-        sendPort.send(jsonEncode({'file_path': filePath}));
-      } else {
-        // Fallback: If SendPort is not ready or we are in the main isolate, open directly
+    if (receivedAction.buttonKeyPressed == 'CANCEL_TRANSFER') {
+      final tid = receivedAction.payload?['transfer_id'];
+      if (tid != null) {
+        RtcThinClient().sendIntent(IsolateAction.cancelTransfer, {'id': tid});
+      }
+    }
+
+    if (receivedAction.buttonKeyPressed == 'OPEN_FILE' ||
+        (receivedAction.channelKey == 'frankn_host_alerts' &&
+            receivedAction.payload?.containsKey('file_path') == true)) {
+      final filePath = receivedAction.payload?['file_path'];
+      if (filePath != null) {
         await OpenFilex.open(filePath);
       }
     }

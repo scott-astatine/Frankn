@@ -512,7 +512,7 @@ async fn parse_dc_msg(
                 ..
             } => {
                 crate::log!("FS: Transfer init for {} → {}", id, path);
-                crate::fs_sync::transfer::handle_transfer_init(
+                let resp = crate::fs_sync::transfer::handle_transfer_init(
                     &id,
                     &path,
                     hash,
@@ -523,6 +523,16 @@ async fn parse_dc_msg(
                     client_id,
                 )
                 .await;
+                if let HostMessage::Response { status: Status::Error(_), .. } = &resp {
+                    if let Ok(json) = serde_json::to_string(&resp) {
+                        let rtc_clone = Arc::clone(&rtc_conn);
+                        let label_clone = label.to_string();
+                        tokio::spawn(async move {
+                            let conn = rtc_clone.lock().await;
+                            let _ = conn.send_message(&label_clone, &Bytes::from(json)).await;
+                        });
+                    }
+                }
             }
 
             ClientMessage::TransferCancel { id, .. } => {
@@ -550,7 +560,7 @@ async fn parse_dc_msg(
                     path,
                     resume_offset
                 );
-                crate::fs_sync::transfer::handle_download_init(
+                let resp = crate::fs_sync::transfer::handle_download_init(
                     &id,
                     &path,
                     resume_offset,
@@ -558,6 +568,16 @@ async fn parse_dc_msg(
                     label,
                 )
                 .await;
+                if let HostMessage::Response { status: Status::Error(_), .. } = &resp {
+                    if let Ok(json) = serde_json::to_string(&resp) {
+                        let rtc_clone = Arc::clone(&rtc_conn);
+                        let label_clone = label.to_string();
+                        tokio::spawn(async move {
+                            let conn = rtc_clone.lock().await;
+                            let _ = conn.send_message(&label_clone, &Bytes::from(json)).await;
+                        });
+                    }
+                }
             }
             ClientMessage::XDcMsg {
                 id,

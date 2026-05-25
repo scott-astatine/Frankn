@@ -58,25 +58,34 @@ class SyncService {
 
   final RtcThinClient _client = RtcThinClient();
   bool _isSyncCancelled = false;
+  final Set<String> _cancelledSyncPairs = {};
   String? _activeTransferId;
 
   /// Cancels any in-progress sync operation.
-  void stopSync() {
-    _isSyncCancelled = true;
-    if (_activeTransferId != null) {
-      _client.sendIntent(IsolateAction.cancelTransfer, {'id': _activeTransferId});
+  void stopSync([String? folderPath]) {
+    if (folderPath != null) {
+      _cancelledSyncPairs.add(folderPath);
+      _client.log("SYNC: Termination signal received for folder: $folderPath");
+    } else {
+      _isSyncCancelled = true;
+      _client.log("SYNC: Termination signal received globally.");
     }
-    _client.log("SYNC: Termination signal received.");
+    if (_activeTransferId != null) {
+      _client.sendIntent(IsolateAction.cancelTransfer, {
+        'id': _activeTransferId,
+      });
+    }
   }
 
   /// Scans a local directory recursively and generates a snapshot.
-  Future<Map<String, SyncFileInfo>> generateLocalSnapshot(String rootPath) async {
-    print("==================================================");
-    print("SYNC_SCAN: Starting local scan of $rootPath");
-    
-    // Check permission status directly using raw print for visibility
+  Future<Map<String, SyncFileInfo>> generateLocalSnapshot(
+    String rootPath,
+  ) async {
+    _client.log("SYNC_SCAN: Starting local scan of $rootPath");
+
+    // Check permission status
     final manageStatus = await Permission.manageExternalStorage.status;
-    print("SYNC_SCAN: All-Files Permission Status: $manageStatus");
+    _client.log("SYNC_SCAN: All-Files Permission Status: $manageStatus");
 
     final Map<String, SyncFileInfo> snapshot = {};
 
@@ -85,7 +94,9 @@ class SyncService {
     final dir = Directory(normalizedRoot);
 
     if (!dir.existsSync()) {
-      print("SYNC_SCAN ERROR: Local path does not exist according to OS: $normalizedRoot");
+      _client.log(
+        "SYNC_SCAN ERROR: Local path does not exist: $normalizedRoot",
+      );
       return snapshot;
     }
 
@@ -97,20 +108,28 @@ class SyncService {
 
       while (stack.isNotEmpty) {
         final currentDir = stack.removeLast();
-        print("SYNC_SCAN: Entering: ${currentDir.path}");
+        _client.log("SYNC_SCAN: Entering: ${currentDir.path}");
         dirCount++;
 
-        final List<FileSystemEntity> entities = currentDir.listSync(recursive: false, followLinks: true);
-        print("SYNC_SCAN: Found ${entities.length} items in ${currentDir.path}");
-        
+        final List<FileSystemEntity> entities = currentDir.listSync(
+          recursive: false,
+          followLinks: true,
+        );
+        _client.log(
+          "SYNC_SCAN: Found ${entities.length} items in ${currentDir.path}",
+        );
+
         for (final entity in entities) {
           if (entity is Directory) {
             stack.add(entity);
           } else if (entity is File) {
             try {
               final stat = entity.statSync();
-              final relativePath = p.relative(entity.path, from: normalizedRoot);
-              
+              final relativePath = p.relative(
+                entity.path,
+                from: normalizedRoot,
+              );
+
               final hash = await _generateQuickHash(entity);
 
               snapshot[relativePath] = SyncFileInfo(
@@ -120,18 +139,22 @@ class SyncService {
                 hash: hash,
               );
               fileCount++;
-              print("SYNC_SCAN: [+] Found: $relativePath");
+              _client.log("SYNC_SCAN: [+] Found: $relativePath");
             } catch (e) {
-              print("SYNC_SCAN ERROR: Failed to read file ${entity.path}: $e");
+              _client.log(
+                "SYNC_SCAN ERROR: Failed to read file ${entity.path}: $e",
+              );
             }
           }
         }
       }
-      print("SYNC_SCAN COMPLETE: Found $fileCount files in $dirCount directories.");
+      _client.log(
+        "SYNC_SCAN COMPLETE: Found $fileCount files in $dirCount directories.",
+      );
     } catch (e) {
-      print("SYNC_SCAN FATAL EXCEPTION: $e");
+      _client.log("SYNC_SCAN FATAL EXCEPTION: $e");
     }
-    print("==================================================");
+    _client.log("==================================================");
 
     return snapshot;
   }
@@ -176,7 +199,9 @@ class SyncService {
         for (final path in local.keys) {
           final localFile = local[path]!;
           final remoteFile = remote[path];
-          if (remoteFile == null || localFile.hash != remoteFile.hash || localFile.hash == null) {
+          if (remoteFile == null ||
+              localFile.hash != remoteFile.hash ||
+              localFile.hash == null) {
             _client.log("SYNC: [BACKUP] Queue Upload: $path");
             ops.add(SyncOperation(SyncOpType.upload, path));
           }
@@ -191,7 +216,9 @@ class SyncService {
         for (final path in remote.keys) {
           final remoteFile = remote[path]!;
           final localFile = local[path];
-          if (localFile == null || remoteFile.hash != localFile.hash || remoteFile.hash == null) {
+          if (localFile == null ||
+              remoteFile.hash != localFile.hash ||
+              remoteFile.hash == null) {
             _client.log("SYNC: [DIST] Queue Download: $path");
             ops.add(SyncOperation(SyncOpType.download, path));
           }
@@ -213,7 +240,7 @@ class SyncService {
   Future<String> _generateQuickHash(File file) async {
     try {
       final size = await file.length();
-      
+
       final raf = await file.open(mode: FileMode.read);
       final bytes = await raf.read(1024);
       await raf.close();
@@ -245,7 +272,9 @@ class SyncService {
   Future<void> performFullSync(SyncPair pair) async {
     final myId = identityHashCode(this);
     final clientId = identityHashCode(_client);
-    _client.log("SYNC_DEBUG[$myId]: Starting FULL_SYNC. RtcThinClient ID: $clientId");
+    _client.log(
+      "SYNC_DEBUG[$myId]: Starting FULL_SYNC. RtcThinClient ID: $clientId",
+    );
 
     try {
       // 1. Generate local snapshot
@@ -257,17 +286,23 @@ class SyncService {
       StreamSubscription? sub;
 
       final normRemote = pair.remotePath.replaceAll(RegExp(r'/+$'), '');
-      _client.log("SYNC_DEBUG[$myId]: Registering snapshot listener for $normRemote");
+      _client.log(
+        "SYNC_DEBUG[$myId]: Registering snapshot listener for $normRemote",
+      );
 
       sub = _client.syncSnapshotStream.listen((msg) {
         final String respPath = msg.rootPath;
         final normResp = respPath.replaceAll(RegExp(r'/+$'), '');
-        _client.log("SYNC_DEBUG[$myId]: Received snapshot chunk for $normResp (Final: ${msg.isFinal})");
+        _client.log(
+          "SYNC_DEBUG[$myId]: Received snapshot chunk for $normResp (Final: ${msg.isFinal})",
+        );
 
         if (normResp == normRemote) {
           accumulatedFiles.addAll(msg.files);
           if (msg.isFinal) {
-            _client.log("SYNC_DEBUG[$myId]: Completing snapshot future with ${accumulatedFiles.length} files.");
+            _client.log(
+              "SYNC_DEBUG[$myId]: Completing snapshot future with ${accumulatedFiles.length} files.",
+            );
             sub?.cancel();
             if (!completer.isCompleted) completer.complete(accumulatedFiles);
           }
@@ -275,7 +310,9 @@ class SyncService {
       });
 
       await requestRemoteSnapshot(pair.remotePath);
-      _client.log("SYNC_DEBUG[$myId]: Snapshot request sent. Waiting for response...");
+      _client.log(
+        "SYNC_DEBUG[$myId]: Snapshot request sent. Waiting for response...",
+      );
 
       final remoteList = await completer.future.timeout(
         const Duration(seconds: 45),
@@ -288,22 +325,6 @@ class SyncService {
 
       // 3. Execute Batch
       await executeSyncBatch(pair, local, remoteList);
-      
-      // 4. Update lastSynced timestamp
-      final settings = SettingsService();
-      final pairs = settings.syncPairs;
-      final index = pairs.indexWhere((p) => p.localPath == pair.localPath && p.remotePath == pair.remotePath);
-      if (index != -1) {
-        pairs[index] = SyncPair(
-          localPath: pair.localPath,
-          remotePath: pair.remotePath,
-          mode: pair.mode,
-          clientIsSource: pair.clientIsSource,
-          intervalMinutes: pair.intervalMinutes,
-          lastSynced: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        );
-        await settings.setSyncPairs(pairs);
-      }
 
       _client.log("SYNC: FULL_SYNC SUCCESS for ${pair.localPath}");
     } catch (e) {
@@ -338,6 +359,7 @@ class SyncService {
 
     if (deltas.isEmpty) {
       _client.log("SYNC: Folder is already up to date.");
+      await _updateLastSynced(pair);
       _client.sendEvent(IsolateAction.syncBatchProgress, {
         'completed': 0,
         'total': 0,
@@ -348,32 +370,39 @@ class SyncService {
 
     final totalItems = deltas.length;
     int completedItems = 0;
-    
-    // Calculate total bytes for the batch (uploads only for now, downloads are harder to estimate total size without another round-trip)
+
+    // Calculate total bytes for the batch (both uploads and downloads)
     int totalBytes = 0;
     for (var op in deltas) {
-       if (op.type == SyncOpType.upload) {
-          totalBytes += local[op.path]?.size ?? 0;
-       }
+      if (op.type == SyncOpType.upload) {
+        totalBytes += local[op.path]?.size ?? 0;
+      } else if (op.type == SyncOpType.download) {
+        totalBytes += remote[op.path]?.size ?? 0;
+      }
     }
-    
+
     int completedBytes = 0;
     int activeFileBytesTransferred = 0;
     final folderName = pair.localPath.split('/').last;
     final syncNotificationId = pair.localPath.hashCode.abs() % 10000;
 
-    _client.log("SYNC: Commencing sequential execution of $totalItems operations...");
+    _client.log(
+      "SYNC: Commencing sequential execution of $totalItems operations...",
+    );
     _isSyncCancelled = false;
+    _cancelledSyncPairs.remove(pair.localPath);
 
     try {
       for (final op in deltas) {
-        if (_isSyncCancelled) {
-          _client.log("SYNC: Operation aborted by user.");
+        if (_isSyncCancelled || _cancelledSyncPairs.contains(pair.localPath)) {
+          _client.log(
+            "SYNC: Operation aborted by user for folder: ${pair.localPath}.",
+          );
           break;
         }
         completedItems++;
         activeFileBytesTransferred = 0;
-        
+
         _client.sendEvent(IsolateAction.syncBatchProgress, {
           'completed': completedItems,
           'total': totalItems,
@@ -383,8 +412,8 @@ class SyncService {
         final completer = Completer<bool>();
         final transferId = FileUtils.generateStableTransferId(
           op.path,
-          op.type == SyncOpType.upload 
-              ? (local[op.path]?.size ?? 0) 
+          op.type == SyncOpType.upload
+              ? (local[op.path]?.size ?? 0)
               : (remote[op.path]?.size ?? 0),
         );
         _activeTransferId = transferId;
@@ -398,7 +427,9 @@ class SyncService {
           totalItems: totalItems,
           totalSize: FileUtils.formatSize(totalBytes),
           currentFile: op.path.split('/').last,
-          progress: totalBytes > 0 ? (completedBytes / totalBytes) : ((completedItems - 1) / totalItems),
+          progress: totalBytes > 0
+              ? (completedBytes / totalBytes)
+              : ((completedItems - 1) / totalItems),
         );
 
         // Listen for the specific transfer completion from the local intent stream or transferProgressStream.
@@ -407,23 +438,28 @@ class SyncService {
         statusSub = _client.transferProgressStream.listen((event) {
           if (event.id == transferId) {
             if (event is TransferProgressUpdate) {
-               activeFileBytesTransferred = event.bytesSent;
-               // Update notification with partial progress
-               NotificationService().showSyncNotification(
-                  id: syncNotificationId,
-                  folderName: folderName,
-                  folderPath: pair.localPath,
-                  completedItems: completedItems - 1,
-                  totalItems: totalItems,
-                  totalSize: FileUtils.formatSize(totalBytes),
-                  currentFile: op.path.split('/').last,
-                  progress: totalBytes > 0 
-                      ? ((completedBytes + activeFileBytesTransferred) / totalBytes) 
-                      : ((completedItems - 1 + event.progress) / totalItems),
-                );
+              activeFileBytesTransferred = event.bytesSent;
+              // Update notification with partial progress
+              NotificationService().showSyncNotification(
+                id: syncNotificationId,
+                folderName: folderName,
+                folderPath: pair.localPath,
+                completedItems: completedItems - 1,
+                totalItems: totalItems,
+                totalSize: FileUtils.formatSize(totalBytes),
+                currentFile: op.path.split('/').last,
+                progress: totalBytes > 0
+                    ? ((completedBytes + activeFileBytesTransferred) /
+                          totalBytes)
+                    : ((completedItems - 1 + event.progress) / totalItems),
+              );
             } else if (event is TransferProgressComplete) {
               statusSub?.cancel();
-              completedBytes += (op.type == SyncOpType.upload ? (local[op.path]?.size ?? 0) : 0);
+              if (op.type == SyncOpType.upload) {
+                completedBytes += local[op.path]?.size ?? 0;
+              } else if (op.type == SyncOpType.download) {
+                completedBytes += remote[op.path]?.size ?? 0;
+              }
               completer.complete(true);
             } else if (event is TransferProgressFailed) {
               statusSub?.cancel();
@@ -435,7 +471,9 @@ class SyncService {
         try {
           switch (op.type) {
             case SyncOpType.upload:
-              _client.log("SYNC: [$completedItems/$totalItems] Uploading ${op.path}...");
+              _client.log(
+                "SYNC: [$completedItems/$totalItems] Uploading ${op.path}...",
+              );
               _client.sendIntent(IsolateAction.uploadInit, {
                 'id': transferId,
                 'local_path': "${pair.localPath}/${op.path}",
@@ -448,11 +486,13 @@ class SyncService {
               break;
 
             case SyncOpType.download:
-              _client.log("SYNC: [$completedItems/$totalItems] Downloading ${op.path}...");
+              _client.log(
+                "SYNC: [$completedItems/$totalItems] Downloading ${op.path}...",
+              );
               // Ensure local directory exists before download
               final targetFile = File("${pair.localPath}/${op.path}");
               if (!targetFile.parent.existsSync()) {
-                 targetFile.parent.createSync(recursive: true);
+                targetFile.parent.createSync(recursive: true);
               }
 
               _client.sendIntent(IsolateAction.downloadInit, {
@@ -466,9 +506,9 @@ class SyncService {
 
             case SyncOpType.deleteRemote:
               _client.log("SYNC: Deleting remote ${op.path}...");
-              _client.sendDcMsg(DcMsgDeleteFile(
-                path: "${pair.remotePath}/${op.path}",
-              ));
+              _client.sendDcMsg(
+                DcMsgDeleteFile(path: "${pair.remotePath}/${op.path}"),
+              );
               await Future.delayed(const Duration(milliseconds: 100));
               statusSub.cancel(); // Cancel unused sub
               break;
@@ -491,7 +531,9 @@ class SyncService {
     }
 
     _client.log("SYNC: Batch processing finished.");
-    
+
+    await _updateLastSynced(pair);
+
     // Final notification update
     NotificationService().showSyncNotification(
       id: syncNotificationId,
@@ -537,8 +579,10 @@ class SyncService {
       });
 
       await requestRemoteSnapshot(pair.remotePath);
-      final remoteList = await completer.future.timeout(const Duration(seconds: 30));
-      
+      final remoteList = await completer.future.timeout(
+        const Duration(seconds: 30),
+      );
+
       final Map<String, SyncFileInfo> remote = {};
       for (var f in remoteList) {
         remote[f['path']] = SyncFileInfo.fromJson(f);
@@ -561,6 +605,34 @@ class SyncService {
       });
     } catch (e) {
       _client.log("SYNC_VERIFIER ERROR: $e");
+    }
+  }
+
+  /// Updates the lastSynced timestamp of a sync pair in SettingsService.
+  Future<void> _updateLastSynced(SyncPair pair) async {
+    try {
+      final settings = SettingsService();
+      await settings.reload();
+      final pairs = settings.syncPairs;
+      final index = pairs.indexWhere(
+        (p) => p.localPath == pair.localPath && p.remotePath == pair.remotePath,
+      );
+      if (index != -1) {
+        pairs[index] = SyncPair(
+          localPath: pair.localPath,
+          remotePath: pair.remotePath,
+          mode: pair.mode,
+          clientIsSource: pair.clientIsSource,
+          intervalMinutes: pair.intervalMinutes,
+          lastSynced: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        );
+        await settings.setSyncPairs(pairs);
+        _client.log(
+          "SYNC: Updated lastSynced to ${pairs[index].lastSynced} for ${pair.localPath}",
+        );
+      }
+    } catch (e) {
+      _client.log("SYNC ERROR: Failed to update lastSynced: $e");
     }
   }
 }

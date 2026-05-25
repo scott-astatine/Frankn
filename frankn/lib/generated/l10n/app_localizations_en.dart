@@ -493,4 +493,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aliasHint => 'e.g. WORK-RIG';
+
+  @override
+  String get defaultDownloadDir => 'Default Download Dir';
+
+  @override
+  String get chooseOnDownload => 'Choose on Download';
+
+  @override
+  String get downloadFolder => 'Download Folder';
+
+  @override
+  String get noDefaultFolderConfigured =>
+      'No default landing folder has been configured yet. It will be set automatically on your first download, or you can choose one below.';
+
+  @override
+  String currentFolder(String folderPath) {
+    return 'Current Folder: $folderPath\n\nWould you like to clear this or choose a new folder?';
+  }
+
+  @override
+  String get clearDefault => 'CLEAR DEFAULT';
+
+  @override
+  String get chooseFolder => 'CHOOSE FOLDER';
+
+  @override
+  String get saveAs => 'Save As';
 }

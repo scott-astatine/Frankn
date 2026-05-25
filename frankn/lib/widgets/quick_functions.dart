@@ -9,27 +9,13 @@ import 'package:frankn/screens/trackpad_screen.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/utils.dart';
-import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/widgets/animated_op_btn.dart';
 import 'package:frankn/widgets/dohee_chat/model_selector_dialog.dart';
 import 'package:frankn/widgets/neural_deck_player.dart';
 
-class QuickFunction extends StatefulWidget {
+class QuickFunction extends StatelessWidget {
   final RtcThinClient client;
   const QuickFunction({super.key, required this.client});
-
-  @override
-  State<QuickFunction> createState() => _QuickFunctionState();
-}
-
-class _QuickFunctionState extends State<QuickFunction> {
-  bool _mediaIsPlaying = false;
-  String? _mediaMetadata;
-  String? _mediaArtist;
-  double _mediaPosition = 0.0;
-  double _mediaLength = 1.0;
-  String? _playerName;
-  String? _artData;
 
   @override
   Widget build(BuildContext context) {
@@ -47,16 +33,7 @@ class _QuickFunctionState extends State<QuickFunction> {
           ),
         ),
         const SizedBox(height: 12),
-        NeuralDeckPlayer(
-          client: widget.client,
-          mediaIsPlaying: _mediaIsPlaying,
-          mediaMetadata: _mediaMetadata ?? l10n.noMediaPlaying,
-          mediaArtist: _mediaArtist ?? l10n.idle,
-          mediaPosition: _mediaPosition,
-          mediaLength: _mediaLength,
-          playerName: _playerName ?? l10n.idleInstance,
-          artData: _artData,
-        ),
+        NeuralDeckPlayer(client: client),
         const SizedBox(height: 32),
         Text(
           l10n.systemOperations,
@@ -68,48 +45,13 @@ class _QuickFunctionState extends State<QuickFunction> {
           ),
         ),
         const SizedBox(height: 12),
-        _buildOperationsGrid(l10n),
+        _buildOperationsGrid(context, l10n),
         const SizedBox(height: 24),
       ],
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    widget.client.sendDcMsg(const DcMsgGetMediaStatus());
-    widget.client.genDcMsgStream.listen((msg) {
-      if (!mounted) return;
-      final l10n = AppLocalizations.of(context)!;
-      final mediamsg = msg is HostMsgMediaUpdate ? msg : null;
-      if (mediamsg == null) {
-        return;
-      } else {
-        setState(() {
-          final rawMetadata = mediamsg.metadata;
-          if (rawMetadata.contains(" - ")) {
-            final parts = rawMetadata.split(" - ");
-            _mediaMetadata = parts[0];
-            _mediaArtist = parts.sublist(1).join(" - ");
-          } else {
-            _mediaMetadata = rawMetadata;
-            _mediaArtist = l10n.unknownArtist;
-          }
-          _playerName = mediamsg.playerName;
-          if (_mediaArtist == l10n.unknownArtist) {
-            _mediaArtist = _playerName?.split('.').last;
-          }
-          _artData = mediamsg.artData;
-          _mediaPosition = mediamsg.position;
-          _mediaLength = mediamsg.length;
-          _mediaIsPlaying = mediamsg.playing;
-          if (_mediaLength <= 0) _mediaLength = 1.0;
-        });
-      }
-    });
-  }
-
-  Widget _buildOperationsGrid(AppLocalizations l10n) {
+  Widget _buildOperationsGrid(BuildContext context, AppLocalizations l10n) {
     return GridView.count(
       crossAxisCount: 3,
       shrinkWrap: true,
@@ -126,7 +68,7 @@ class _QuickFunctionState extends State<QuickFunction> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => FileBrowserScreen(client: widget.client),
+                builder: (_) => FileBrowserScreen(client: client),
               ),
             );
           },
@@ -134,25 +76,25 @@ class _QuickFunctionState extends State<QuickFunction> {
         _opBtn(l10n.terminal, Icons.terminal_outlined, AppColors.neonCyan, () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => SShScreen(client: widget.client)),
+            MaterialPageRoute(builder: (_) => SShScreen(client: client)),
           );
         }),
         _opBtn(l10n.trackpad, Icons.mouse, AppColors.neonCyan, () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => TrackpadScreen(client: widget.client),
+              builder: (_) => TrackpadScreen(client: client),
             ),
           );
         }),
         _opBtn(l10n.doheeChat, Icons.auto_awesome, AppColors.neonPink, () {
-          _showNeuralChatDialog(context, widget.client);
+          _showNeuralChatDialog(context, client);
         }),
         _opBtn(l10n.processes, Icons.show_chart, AppColors.textGrey, () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ProcessManagerScreen(client: widget.client),
+              builder: (_) => ProcessManagerScreen(client: client),
             ),
           );
         }),
@@ -160,7 +102,7 @@ class _QuickFunctionState extends State<QuickFunction> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => SyslogScreen(client: widget.client),
+              builder: (_) => SyslogScreen(client: client),
             ),
           );
         }),

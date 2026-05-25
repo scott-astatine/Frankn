@@ -1021,6 +1021,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'e.g. WORK-RIG'**
   String get aliasHint;
+
+  /// No description provided for @defaultDownloadDir.
+  ///
+  /// In en, this message translates to:
+  /// **'Default Download Dir'**
+  String get defaultDownloadDir;
+
+  /// No description provided for @chooseOnDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose on Download'**
+  String get chooseOnDownload;
+
+  /// No description provided for @downloadFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Download Folder'**
+  String get downloadFolder;
+
+  /// No description provided for @noDefaultFolderConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'No default landing folder has been configured yet. It will be set automatically on your first download, or you can choose one below.'**
+  String get noDefaultFolderConfigured;
+
+  /// No description provided for @currentFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Current Folder: {folderPath}\n\nWould you like to clear this or choose a new folder?'**
+  String currentFolder(String folderPath);
+
+  /// No description provided for @clearDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'CLEAR DEFAULT'**
+  String get clearDefault;
+
+  /// No description provided for @chooseFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'CHOOSE FOLDER'**
+  String get chooseFolder;
+
+  /// No description provided for @saveAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Save As'**
+  String get saveAs;
 }
 
 class _AppLocalizationsDelegate

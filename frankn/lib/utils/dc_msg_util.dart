@@ -192,6 +192,30 @@ class HostMsgMediaUpdate extends HostMessage {
       'timestamp': timestamp,
       'track_id': trackId,
     });
+
+  HostMsgMediaUpdate copyWith({
+    String? playerName,
+    bool? playing,
+    String? metadata,
+    String? artData,
+    double? position,
+    double? length,
+    double? volume,
+    int? timestamp,
+    String? trackId,
+  }) {
+    return HostMsgMediaUpdate(
+      playerName: playerName ?? this.playerName,
+      playing: playing ?? this.playing,
+      metadata: metadata ?? this.metadata,
+      artData: artData ?? this.artData,
+      position: position ?? this.position,
+      length: length ?? this.length,
+      volume: volume ?? this.volume,
+      timestamp: timestamp ?? this.timestamp,
+      trackId: trackId ?? this.trackId,
+    );
+  }
 }
 
 class HostMsgResponse extends HostMessage {

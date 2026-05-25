@@ -25,6 +25,7 @@ class SettingsService {
   static const String _keyLlmSystemPrompt = 'llm_system_prompt';
   static const String _keyLlmProvider = 'llm_provider';
   static const String _keySyncPairs = 'sync_pairs';
+  static const String _keyDefaultDownloadDir = 'default_download_dir';
 
   // Default Values
   static const String _defaultSignalingUrl = 'ws://152.67.19.202:8037';
@@ -163,6 +164,17 @@ class SettingsService {
     hosts.removeWhere((h) => h['id'] == id);
     final list = hosts.map((e) => jsonEncode(e)).toList();
     await _prefs.setStringList(_keySavedHosts, list);
+  }
+
+  /// Returns the configured default download directory.
+  String? get defaultDownloadDir => _prefs.getString(_keyDefaultDownloadDir);
+
+  /// Persists a new default download directory.
+  Future<bool> setDefaultDownloadDir(String? value) async {
+    if (value == null) {
+      return await _prefs.remove(_keyDefaultDownloadDir);
+    }
+    return await _prefs.setString(_keyDefaultDownloadDir, value);
   }
 
   /// Clears all local data. Used for a complete app reset.

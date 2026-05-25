@@ -11,16 +11,26 @@ mixin RtcMessageHandler on RtcClientBase {
 
   final Map<String, String> _downloadTargetDirs = {};
   final Map<String, bool> _showNotificationMap = {};
+  final Map<String, int> _transferStartTimes = {};
+  final Map<String, int> _lastNotificationUpdateTime = {};
 
   // Album art tracking
   String? _lastArtSig;
   String? _lastArtLocalPath;
   String? _currentArtTransferId;
+  HostMsgMediaUpdate? _lastMediaUpdate;
+
+  // Background Ping/RTT tracking
+  Timer? _bgPingTimer;
+  int? _lastPingTime;
+  int _lastPingMs = 0;
 
   void _handleChallenge(HostMsgChallenge msg) async {
     log("Computing Auth Response...");
-    final argon2Hash =
-        await AuthService().computeArgon2Hash(currentPassword ?? "", msg.salt);
+    final argon2Hash = await AuthService().computeArgon2Hash(
+      currentPassword ?? "",
+      msg.salt,
+    );
     final response = AuthService().computeResponse(argon2Hash, msg.challenge);
     sendHostMessage(ClientMsgAuthResponse(response: response).toJson());
   }
@@ -30,6 +40,23 @@ mixin RtcMessageHandler on RtcClientBase {
     AuthService().setToken(msg.token);
     updateHostState(HostConnectionState.authenticated);
     log("AUTH SUCCESS. Session Token acquired.");
+    _startBgPingTimer();
+  }
+
+  void _startBgPingTimer() {
+    _bgPingTimer?.cancel();
+    _bgPingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      final client = this as RtcClient;
+      if (client.currentHostState == HostConnectionState.authenticated) {
+        _lastPingTime = DateTime.now().millisecondsSinceEpoch;
+        client.sendDcMsg(const DcMsgPing());
+      }
+    });
+  }
+
+  void _stopBgPingTimer() {
+    _bgPingTimer?.cancel();
+    _bgPingTimer = null;
   }
 
   void _handleAuthFailed(HostMsgAuthFailed msg) {
@@ -68,36 +95,69 @@ mixin RtcMessageHandler on RtcClientBase {
       final totalSize = _totalSizes[id] ?? 1;
       final progress = (currentTotal / totalSize).clamp(0.0, 1.0);
 
-      // Throttled UI Update: Only emit progress every 1MB or on completion
-      if (currentTotal % (1024 * 1024) < chunk.length ||
+      // Throttled UI Update: Only emit progress every 256KB or on completion
+      if (currentTotal % (256 * 1024) < chunk.length ||
           currentTotal == totalSize) {
-        transferProgressController.add(TransferProgressUpdate(
-          id: id,
-          progress: progress,
-          bytesSent: currentTotal,
-          totalBytes: totalSize,
-        ));
+        transferProgressController.add(
+          TransferProgressUpdate(
+            id: id,
+            progress: progress,
+            bytesSent: currentTotal,
+            totalBytes: totalSize,
+          ),
+        );
       }
 
-      // Update notification every 1MB or on completion
-      if ((_showNotificationMap[id] ?? true) &&
-          (currentTotal % (1024 * 1024) < chunk.length ||
-              currentTotal == totalSize)) {
-        final String sizeInfo =
-            "${FileUtils.formatSize(currentTotal)} / ${FileUtils.formatSize(totalSize)}";
-        NotificationService().showProgressNotification(
-          id.hashCode.abs() % 100000,
-          "Downloading '${activeFileNames[id] ?? 'File'}'...",
-          "$sizeInfo (${(progress * 100).toStringAsFixed(1)}%)",
-          progress * 100,
-          transferId: id,
-        );
+      // Update notification: Throttled to 500ms (2Hz) to prevent CPU starvation
+      if (_showNotificationMap[id] ?? true) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final lastUpdate = _lastNotificationUpdateTime[id] ?? 0;
+        final isComplete = currentTotal == totalSize;
+
+        if (isComplete || now - lastUpdate > 500) {
+          _lastNotificationUpdateTime[id] = now;
+
+          final startTime = _transferStartTimes[id] ?? now;
+          final timeDiffSec = (now - startTime) / 1000.0;
+
+          final double speed = timeDiffSec > 0.1
+              ? currentTotal / timeDiffSec
+              : 0.0;
+          final double etaSec = speed > 1024
+              ? (totalSize - currentTotal) / speed
+              : 0.0;
+
+          String etaStr = "Calculating...";
+          if (etaSec > 0) {
+            if (etaSec < 60) {
+              etaStr = "⧗ ${etaSec.toStringAsFixed(0)}s remaining";
+            } else {
+              final minutes = etaSec ~/ 60;
+              final seconds = (etaSec % 60).toInt();
+              etaStr = "⧗ ${minutes}m ${seconds}s remaining";
+            }
+          } else if (isComplete) {
+            etaStr = "⧗ Complete";
+          }
+
+          final String speedStr = "${FileUtils.formatSize(speed.toInt())}/s";
+
+          NotificationService().showProgressNotification(
+            id.hashCode.abs() % 100000,
+            "⇩ [DNLD_RUN] // ${(progress * 100).toStringAsFixed(1)}%",
+            "⇄ $speedStr | $etaStr | ⛃ ${FileUtils.formatSize(currentTotal)} / ${FileUtils.formatSize(totalSize)}",
+            progress * 100,
+            transferId: id,
+          );
+        }
       }
     }
   }
 
   void _handleDownloadEnd(HostMsgDownloadEnd msg) async {
     final transferId = msg.id;
+    AwesomeNotifications().dismiss(transferId.hashCode.abs() % 100000);
+
     final sink = _activeSinks.remove(transferId);
     final tempPath = _tempPaths.remove(transferId);
 
@@ -112,19 +172,23 @@ mixin RtcMessageHandler on RtcClientBase {
     final fileName = activeFileNames.remove(transferId);
     if (fileName == null) {
       log("WARN: DownloadEnd for $transferId has no registered file name.");
-      transferProgressController.add(TransferProgressFailed(
-        id: transferId,
-        error: 'No file name registered',
-      ));
+      transferProgressController.add(
+        TransferProgressFailed(
+          id: transferId,
+          error: 'No file name registered',
+        ),
+      );
       return;
     }
 
     // Emit completion event
-    transferProgressController.add(TransferProgressComplete(
-      id: transferId,
-      finalPath: tempPath,
-      fileName: fileName,
-    ));
+    transferProgressController.add(
+      TransferProgressComplete(
+        id: transferId,
+        finalPath: tempPath,
+        fileName: fileName,
+      ),
+    );
 
     final file = File(tempPath);
 
@@ -138,11 +202,15 @@ mixin RtcMessageHandler on RtcClientBase {
       final digest = sha256.convert(bytes).toString();
 
       if (digest != expectedHash) {
-        log("FS ERROR: Hash mismatch for $fileName (Got: $digest, Expected: $expectedHash)");
+        log(
+          "FS ERROR: Hash mismatch for $fileName (Got: $digest, Expected: $expectedHash)",
+        );
         NotificationService().showDownloadComplete(
           transferId.hashCode.abs() % 100000,
-          "Download Failed",
-          "Integrity check failed for $fileName",
+          fileName,
+          tempPath,
+          isFailed: true,
+          customBody: "Integrity check failed for $fileName",
         );
         return;
       }
@@ -177,20 +245,26 @@ mixin RtcMessageHandler on RtcClientBase {
         _lastArtLocalPath = "file://$finalPath";
         log("FS: Album Art cached: $finalPath");
 
-        // Force a UI refresh by re-broadcasting the last media update with the local path
-        // We don't need to force a sync! The Host's media loop polls every
-        // second and broadcasts a MediaUpdate whenever the position changes.
+        // Force a UI refresh by re-broadcasting/updating the media state immediately!
+        if (_lastMediaUpdate != null) {
+          _handleMediaUpdate(_lastMediaUpdate!);
+        }
       }
     }
 
-    genDcMsgController.add(HostMsgDownloadEnd.fromJson({
-      'type': 'download_end',
-      'file_name': fileName,
-      'temp_path': tempPath,
-      'final_path': finalPath,
-      'id': transferId,
-      'completed': expectedHash != null,
-    } as Map<String, dynamic>));
+    genDcMsgController.add(
+      HostMsgDownloadEnd.fromJson(
+        {
+              'type': 'download_end',
+              'file_name': fileName,
+              'temp_path': tempPath,
+              'final_path': finalPath,
+              'id': transferId,
+              'completed': expectedHash != null,
+            }
+            as Map<String, dynamic>,
+      ),
+    );
   }
 
   void _handleDownloadStart(HostMsgDownloadStart msg) {
@@ -202,6 +276,7 @@ mixin RtcMessageHandler on RtcClientBase {
     // Initialize tracking
     _totalSizes[transferId] = msg.totalSize;
     _receivedSizes[transferId] = msg.offset;
+    _transferStartTimes[transferId] = DateTime.now().millisecondsSinceEpoch;
 
     // Show initial notification if requested
     if (_showNotificationMap[transferId] ?? true) {
@@ -209,8 +284,8 @@ mixin RtcMessageHandler on RtcClientBase {
           "${FileUtils.formatSize(_receivedSizes[transferId] ?? 0)} / ${FileUtils.formatSize(_totalSizes[transferId] ?? 0)}";
       NotificationService().showProgressNotification(
         transferId.hashCode.abs() % 100000,
-        "Downloading '$fileName'...",
-        "$sizeInfo (0.0%)",
+        "⇩ [DNLD_RUN] // 0.0% Completed [□□□□□□□□□□]",
+        "⇄ 0 B/s  |  ⧗ Calculating...  |  ⛃ $sizeInfo",
         0.0,
         transferId: transferId,
       );
@@ -240,14 +315,21 @@ mixin RtcMessageHandler on RtcClientBase {
   void _handleHostResponse(HostMsgResponse msg) {
     genDcMsgController.add(msg);
 
-    if (msg.data != null) {
-      if (msg.data is Map && msg.data['response'] != 'Pong') {
+    if (msg.data != null && msg.data is Map) {
+      final response = msg.data['response'];
+      if (response == 'Pong') {
+        if (_lastPingTime != null) {
+          _lastPingMs = DateTime.now().millisecondsSinceEpoch - _lastPingTime!;
+          _lastPingTime = null;
+        }
+      } else {
         log("Host Response: ${msg.data}");
       }
     }
   }
 
   void _handleMediaUpdate(HostMsgMediaUpdate msg) async {
+    _lastMediaUpdate = msg;
     final artStr = msg.artData;
     String? localArtPath;
 
@@ -289,17 +371,21 @@ mixin RtcMessageHandler on RtcClientBase {
         // 4. Initiate download
         sendToChannel(
           fsDC,
-          jsonEncode(ClientMsgDownloadInit(
-            id: uuid,
-            path: remotePath,
-            resumeOffset: 0,
-          ).toJson()),
+          jsonEncode(
+            ClientMsgDownloadInit(
+              id: uuid,
+              path: remotePath,
+              resumeOffset: 0,
+            ).toJson(),
+          ),
           "FS",
         );
       }
     }
 
-    final media = msg;
+    final media = localArtPath != null
+        ? msg.copyWith(artData: localArtPath)
+        : msg;
 
     franknAudioHandlerInstance?.updateMediaState(
       isPlaying: media.playing,
@@ -312,11 +398,12 @@ mixin RtcMessageHandler on RtcClientBase {
       playerName: media.playerName,
       position: Duration(microseconds: media.position.toInt()),
       duration: Duration(microseconds: media.length.toInt()),
-      artUri: localArtPath != null
-          ? Uri.parse(localArtPath)
-          : (media.artData != null && media.artData!.startsWith('http'))
-              ? Uri.parse(media.artData!)
-              : null,
+      artUri:
+          media.artData != null &&
+              (media.artData!.startsWith('file://') ||
+                  media.artData!.startsWith('http'))
+          ? Uri.parse(media.artData!)
+          : null,
       volume: media.volume,
     );
 
@@ -356,13 +443,24 @@ mixin RtcMessageHandler on RtcClientBase {
           genDcMsgController.add(msg);
         case HostMsgTelemetry():
           final cpu = msg.cpuLoad.toStringAsFixed(1);
-          final usedMem = (msg.usedMem / 1024 / 1024 / 1024).toStringAsFixed(1);
-          final cpuTemp = msg.cpuTemp.toStringAsFixed(1);
 
-          final statusIcon = msg.cpuLoad > 80 ? '🔥' : '🟢';
+          final double usedMemGb = msg.usedMem / (1024 * 1024 * 1024);
+          final usedMemStr = usedMemGb.toStringAsFixed(1);
+          final cpuTempStr = msg.cpuTemp.toStringAsFixed(1);
+
+          String statusIcon = '◈';
+          if (msg.cpuLoad > 85 || msg.cpuTemp > 80) {
+            statusIcon = '⚠';
+          } else if (msg.cpuLoad > 50 || msg.cpuTemp > 65) {
+            statusIcon = '▲';
+          }
+
+          final pingStr = _lastPingMs > 0 ? "${_lastPingMs}ms" : "-- ms";
 
           updateBackgroundService(
-            text: "$statusIcon: $cpu% | 💾 : $usedMem GB | 🌡️ $cpuTemp°C",
+            title: "☁️ ${currentHostName ?? 'Remote PC'}",
+            text:
+                "$statusIcon  ⚙ $cpu%  |  ⛃ ${usedMemStr}G  |  ⎋ $pingStr  |  ⏛ $cpuTempStr°C",
           );
           genDcMsgController.add(msg);
         case HostMsgSyncSnapshot():
@@ -402,7 +500,8 @@ mixin RtcMessageHandler on RtcClientBase {
           transferProgressController.add(
             TransferProgressFailed(id: id, error: 'Transfer cancelled by host'),
           );
-          genDcMsgController.add(msg);        case HostMsgUnknown():
+          genDcMsgController.add(msg);
+        case HostMsgUnknown():
           log("Unknown host message type: ${msg.type}");
       }
     } catch (e, stack) {
@@ -460,12 +559,14 @@ mixin RtcMessageHandler on RtcClientBase {
   }
 
   void clearActiveTransfers() {
+    _stopBgPingTimer();
     for (final entry in _activeSinks.entries) {
       try {
         entry.value.close();
       } catch (e) {
         log("Error closing leaked IOSink for transfer ${entry.key}: $e");
       }
+      AwesomeNotifications().dismiss(entry.key.hashCode.abs() % 100000);
     }
     _activeSinks.clear();
     _totalSizes.clear();
@@ -473,5 +574,7 @@ mixin RtcMessageHandler on RtcClientBase {
     _tempPaths.clear();
     _expectedHashes.clear();
     _downloadTargetDirs.clear();
+    _transferStartTimes.clear();
+    _lastNotificationUpdateTime.clear();
   }
 }

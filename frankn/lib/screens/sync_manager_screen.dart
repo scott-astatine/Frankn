@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/isolate_protocol.dart';
@@ -8,6 +10,7 @@ import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/widgets/settings/remote_dir_selector.dart';
+import 'package:frankn/widgets/settings/local_dir_selector.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -29,21 +32,31 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
   int _syncTotal = 0;
   int _syncCurrent = 0;
 
+  StreamSubscription? _syncStatusSub;
+  StreamSubscription? _syncBatchProgressSub;
+
   @override
   void initState() {
     super.initState();
     _pairs = _settings.syncPairs;
     _checkPermissions();
 
-    _client.syncStatusStream.listen((event) {
+    if (_client.currentHostState == HostConnectionState.authenticated) {
+      for (final pair in _pairs) {
+        _client.sendIntent(IsolateAction.checkSyncStatus, pair.toJson());
+      }
+    }
+
+    _syncStatusSub = _client.syncStatusStream.listen((event) {
       if (!mounted) return;
       setState(() {
         _syncStatus[event.localPath] = event;
       });
     });
 
-    _client.syncBatchProgressStream.listen((event) async {
+    _syncBatchProgressSub = _client.syncBatchProgressStream.listen((event) async {
       if (!mounted) return;
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
       final l10n = AppLocalizations.of(context)!;
       setState(() {
         _isSyncing =
@@ -64,7 +77,14 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
           _pairs = _settings.syncPairs;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
+        // Trigger a status check for all pairs so the UI badges are updated to reflect reality
+        if (_client.currentHostState == HostConnectionState.authenticated) {
+          for (final pair in _pairs) {
+            _client.sendIntent(IsolateAction.checkSyncStatus, pair.toJson());
+          }
+        }
+
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
               event.currentFile == 'COMPLETE'
@@ -75,7 +95,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
           ),
         );
       } else if (event.currentFile.startsWith('ERROR')) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(event.currentFile),
             backgroundColor: AppColors.errorRed,
@@ -83,6 +103,13 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
         );
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _syncStatusSub?.cancel();
+    _syncBatchProgressSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkPermissions() async {
@@ -127,8 +154,17 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                       value: localPath ?? l10n.notSelected,
                       actionIcon: Icons.create_new_folder_outlined,
                       onTap: () async {
-                        String? selected =
-                            await FilePicker.platform.getDirectoryPath();
+                        String? selected;
+                        if (Platform.isAndroid) {
+                          selected = await showModalBottomSheet<String>(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => const LocalDirSelector(pickFiles: false),
+                          );
+                        } else {
+                          selected = await FilePicker.platform.getDirectoryPath();
+                        }
                         if (selected != null) {
                           setDialogState(() => localPath = selected);
                         }
@@ -249,7 +285,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
       
       // Trigger a status check for the new/updated pair if connected
       if (_client.currentHostState == HostConnectionState.authenticated) {
-         _client.sendIntent(IsolateAction.triggerBackgroundSync, result.toJson());
+         _client.sendIntent(IsolateAction.checkSyncStatus, result.toJson());
       }
     }
   }

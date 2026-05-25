@@ -4,6 +4,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/services/settings_service.dart';
+import 'package:frankn/widgets/settings/local_dir_selector.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
@@ -69,6 +71,7 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
     int? size, // Pass size for stable ID/resume
     bool showNotification = true,
     bool isTemporary = false,
+    bool promptDir = false, // Add this!
   }) async {
     // Generate stable ID if size is known, otherwise fallback to random (fresh start)
     final requestId = size != null
@@ -94,11 +97,47 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       return requestId;
     }
 
-    String? selectedDir = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: "Select Destination",
-    );
+    String? selectedDir;
+    if (!promptDir) {
+      selectedDir = SettingsService().defaultDownloadDir;
+    }
 
-    if (selectedDir == null) return requestId;
+    if (selectedDir == null || selectedDir.isEmpty) {
+      if (!mounted) return requestId;
+      // Fallback to picker if no default is saved or promptDir is true
+      if (Platform.isAndroid) {
+        selectedDir = await showModalBottomSheet<String>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => const LocalDirSelector(pickFiles: false),
+        );
+      } else {
+        selectedDir = await FilePicker.platform.getDirectoryPath(
+          dialogTitle: "Select Destination",
+        );
+      }
+
+      if (selectedDir == null) return requestId;
+
+      // Save as default for future downloads only if not promptDir
+      if (!promptDir) {
+        await SettingsService().setDefaultDownloadDir(selectedDir);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "⚡ DEFAULT LANDING PAD SET TO: ${selectedDir.split('/').last.toUpperCase()}",
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.neonCyan),
+              ),
+              backgroundColor: AppColors.voidBlack,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    }
 
     client.sendDownloadInit(
       id: requestId,
@@ -148,14 +187,30 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
   }
 
   Future<void> uploadFile(String currentRemotePath) async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles();
-    if (result == null) return;
+    String? selectedFilePath;
 
-    final file = File(result.files.single.path!);
+    if (Platform.isAndroid) {
+      selectedFilePath = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => const LocalDirSelector(pickFiles: true),
+      );
+    } else {
+      FilePickerResult? result = await FilePicker.platform.pickFiles();
+      if (result != null && result.files.single.path != null) {
+        selectedFilePath = result.files.single.path;
+      }
+    }
+
+    if (selectedFilePath == null) return;
+
+    final file = File(selectedFilePath);
     final int size = await file.length();
+    final fileName = selectedFilePath.split(Platform.pathSeparator).last;
     final targetPath = PathHelper.join(
       currentRemotePath,
-      result.files.single.name,
+      fileName,
     );
     final transferId = FileUtils.generateStableTransferId(targetPath, size);
 
@@ -168,12 +223,12 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
     final hashStr = HEX.encode(hash.bytes).toLowerCase();
 
     setState(() {
-      transferMsg = "UPLOADING: ${result.files.single.name}";
+      transferMsg = "UPLOADING: $fileName";
     });
 
     client.sendIntent(IsolateAction.uploadInit, {
       'id': transferId,
-      'file_name': result.files.single.name,
+      'file_name': fileName,
       'local_path': file.path,
       'remote_path': targetPath,
       'hash': hashStr,
