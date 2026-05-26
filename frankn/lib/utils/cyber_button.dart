@@ -8,6 +8,7 @@ class CyberButton extends StatefulWidget {
   final VoidCallback onPressed;
   final CyberButtonVariant variant;
   final bool isSmall;
+  final IconData? icon;
 
   const CyberButton({
     super.key,
@@ -15,6 +16,7 @@ class CyberButton extends StatefulWidget {
     required this.onPressed,
     this.variant = CyberButtonVariant.primary,
     this.isSmall = false,
+    this.icon,
   });
 
   @override
@@ -91,14 +93,28 @@ class _CyberButtonState extends State<CyberButton>
                   ),
                 ],
               ),
-              child: Text(
-                widget.text.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                  letterSpacing: 1,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (widget.icon != null) ...[
+                    Icon(
+                      widget.icon,
+                      size: widget.isSmall ? 14 : 18,
+                      color: Colors.black,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    widget.text.toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
               ),
             ),
           );

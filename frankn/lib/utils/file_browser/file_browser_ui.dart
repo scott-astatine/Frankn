@@ -102,6 +102,13 @@ class FileBrowserAppBar {
             color: AppColors.neonCyan,
             size: 20,
           ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: AppColors.neonCyan.withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+          ),
           onSelected: (val) {
             if (val == "upload") {
               onUpload?.call();
@@ -112,20 +119,38 @@ class FileBrowserAppBar {
           color: AppColors.voidBlack,
           itemBuilder: (context) => [
             PopupMenuItem(
+              enabled: false,
+              height: 32,
+              child: Text(
+                "[CONSOLE_ACTIONS]",
+                style: TextStyle(
+                  color: AppColors.neonCyan.withValues(alpha: 0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                  fontFamily: 'JetBrainsMonoNerdFont',
+                ),
+              ),
+            ),
+            const PopupMenuDivider(height: 8),
+            PopupMenuItem(
               value: "name",
               child: Row(
                 children: [
                   const Icon(
                     Icons.sort_by_alpha,
-                    color: AppColors.textGrey,
+                    color: AppColors.neonCyan,
                     size: 16,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Text(
                     l10n.sortByName.toUpperCase(),
                     style: const TextStyle(
+                      color: Colors.white70,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                      fontFamily: 'JetBrainsMonoNerdFont',
                     ),
                   ),
                 ],
@@ -136,16 +161,19 @@ class FileBrowserAppBar {
               child: Row(
                 children: [
                   const Icon(
-                    Icons.format_size,
-                    color: AppColors.textGrey,
+                    Icons.analytics_outlined,
+                    color: AppColors.neonCyan,
                     size: 16,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Text(
                     l10n.sortBySize.toUpperCase(),
                     style: const TextStyle(
+                      color: Colors.white70,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                      fontFamily: 'JetBrainsMonoNerdFont',
                     ),
                   ),
                 ],
@@ -156,38 +184,43 @@ class FileBrowserAppBar {
               child: Row(
                 children: [
                   const Icon(
-                    Icons.date_range,
-                    color: AppColors.textGrey,
+                    Icons.schedule_rounded,
+                    color: AppColors.neonCyan,
                     size: 16,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Text(
                     l10n.sortByDate.toUpperCase(),
                     style: const TextStyle(
+                      color: Colors.white70,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                      fontFamily: 'JetBrainsMonoNerdFont',
                     ),
                   ),
                 ],
               ),
             ),
-            const PopupMenuDivider(),
+            const PopupMenuDivider(height: 8),
             PopupMenuItem(
               value: "upload",
               child: Row(
                 children: [
                   const Icon(
-                    Icons.upload_file,
-                    color: AppColors.neonCyan,
+                    Icons.cloud_upload_outlined,
+                    color: AppColors.neonPink,
                     size: 16,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
+                  const SizedBox(width: 10),
+                  const Text(
                     "UPLOAD FILE",
-                    style: const TextStyle(
-                      color: AppColors.neonCyan,
+                    style: TextStyle(
+                      color: AppColors.neonPink,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                      fontFamily: 'JetBrainsMonoNerdFont',
                     ),
                   ),
                 ],

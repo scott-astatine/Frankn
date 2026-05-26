@@ -37,6 +37,7 @@ class AppColors {
   static const Color neonPink = Color(0xFFFF00FF);
   static const Color cyberYellow = Color(0xFFFFEE00);
   static const Color matrixGreen = Color(0xFF00FF41);
+  static const Color neonRed = Color(0xeecc203A);
 
   // Functional Colors
   static const Color errorRed = Color(0xFFFF2A2A);
@@ -93,22 +94,22 @@ class SyncPair {
   });
 
   Map<String, dynamic> toJson() => {
-        'local_path': localPath,
-        'remote_path': remotePath,
-        'mode': mode.index,
-        'client_is_source': clientIsSource,
-        'interval_minutes': intervalMinutes,
-        'last_synced': lastSynced,
-      };
+    'local_path': localPath,
+    'remote_path': remotePath,
+    'mode': mode.index,
+    'client_is_source': clientIsSource,
+    'interval_minutes': intervalMinutes,
+    'last_synced': lastSynced,
+  };
 
   factory SyncPair.fromJson(Map<String, dynamic> json) => SyncPair(
-        localPath: json['local_path'],
-        remotePath: json['remote_path'],
-        mode: SyncMode.values[json['mode'] ?? 0],
-        clientIsSource: json['client_is_source'] ?? true,
-        intervalMinutes: json['interval_minutes'] ?? 60,
-        lastSynced: json['last_synced'],
-      );
+    localPath: json['local_path'],
+    remotePath: json['remote_path'],
+    mode: SyncMode.values[json['mode'] ?? 0],
+    clientIsSource: json['client_is_source'] ?? true,
+    intervalMinutes: json['interval_minutes'] ?? 60,
+    lastSynced: json['last_synced'],
+  );
 }
 
 class FileUtils {

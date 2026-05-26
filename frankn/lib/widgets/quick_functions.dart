@@ -73,21 +73,24 @@ class QuickFunction extends StatelessWidget {
             );
           },
         ),
-        _opBtn(l10n.terminal, Icons.terminal_outlined, AppColors.neonCyan, () {
+        _opBtn(
+          l10n.terminal,
+          Icons.terminal_outlined,
+          AppColors.matrixGreen,
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => SShScreen(client: client)),
+            );
+          },
+        ),
+        _opBtn(l10n.trackpad, Icons.mouse, AppColors.textGrey, () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => SShScreen(client: client)),
+            MaterialPageRoute(builder: (_) => TrackpadScreen(client: client)),
           );
         }),
-        _opBtn(l10n.trackpad, Icons.mouse, AppColors.neonCyan, () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => TrackpadScreen(client: client),
-            ),
-          );
-        }),
-        _opBtn(l10n.doheeChat, Icons.auto_awesome, AppColors.neonPink, () {
+        _opBtn(l10n.doheeChat, Icons.auto_awesome, AppColors.neonRed, () {
           _showNeuralChatDialog(context, client);
         }),
         _opBtn(l10n.processes, Icons.show_chart, AppColors.textGrey, () {
@@ -101,9 +104,7 @@ class QuickFunction extends StatelessWidget {
         _opBtn(l10n.sysLog, Icons.article_outlined, AppColors.matrixGreen, () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => SyslogScreen(client: client),
-            ),
+            MaterialPageRoute(builder: (_) => SyslogScreen(client: client)),
           );
         }),
       ],

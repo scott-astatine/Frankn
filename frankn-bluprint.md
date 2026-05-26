@@ -1,133 +1,100 @@
 # Frankn: My Personal Remote Ops Center
 
-This is the evolving master plan for **Frankn**, a high-performance, P2P remote operations center. I am building this because I need a "remote brain" for my personal AI assistant devices—something that combines the power of a terminal with the elegance of a modern GUI, without sacrificing security or privacy.
+This is the evolving master plan and technical blueprint for **Frankn**, a high-performance, peer-to-peer remote operations center. I am building this because I need a secure, low-latency "remote brain" for my workstation and system servers—something that combines the power of a modern GUI with the absolute control of a terminal, without compromising on security or performance.
 
 ---
 
-## 1. My Vision & Design Principles
+## 1. Vision & Core Design Principles
 
-I'm not just building another remote desktop app. Frankn is designed around three core pillars:
+Unlike traditional remote administration interfaces, Frankn operates strictly on a set of core principles optimized for decentralized, lightweight execution:
 
-1. **Intents, Not Pixels**: Unlike VNC or RDP, Frankn doesn't stream your screen. It streams *intents* (commands, file chunks, metadata). This makes it blazingly fast even on slow connections and extremely light on battery.
-2. **Zero-Trust Security**: Every connection is a stranger until proven otherwise. I've implemented a rigorous Argon2-based challenge-response protocol. If the host doesn't know you, the "Gatekeeper" doesn't even let your messages reach the system logic.
-3. **The Cyberpunk Aesthetic**: If I'm going to control my life from a phone, it should look like it belongs in 2077. I'm using high-contrast neon accents, monospaced Nerd Fonts for iconography, and a terminal-first design language.
+1. **Intents, Not Pixels:** Frankn completely avoids bandwidth-heavy screen streaming (such as VNC or RDP). Instead, it streams raw, structured *intents* (binary file chunks, process metrics, system states, and terminal strings) across direct P2P data channels. This ensures that the interface remains blazingly fast even on degraded edge connections while conserving battery.
+2. **Zero-Trust Security & Timing Mitigation:** Every connection is treated as hostile until cryptographically verified. We employ Argon2id challenge-response handshakes combined with constant-time verification primitives (`subtle` crate) to safeguard the pairing from side-channel timing analysis. Subsystem actions are sandboxed within the host's home directory (`dirs::home_dir()`), walking ancestor paths recursively to block directory traversal attacks.
+3. **The Cyberpunk Aesthetic:** Built with a high-contrast monospaced command-line layout, Nerd Font iconography, neon borders, and dynamic frosted-glass modal panels, the client provides the visual feedback of an immersive, futuristic system cockpit.
 
 ---
 
 ## 2. Architecture Overview
 
-My architecture relies on **WebRTC** for direct, encrypted P2P communication, bypassing the need for port forwarding or VPNs.
+Direct P2P links are negotiated dynamically via WebRTC, bypassing the need for port forwarding, public network exposure, or central VPN tunnels.
 
 ```
-┌─────────────────────────┐         ┌────────────────────────────┐
-│     Flutter Mobile      │◄───────►│     Rust Backend           │
-│     App (Client)        │ WebRTC  │     (System Service)       │
-│                         │         │     Running on PC          │
-└─────────────────────────┘         └────────────────────────────┘
-          │                                             │
-          └───────►┌──────────────────────┐◄────────────┘
-                   │    Rust Signaling    │
-                   │        Server        │
-                   │      (Discovery)     │
-                   └──────────────────────┘
+┌─────────────────────────────────┐           ┌─────────────────────────────────┐
+│         FLUTTER CLIENT          │◄─────────►│            RUST HOST            │
+│         (Mobile App)            │  WebRTC   │        (System Daemon)          │
+│   Immersive Command Terminal    │           │   Direct D-Bus & Linux APIs     │
+└─────────────────────────────────┘           └─────────────────────────────────┘
+                 │                                             │
+                 └──────────►┌─────────────────────────┐◄──────┘
+                             │  RUST SIGNALING SERVER  │
+                             │   (Secure Handshakes)   │
+                             └─────────────────────────┘
 ```
 
-### Comms
-* **Transport**: Multi-channel WebRTC Data Channels. Specialized lanes: `frankn_cmd` (general ops), `frankn_fs` (file transfers), `frankn_media` (sync), `frankn_ssh` (terminal), **`dohee_x`** (LLM / neural chat streaming), and **`frankn_input`** (virtual keyboard & mouse events to the host).
-* **Discovery**: A lightweight Rust Signaling Server facilitates initial handshakes (SDP/ICE exchange). Includes support for private/unlisted hosts and guards against duplicate peer registrations on a connection.
-* **Config**: Host settings are managed via a persistent TOML provider and an interactive TUI.
-* **Background Ops**: The mobile app runs a persistent Foreground Service on Android to maintain the link; RTC-heavy work is isolated from the UI isolate for stability.
+### Comms Channels
+* **specialized Data Lanes:**
+  * `frankn_cmd`: System diagnostics, process managers, and power states.
+  * `frankn_fs`: High-speed binary storage transfers with recursive indexing and SHA-256 validation.
+  * `frankn_media`: Bidirectional MPRIS track status synchronization and interactive seek control.
+  * `frankn_ssh`: Raw terminal bridge backed by sticky modifier mapping and cache-held session restoration.
+  * `frankn_input`: batch-transmitted pointer movements, precise scroll metrics, and virtual key mapping.
+  * `dohee_x`: Real-time streaming thread connecting to a secure, host-side AI chat engine (`llama-server`).
+* **Discovery Protocol:** High-performance Signaling middleman that facilitates ICE exchanges, verifies unlisted hosts, restricts duplicate registrations, and enforces strict connection timeouts (15s/30s) to prune ghost sockets.
+* **Persistent Configuration:** Workstation preferences are managed via a robust, custom path TOML engine and an interactive terminal-based TUI configurator with Vim-style navigation.
 
 ---
 
-## 3. Current Progress
+## 3. Current Development Progress
 
-### A. Frankn-Host Server
-I've implemented a robust backend that interfaces directly with Linux system APIs:
-- **Security**: Argon2id challenge-response. Host generates session challenges; 
-  client proves knowledge without sending passwords.
-- **CLI/TUI**: A dedicated tool for configuration management (`frankn-host config`) and
-  pairing (`frankn-host pair`) with QR code generation.
-- **Power Management**: Integrated with `systemctl`, `loginctl`, and `hyprlock`.
-- **Media & Audio**: Full audio mixer experience (`wpctl`/`pactl`) and track control (`mpris`).
-- **File System**: Recursive viewing, chunked transfers with SHA-256 validation, and integrated editor.
-- **Neural / LLM**: `LlmManager` handles chat sessions, streaming inference (including SSE-style upstream handling),
-  and persistence; exposes commands over the `dohee_x` data channel inside the authenticated WebRTC session.
-- **Remote Input**: Optional `uinput`-based virtual mouse and keyboard;
-  fails soft at startup if the kernel module or `/dev/uinput` permissions are missing, leaving other ops unaffected.
+### A. Frankn-Host Server (Rust Daemon)
+* **Security & Sandboxing:** Constant-time Argon2id verifiers, automatic legacy configuration upgrades on startup, and ancestor-validated path sandbox validation inside `fs_sync/mod.rs` to allow deep folder generation during transfers.
+* **Workstation Integration:** Direct bindings to systemd, loginctl, D-Bus notification structures, and Hyprlock background child management.
+* **Media & Audio Mixer:** Volume controls mapped directly to WirePlumber or PulseAudio mixers (`wpctl`/`pactl`) with strict floating-point amplitude safety clamps.
+* **Storage Synchronizations:** Multi-threaded, symlink-aware directory indexing and sequential batch transfers backed by `notify` system directory monitors.
+* **Local LLM Engine:** Host-side `LlmManager` orchestrating model selection, persistent session mapping (`chats.json`), and server-sent stream buffering.
 
-### B. The "interface" (Flutter Client)
-The UI is now highly functional and visually polished:
-- **Immersive Terminal**: Full-screen SSH via `dartssh2` and `xterm.dart` with Nerd Font support.
-- **SSH Session Restore**: Seamless, in-memory credential caching for instant terminal re-entry during the same host session.
-- **Pairing System**: QR Code scanner (including screenshot import) and manual 12-digit ID entry for persistent "Hosts"
-- **File Browser**: Refactored for speed with real-time progress bars and bulk actions.
-- **Notification Mirroring**: Linux D-Bus notifications pushed to mobile via `awesome_notifications`.
-- **Dynamic Settings**: Persistent app configuration (Signaling URL, font size, themes).
-- **Neural Deck (Dohee)**: In-app LLM chat with streaming markdown/LaTeX-style rendering; pairs with the host `dohee_x` channel and model selection.
-- **Remote Trackpad**: Redesigned full-screen touch trackpad with batched move/scroll, sticky modifiers, and a dynamic toolbar that appears only when typing—fixed Linux keycode mapping for perfect input accuracy.
-- **Shell UX**: SSH controller / key bar refinements and clearer connection status affordances.
-- **Live Log Deck**: A real-time, auto-scrolling log preview widget docked to the bottom of the host list for instant diagnostic visibility.
-
-### C. Recent milestones (early 2026)
-Shipped or in flight alongside the blueprint updates:
-- **Local LLM path on the host** (`LlmManager`): chat sessions persisted under `~/.config/frankn/chats.json`, streaming responses to the client (SSE-style consumption on the host, forwarded over WebRTC).
-- **Background isolate migration** for WebRTC: keeps the UI responsive and reduces link “zombie” races during reconnect.
-- **Signaling Security & Persistence**: Identity hijacking prevention and strict 15s/30s `last_seen` timeouts to purge ghost connections.
-- **Custom Configuration Paths**: Host-side support for specifying config files via the `-c` flag.
-- **Stable FS streaming**: Chunked transfer and media pipeline hardening on the host.
-- **Linux virtual input**: Corrected `uinput` keycode mappings and improved error diagnostics for system-level permission failures.
+### B. Flutter Mobile Client
+* **Custom Scoped Storage Bypass:** Integrated a custom pure-Dart `LocalDirSelector` modal sheet to bypass scoped storage tree chooser freezes, facilitating sub-millisecond local folder and file traversals.
+* **Default Path Configuration:** Configurable default download directory on the settings screen, allowing users to choose or clear a default landing path, with support for prompting on-demand destination selection for specific files.
+* **Frosted Glassmorphic Context Sheets:** High-fidelity bottom sheets utilizing frosted blurs (`BackdropFilter`), cyan neon rails, dynamic monospaced diagnostics rows (file size, category, and local source indicators), and cybernetic icon buttons.
+* **Interactive Media Deck:** Overhauled the music progress bar with a `LayoutBuilder` and horizontal drag-and-tap gestures to seek audio tracks dynamically via real-time `DcMsgSeek` updates.
+* **Throttled Diagnostic Notifications:** Native notification progress redraw limits (500ms / 2Hz threshold) to prevent Dart-to-Native IPC thread lockups during high-speed transfers.
+* **Precision Trackpad Gestures:** Batched touch gestures including 1-finger long-press for left-click dragging, 3-finger taps for middle-clicking, and dual-state HUD modifier key toggling/locking.
 
 ---
 
-## 4. Modification History & Progress
+## 4. Phase Roadmap & Milestones
 
-### Phase 1: Security & Foundation [COMPLETE]
-- [x] Switched to Argon2id for industry-standard password hashing.
-- [x] Implemented the "Gatekeeper" pattern to enforce authenticated sessions.
-- [x] Added timestamp-based signaling to prevent replay attacks.
-- [x] Established robust mixin-based RTC client architecture.
-- [x] Hardened signaling server against identity hijacking and ghost connections.
+### Phase 1: Foundation & Zero-Trust Protocol [COMPLETE]
+- [x] Adopted Argon2id cryptography for challenge-response auth verification.
+- [x] Sandboxed path operations within secure user directories.
+- [x] Hardened discovery server against peer hijacking and socket duplicates.
+- [x] Implemented RAII connection cleanup routines to purge stale file descriptors.
 
-### Phase 2: Core Control [COMPLETE]
-- [x] Real-world system calls for Power, Media, and Processes.
-- [x] Bi-directional state sync: Host pushes media updates (title, art, position).
-- [x] Immersive full-screen Terminal with context menu.
-- [x] Settings page for configuration management.
+### Phase 2: Core Workstation Node control [COMPLETE]
+- [x] Power managers, systemctl states, and Hyprlock integration.
+- [x] High-precision touch trackpad gestures and HUD modifier keys.
+- [x] Dynamic, auto-scrolling terminal logs console preview.
 
-### Phase 3: Files & Media [COMPLETE]
-- [x] Recursive File Browser with symlink support.
-- [x] Robust chunked file transfer with SHA-256 integrity checks.
-- [x] Integrated Linux System Logs (`journalctl`) into a dedicated mobile view.
-- [x] Advanced Media Sync: HTTP remote album art support and immediate state synchronization.
+### Phase 3: Storage Orchestration & Media [COMPLETE]
+- [x] Recursive, symlink-aware filesystem indexing and editor viewers.
+- [x] Chunked storage transfers with SHA-256 validations.
+- [x] High-fidelity media track updates, volume mixers, and interactive seek scrubbers.
 
-### Phase 4: Configuration & Pairing [COMPLETE]
-- [x] **Config Provider**: Persistent TOML-based host settings with custom path support.
-- [x] **Host TUI**: Cyberpunk-styled terminal UI for managing settings with Vim keybinds.
-- [x] **QR Pairing**: Automated pairing flow via QR scanning, screenshot import, and 12-digit unique IDs.
-- [x] **Discovery Filtering**: Support for unlisted/private hosts.
+### Phase 4: Configurations & Handshakes [COMPLETE]
+- [x] TOML-based persistence configurations and Vim-based config TUI.
+- [x] QR code automated pairing, manual 12-digit IDs, and screen import decoders.
+- [x] Discovery filtering to support unlisted host registries.
 
-### Phase 5: Advanced Features [IN PROGRESS]
-- [x] **Notification Mirroring**: PC notifications buzz on the phone.
-- [x] **Neural Chat & LLM over WebRTC**: Dedicated `dohee_x` data channel with host-side `LlmManager` (local inference / streaming, chat persistence)—same zero-trust session as the rest of Frankn; no need to expose model APIs publicly.
-- [x] **Remote Trackpad & Keyboard**: `frankn_input` channel + Linux `uinput` for pointer, scroll, keys, and typed text from the mobile client. Corrected Linux keycode translation logic.
-- [x] **SSH Session Restore**: Secure, in-memory credential restoration for seamless terminal entry.
-- [x] **Live Log Preview**: Docked scrolling widget for instant signaling and system diagnostic monitoring.
-- [ ] **Vice Versa**: PC controlling the phone (Mobile as the Host).
-- [ ] **Bidirectional Sync**: Folder-to-folder background synchronization.
-- [x] **Process Manager Search**: Advanced filtering for the process list.
+### Phase 5: Advanced Features & Synchronizations [IN PROGRESS]
+- [x] **Notification Mirroring:** PC notification sync mirrors onto phone.
+- [x] **Folder Mirroring:** Sequenced batch folder synchronizations with packet-size chunking (200 files per packet) and stack-based local scanning.
+- [x] **Mobile SAF Bypass:** Pure-Dart local selector to avoid native tree chooser freezes.
+- [x] **Settings Download Configs:** Default path preference controls and on-demand file destination routing.
+- [x] **Visual Theme Hardening:** Frosted glassmorphism panels, cyan neon outlines, and icon-based command controls.
+- [ ] **Neural Assistant:** Direct model selectors, chat stream buffering, and session logging [WIP].
+- [ ] **Reverse Control:** Option to command the mobile node from the workstation terminal.
 
 ---
 
-## 5. Why I'm Building This (Comparison)
-* Aesthetic mobile-centric ROC for local & remote servers.
-*   **vs SSH/Termux**: Frankn provides a native GUI for quick tasks like volume control while keeping the power of a terminal.
-*   **vs Remote Desktop (RDP/VNC)**: Frankn works on poor connections because it streams metadata, not video buffers.
-*   **vs KDE Connect**: Frankn works over the global internet via WebRTC, not just local Wi-Fi. And it's just better!
-
-## TODO
-- [ ] Update initial host connection req to the signaling server to include a list of known hosts.
-- [ ] Update the signaling server to read the know_hosts for and to only send Host online status for the respective Client IDs
-
----
-*Last Updated: May 2026*
+*Last Updated: Late May 2026*

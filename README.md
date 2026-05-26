@@ -1,28 +1,54 @@
-# ⚡ Frankn
+# ⚡ FRANKN // Remote Operations Center
 
-Frankn is a personal modular Remote access tool for my servers & a personal assistant device that I'm working on. 
+Frankn is a decentralized, personal Remote Operations Center designed for secure, low-latency, peer-to-peer management of servers and personal workstations. Built on the core philosophy of **"Intents over Pixels"**, it prioritizes streaming structured system metadata, command payloads, and binary file chunks over heavy, bandwidth-hogging video buffers. 
 
-The core philosophy here is **Intents over Pixels & for it to be modular**.
+---
 
-## 🏗️ Architecture
+## 🏗️ Architecture & WebRTC Protocol Lanes
 
-The system is split into three parts:
-- **Client (Flutter)**: My mobile interface—immersive SSH (`xterm`), file browser & editor, notification mirroring, neural chat UI, remote trackpad/keyboard, and QR-based pairing.
-- **Host (Rust)**: The system-level service running on the PC. It talks to Linux APIs (systemd, D-Bus, MPRIS) and includes a CLI/TUI for configuration.
-- **Signaling Server (Rust)**: A lightweight middleman used only for the initial WebRTC handshake (SDP/ICE exchange). Once connected, the traffic is strictly P2P. Self Hosted, however I have included a free one running for testing, don't DDos it pls... 
+The system establishes direct, end-to-end encrypted WebRTC P2P connections between your devices, bypassing public cloud relays, virtual private networks, or complex port forwarding. Initial discovery and handshake exchanges (SDP/ICE) are handled by a lightweight, self-hosted Signaling middleman.
 
-## 📸 Screenshots
+```
+┌─────────────────────────────────┐           ┌─────────────────────────────────┐
+│         FLUTTER CLIENT          │◄─────────►│            RUST HOST            │
+│         (Mobile App)            │  WebRTC   │        (System Daemon)          │
+│   Immersive Command Terminal    │           │   Direct D-Bus & Linux APIs     │
+└─────────────────────────────────┘           └─────────────────────────────────┘
+                 │                                             │
+                 └──────────►┌─────────────────────────┐◄──────┘
+                             │  RUST SIGNALING SERVER  │
+                             │   (Secure Handshakes)   │
+                             └─────────────────────────┘
+```
+
+Once paired, communication is multiplexed across specialized, high-performance WebRTC Data Channels:
+
+| Data Channel | Operation | Description |
+| :--- | :--- | :--- |
+| `frankn_cmd` | System Control | Handles process diagnostics, systemd power states, and command dispatching. |
+| `frankn_fs` | Binary Storage | Manages chunked, high-speed file transceivers with SHA-256 integrity validation. |
+| `frankn_media` | Media Telemetry | Bidirectional audio mixer tracking, album art synchronization, and stream scrubbing. |
+| `frankn_ssh` | Terminal Bridge | Establishes a raw xterm SSH bridge with Nerd Font support and session restoration. |
+| `frankn_input` | Remote Input | Batches precise Pointer movements, scroll metrics, and virtual keypresses. |
+| `dohee_x` | Neural Chat | Secure, isolated local LLM streaming thread connecting to the host `llama-server`. |
+
+---
+
+## 📸 Cyberpunk User Interface
 
 <div align="center">
-  <img src="frankn/docs/dohee_dashboard.png" width="18%" />
-  <img src="frankn/docs/ssh_screen.png" width="18%" />
-  <img src="frankn/docs/client_logs.png" width="18%" />
-  <img src="frankn/docs/file_browser.png" width="18%" />
-  <img src="frankn/docs/process_manager.png" width="18%" />
+  <img src="frankn/docs/dohee_dashboard.png" width="15%" />
+  <img src="frankn/docs/ssh_screen.png" width="15%" />
+  <img src="frankn/docs/client_logs.png" width="15%" />
+  <img src="frankn/docs/file_browser.png" width="15%" />
+  <img src="frankn/docs/process_manager.png" width="15%" />
+  <img src="frankn/docs/sync_manager.png" width="15%" />
 </div>
+
 <br>
+
 <details>
-<summary><b>👀 View more screenshots</b></summary>
+<summary><b>👀 View more system interface telemetry</b></summary>
 <br>
 <div align="center">
   <img src="frankn/docs/dohee_chat_latex.png" width="24%" />
@@ -37,72 +63,79 @@ The system is split into three parts:
   <img src="frankn/docs/host_list_empty.png" width="24%" />
   <img src="frankn/docs/ssh_auth.png" width="24%" />
   <img src="frankn/docs/config_screen.png" width="24%" />
+  <img src="frankn/docs/sync_pair_dialog.png" width="24%" />
 </div>
 </details>
 
-## 🦸‍♂️ Superpowers (Features)
+---
 
-- **Immersive Terminal**: Full SSH access over WebRTC with session restoration. Supports Nerd Fonts and sticky modifier keys.
-- **Zero-Trust Security**: Uses Argon2id for challenge-response authentication. Signaling server hardened against hijacking and ghost connections.
-- **Config & Pairing**: 12-digit unique IDs and QR code pairing (including screenshot import).
-- **Host CLI/TUI**: A dedicated `frankn-host config` TUI for managing settings with Vim keybindings.
-- **Media Control**: Real-time sync of track info, album art, and volume. Control your PC's audio from your phone.
-- **File System**: Recursive browsing, chunked binary transfers with SHA-256 validation, and a built-in code editor.
-- **Notification Mirroring**: My PC's notifications show up on my phone in real-time via D-Bus integration.
-- **Neural Chat [WIP]**: Integrated AI assistant (Dohee) powered by local LLM inferencing. Direct `llama-server` management with persistent session history. *(Note: This feature is currently a work in progress and not fully completed).*
-- **Remote Trackpad**: High-performance pointer and scroll control with batched events and perfect Linux keycode mapping.
+## 🦸‍♂️ Capabilities & Core Features
+
+### 🔐 Zero-Trust Cryptographic Security
+* **Constant-Time Argon2id Auth:** Hardened challenge-response pairing protocol utilizing `subtle` verifiers to mitigate timing side-channel attacks.
+* **Home Directory Sandboxing:** Enforces strict local directory barriers (`dirs::home_dir()`), recursively walking path structures to completely prevent parent directory traversal escapes.
+* **RAII Resource Management:** Connection handshakes automatically purge active file descriptors and memory-held signaling bindings upon link drop.
+
+### 📁 Advanced Files Orchestration
+* **Android Storage API Bypass:** Integrated a custom pure-Dart directory traversal engine listing folders asynchronously in sub-milliseconds to avoid native Storage Access Framework Tree crashes.
+* **Custom Landing Directories:** Supports persistent download landing configurations alongside dynamic, on-demand routing controls to choose custom storage targets for individual transfers.
+* **Frosted Glassmorphic Context Sheets:** File items display responsive telemetry diagnostics (size, type, and subsystem origin) inside custom frosted blurs with icon-guided operations.
+* **High-Speed Transfer Throttling:** Restricts Native progress redraws to a strict 2Hz limit, keeping the client completely fluid and responsive during gigabit-level P2P transfers.
+
+### 🎬 Media Synchronization
+* **Real-time State & Seek Sync:** Bidirectional streaming of workstation volume mixers (WirePlumber/PulseAudio), track details, and album art with gesture-based track seeking.
+
+### 🖥️ Precise Workstation Inputs
+* **Precision HUD Trackpad:** Supports 1-finger long-press drag gestures, 3-finger middle-click taps, and dual-state modifier key locking (Ctrl, Alt, Shift, Super) mapped directly to host `uinput` Linux virtual keys.
+* **Terminal Shell & Session Restoration:** Persistent terminal sessions over WebRTC with sticky modifiers and in-memory SSH credential caching for seamless reconnections.
+
+---
 
 ## 🚀 Getting Started
 
-### 1. Signaling Server
-This is the matchmaker. Run it anywhere with a public IP.
+### 1. Matchmaker (Signaling)
+Run this lightweight middleman on a VPS or public IP to facilitate the WebRTC handshakes:
 ```bash
 cd frankn-signaling-server
 cargo run --release
 ```
-**Note:** While I have provided a public testing server by default, it is highly recommended that you self-host the signaling server on your own VPS for maximum privacy and reliability.
 
-### 2. The Host
-Run this on the machine you want to control. On first run, it will guide you through an interactive setup. You can use the provided `install.sh` script to compile and install it as a system service.
+### 2. Workstation Host
+Run this on the machine you want to command. First-time startup launches an interactive configurator.
 ```bash
 cd frankn-host
 ./install.sh
 ```
-To pair your phone, run:
+To pair your client, launch the interactive QR code generator:
 ```bash
 frankn-host pair
 ```
 
-### 3. The Client
-Build the Flutter app, scan the QR code from the host, and you're in.
+### 3. Mobile Client
+Compile the Flutter engine and connect to your hosts:
 ```bash
 cd frankn
 flutter pub get
 flutter run
 ```
 
-## 🗺️ Current Progress & End Goal
+---
 
-**Status:** Phase 5 (Advanced Features)
-- [x] P2P WebRTC Transport & Auth (Argon2id)
-- [x] Persistent Configuration Provider (TOML) with custom path support
-- [x] Host CLI tool & TUI Config Editor (Vim binds)
-- [x] QR Code & 12-digit ID Pairing (+ Screenshot Import)
-- [x] System Control (Power, Processes, Logs)
-- [x] Immersive Terminal & File Browser
-- [x] Integrated file viewer & editor with syntax highlighting
-- [x] Media Sync & Notification Mirroring
-- [ ] Neural Chat & Local LLM Integration [WIP]
-- [x] High-performance Remote Trackpad & Virtual Keyboard
-- [x] Bidirectional Folder Sync [WIP]
-- [ ] Mobile-as-Host (Control the phone from the PC)
+## 🗺️ Progress Checklist & Project Path
 
-**The End Goal:** A fully decentralized, low-latency ecosystem where I can manage my entire digital footprint from a single mobile interface, regardless of where I am or how bad my internet is.
+**Current Phase:** Phase 5 (Advanced Protocols Integration)
+- [x] WebRTC End-to-End Encrypted Transport & Argon2id Verifications
+- [x] Host Configuration Provider (TOML) with custom path selectors (`-c` flags)
+- [x] Workstation Configuration TUI & Vim-based binds
+- [x] Secure QR Code Handshakes, 12-digit Unique IDs, & Screenshot Import
+- [x] Workstation Control Nodes (Systemctl, D-Bus, Hyprlock, Process managers)
+- [x] Immersive Terminal Emulator & Synced Viewer
+- [x] Frosted Glassmorphism Context UI & Neon Sorting Panels
+- [x] Bidirectional Storage Synchronizations (Sequenced batch folder mirroring)
+- [x] Precise Virtual Remote Pointer & Multi-touch gestures
+- [ ] Neural Chat & Local LLM Chat Thread (`LlmManager` streaming & persistence)
+- [ ] Mobile-as-Host Protocol (Reverse controller logic)
 
 ---
 
-### 🤝 Contributions
-I'm sharing this publicly because I think it's useful. While this is primarily a personal project, feel free to play around, and suggest improvements!
-
----
 *Built with Rust and Flutter. Cyberpunk aesthetic intended.*

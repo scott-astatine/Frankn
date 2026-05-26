@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
@@ -42,97 +43,157 @@ class FileBrowserItem extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Color(0xFF0F0F0F),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-          border: Border(top: BorderSide(color: Colors.white10, width: 2)),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "${l10n.intentHandler.toUpperCase()} // ${name.toUpperCase()}",
-              style: const TextStyle(
-                color: AppColors.neonCyan,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-                letterSpacing: 2,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.75),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(24),
+                topRight: Radius.circular(24),
+              ),
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.neonCyan.withValues(alpha: 0.8),
+                  width: 2,
+                ),
               ),
             ),
-            const SizedBox(height: 24),
-            Column(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!isDir) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: CyberButton(
-                            text: l10n.download.toUpperCase(),
-                            isSmall: true,
-                            onPressed: () {
-                              Navigator.pop(context);
-                              onDownload(fullPath, size);
-                            },
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: CyberButton(
-                            text: l10n.saveAs.toUpperCase(),
-                            isSmall: true,
-                            onPressed: () {
-                              Navigator.pop(context);
-                              onSaveAs(fullPath, size);
-                            },
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 4),
-                          child: CyberButton(
-                            text: l10n.edit.toUpperCase(),
-                            isSmall: true,
-                            onPressed: () {
-                              Navigator.pop(context);
-                              onEdit(fullPath, name);
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
+                Text(
+                  "${l10n.intentHandler.toUpperCase()} // ${name.toUpperCase()}",
+                  style: const TextStyle(
+                    color: AppColors.neonCyan,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    letterSpacing: 2,
+                    fontFamily: 'JetBrainsMonoNerdFont',
                   ),
-                  const SizedBox(height: 12),
-                ],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    Expanded(
-                      child: CyberButton(
-                        text: l10n.delete.toUpperCase(),
-                        variant: CyberButtonVariant.destructive,
-                        isSmall: true,
-                        onPressed: () {
-                          Navigator.pop(context);
-                          onDelete(fullPath);
-                        },
+                    Icon(
+                      isDir ? Icons.folder_open_rounded : Icons.insert_drive_file_outlined,
+                      color: isDir ? AppColors.neonCyan.withValues(alpha: 0.6) : AppColors.neonPink.withValues(alpha: 0.6),
+                      size: 14,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isDir ? "DIRECTORY" : FileUtils.formatSize(size),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                        fontFamily: 'JetBrainsMonoNerdFont',
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: const BoxDecoration(
+                        color: Colors.white24,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      "SYS_RESRC: LOCAL_FS",
+                      style: TextStyle(
+                        color: AppColors.textGrey.withValues(alpha: 0.8),
+                        fontSize: 11,
+                        fontFamily: 'JetBrainsMonoNerdFont',
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 24),
+                Column(
+                  children: [
+                    if (!isDir) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: CyberButton(
+                                text: l10n.download.toUpperCase(),
+                                icon: Icons.download_for_offline_rounded,
+                                isSmall: true,
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  onDownload(fullPath, size);
+                                },
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: CyberButton(
+                                text: l10n.saveAs.toUpperCase(),
+                                icon: Icons.drive_file_move_rounded,
+                                isSmall: true,
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  onSaveAs(fullPath, size);
+                                },
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: CyberButton(
+                                text: l10n.edit.toUpperCase(),
+                                icon: Icons.edit_note_rounded,
+                                isSmall: true,
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  onEdit(fullPath, name);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CyberButton(
+                            text: l10n.delete.toUpperCase(),
+                            icon: Icons.delete_forever_rounded,
+                            variant: CyberButtonVariant.destructive,
+                            isSmall: true,
+                            onPressed: () {
+                              Navigator.pop(context);
+                              onDelete(fullPath);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
               ],
             ),
-            const SizedBox(height: 16),
-          ],
+          ),
         ),
       ),
     );
