@@ -58,9 +58,6 @@ pub async fn handle_sync_request(
             let entry_path = entry.path();
             let file_type = entry.file_type();
             
-            crate::log!("SYNC: WalkDir yielded: {:?} (is_file: {}, is_dir: {}, is_symlink: {})", 
-                entry_path, file_type.is_file(), file_type.is_dir(), file_type.is_symlink());
-
             if file_type.is_file() || (file_type.is_symlink() && entry_path.is_file()) {
                 let metadata = match entry.metadata() {
                     Ok(m) => m,
@@ -85,8 +82,6 @@ pub async fn handle_sync_request(
                 // Quick hash (first 1KB + size)
                 let hash_fragment = generate_quick_hash(entry_path);
 
-                crate::log!("SYNC: Found file: {} ({} bytes)", relative_path, metadata.len());
-
                 files.push(json!({
                     "path": relative_path,
                     "size": metadata.len(),
@@ -94,11 +89,6 @@ pub async fn handle_sync_request(
                     "hash": hash_fragment
                 }));
                 count += 1;
-            } else if file_type.is_dir() {
-                crate::log!("SYNC: Scanned directory: {:?}", entry_path);
-            } else if file_type.is_symlink() {
-                crate::log!("SYNC: Found symlink: {:?}", entry_path);
-                // Currently skipping symlinks to prevent infinite loops, can be added later if needed
             }
         }
         (files, count, skipped)
@@ -139,7 +129,6 @@ pub async fn handle_sync_request(
 
                     if let Ok(json) = serde_json::to_string(&snapshot) {
                         let conn = rtc_conn.lock().await;
-                        crate::log!("SYNC: Sending snapshot chunk {}/{} (len: {})", i+1, total_chunks, json.len());
                         if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
                             crate::elog!("SYNC ERROR: Failed to send chunk: {}", e);
                         }

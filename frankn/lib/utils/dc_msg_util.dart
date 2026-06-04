@@ -847,7 +847,13 @@ sealed class DcMsg {
       case 'restart_host_server':
         return const DcMsgRestartHostServer();
       case 'system_log':
-        return DcMsgSystemLog(args: json['args']?.toString());
+        return DcMsgSystemLog(
+          unit: json['unit']?.toString(),
+          lines: json['lines'] as int?,
+          priority: json['priority']?.toString(),
+          since: json['since']?.toString(),
+          grep: json['grep']?.toString(),
+        );
       case 'kill':
         return DcMsgKillProcess(proc: (json['proc'] ?? '').toString());
       case 'list_processes':
@@ -984,12 +990,21 @@ class DcMsgRestartHostServer extends DcMsg {
 }
 
 class DcMsgSystemLog extends DcMsg {
-  final String? args;
-  const DcMsgSystemLog({this.args}) : super('system_log');
+  final String? unit;
+  final int? lines;
+  final String? priority;
+  final String? since;
+  final String? grep;
+  const DcMsgSystemLog({this.unit, this.lines, this.priority, this.since, this.grep})
+      : super('system_log');
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    if (args != null) json['args'] = args;
+    if (unit != null) json['unit'] = unit;
+    if (lines != null) json['lines'] = lines;
+    if (priority != null) json['priority'] = priority;
+    if (since != null) json['since'] = since;
+    if (grep != null) json['grep'] = grep;
     return json;
   }
 }

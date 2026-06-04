@@ -326,11 +326,17 @@ mixin RtcConnection on RtcClientBase {
         title: "☁️ $hostName",
         text: '⚡ Connected to Host',
       );
+    } else if (newState == HostConnectionState.connecting) {
+      if (!isIntentionalDisconnect && client.firstDisconnectTime != null) {
+        final hostName = client.currentHostName ?? "Remote PC";
+        updateBackgroundService(
+          title: "☁️ [RECONNECTING] // $hostName",
+          text: '⚡ Neural link unstable. Retrying connection...',
+        );
+      }
     } else if (newState == HostConnectionState.disconnected ||
         newState == HostConnectionState.failed) {
-      if (isIntentionalDisconnect) {
-        stopBackgroundService();
-      }
+      stopBackgroundService();
     }
 
     if (newState == HostConnectionState.disconnected ||

@@ -24,6 +24,7 @@ mixin RtcMessageHandler on RtcClientBase {
   Timer? _bgPingTimer;
   int? _lastPingTime;
   int _lastPingMs = 0;
+  int? _lastSuccessfulPongTime;
 
   void _handleChallenge(HostMsgChallenge msg) async {
     log("Computing Auth Response...");
@@ -38,6 +39,7 @@ mixin RtcMessageHandler on RtcClientBase {
   void _handleAuthSuccess(HostMsgAuthSuccess msg) {
     isAuthFailed = false;
     AuthService().setToken(msg.token);
+    _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
     updateHostState(HostConnectionState.authenticated);
     log("AUTH SUCCESS. Session Token acquired.");
     _startBgPingTimer();
@@ -45,10 +47,22 @@ mixin RtcMessageHandler on RtcClientBase {
 
   void _startBgPingTimer() {
     _bgPingTimer?.cancel();
+    _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
     _bgPingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       final client = this as RtcClient;
       if (client.currentHostState == HostConnectionState.authenticated) {
-        _lastPingTime = DateTime.now().millisecondsSinceEpoch;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        
+        // Timeout detection: 15 seconds (3 missed heartbeats)
+        if (_lastSuccessfulPongTime != null &&
+            (now - _lastSuccessfulPongTime!) > 15000) {
+          log("Heartbeat lost. Neural link severed.");
+          _stopBgPingTimer();
+          updateHostState(HostConnectionState.disconnected);
+          return;
+        }
+
+        _lastPingTime = now;
         client.sendDcMsg(const DcMsgPing());
       }
     });
@@ -57,6 +71,7 @@ mixin RtcMessageHandler on RtcClientBase {
   void _stopBgPingTimer() {
     _bgPingTimer?.cancel();
     _bgPingTimer = null;
+    _lastSuccessfulPongTime = null;
   }
 
   void _handleAuthFailed(HostMsgAuthFailed msg) {
@@ -106,6 +121,19 @@ mixin RtcMessageHandler on RtcClientBase {
             totalBytes: totalSize,
           ),
         );
+
+        // Forward progress event to the Background Isolate for sync monitoring
+        final progMsg = IsolateMsg(
+          type: IsolateType.event,
+          action: IsolateAction.transferProgress,
+          payload: TransferProgressUpdate(
+            id: id,
+            progress: progress,
+            bytesSent: currentTotal,
+            totalBytes: totalSize,
+          ).toJson(),
+        );
+        FlutterForegroundTask.sendDataToTask(progMsg.toJson());
       }
 
       // Update notification: Throttled to 500ms (2Hz) to prevent CPU starvation
@@ -265,6 +293,14 @@ mixin RtcMessageHandler on RtcClientBase {
             as Map<String, dynamic>,
       ),
     );
+
+    // Forward download completion to the Background Isolate to resolve active sync waits
+    final endMsg = IsolateMsg(
+      type: IsolateType.event,
+      action: IsolateAction.downloadEnd,
+      payload: {'id': transferId},
+    );
+    FlutterForegroundTask.sendDataToTask(endMsg.toJson());
   }
 
   void _handleDownloadStart(HostMsgDownloadStart msg) {
@@ -310,6 +346,14 @@ mixin RtcMessageHandler on RtcClientBase {
       _expectedHashes[transferId] = msg.hash!;
     }
     genDcMsgController.add(msg);
+
+    // Forward download start to the Background Isolate
+    final startMsg = IsolateMsg(
+      type: IsolateType.event,
+      action: IsolateAction.downloadStart,
+      payload: {'id': transferId},
+    );
+    FlutterForegroundTask.sendDataToTask(startMsg.toJson());
   }
 
   void _handleHostResponse(HostMsgResponse msg) {
@@ -318,6 +362,7 @@ mixin RtcMessageHandler on RtcClientBase {
     if (msg.data != null && msg.data is Map) {
       final response = msg.data['response'];
       if (response == 'Pong') {
+        _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
         if (_lastPingTime != null) {
           _lastPingMs = DateTime.now().millisecondsSinceEpoch - _lastPingTime!;
           _lastPingTime = null;
@@ -500,6 +545,16 @@ mixin RtcMessageHandler on RtcClientBase {
           transferProgressController.add(
             TransferProgressFailed(id: id, error: 'Transfer cancelled by host'),
           );
+          // Forward transfer failure/cancel to the Background Isolate
+          final failMsg = IsolateMsg(
+            type: IsolateType.event,
+            action: IsolateAction.transferFailed,
+            payload: {
+              'id': id,
+              'error': 'Transfer cancelled by host',
+            },
+          );
+          FlutterForegroundTask.sendDataToTask(failMsg.toJson());
           genDcMsgController.add(msg);
         case HostMsgUnknown():
           log("Unknown host message type: ${msg.type}");

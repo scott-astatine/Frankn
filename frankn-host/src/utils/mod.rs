@@ -1,6 +1,6 @@
 use std::io::Error;
 
-pub use crate::ops::dc_message_parser::DcMsg;
+pub use crate::ops::dc_message_parser;
 use serde::{Deserialize, Serialize};
 
 pub fn get_timestamp() -> u64 {
@@ -33,11 +33,10 @@ pub enum ClientMessage {
     AuthResponse { response: String },
 
     #[serde(rename = "dc_msg")]
-    XDcMsg {
+    ClientGenMsg {
         id: String,
         #[serde(flatten)]
-        command: DcMsg,
-        params: Option<serde_json::Value>,
+        command: dc_message_parser::DcMsg,
         auth_token: String,
     },
 
@@ -152,10 +151,7 @@ pub enum HostMessage {
 
     /// Transfer cancelled by client.
     #[serde(rename = "transfer_cancel")]
-    TransferCancel {
-        id: String,
-        timestamp: u64,
-    },
+    TransferCancel { id: String, timestamp: u64 },
 
     /// Download stream start with metadata.
     #[serde(rename = "download_start")]

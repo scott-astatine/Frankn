@@ -389,4 +389,172 @@ impl LlmManager {
             let _ = conn.send_message(label, &Bytes::from(json)).await;
         }
     }
+
+    // =========================================================================
+    // DC Message Handlers — called from dc_message_parser::DcMsg::parse_msg
+    // =========================================================================
+
+    pub async fn handle_list_models(
+        id: &str,
+        config: &crate::config::HostConfig,
+    ) -> HostMessage {
+        use crate::utils::{Status, get_timestamp};
+
+        let model_dir = config.llm_model_dir.clone().unwrap_or_else(|| {
+            dirs::home_dir()
+                .map(|mut p| {
+                    p.push("Models");
+                    p.to_string_lossy().to_string()
+                })
+                .unwrap_or_else(|| "~/.config/frankn/llms/".to_string())
+        });
+
+        match Self::scan_models(&model_dir).await {
+            Ok(data) => HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Success,
+                data: Some(data),
+                timestamp: get_timestamp(),
+            },
+            Err(e) => HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Error(e),
+                data: None,
+                timestamp: get_timestamp(),
+            },
+        }
+    }
+
+    pub async fn handle_start(
+        id: &str,
+        model_path: &str,
+        llm_manager: Arc<Mutex<Self>>,
+        config: &crate::config::HostConfig,
+    ) -> HostMessage {
+        use crate::utils::{Status, get_timestamp};
+
+        match llm_manager.lock().await.start_server(model_path, config).await {
+            Ok(_) => HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Success,
+                data: None,
+                timestamp: get_timestamp(),
+            },
+            Err(e) => HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Error(e),
+                data: None,
+                timestamp: get_timestamp(),
+            },
+        }
+    }
+
+    pub async fn handle_chat(
+        id: &str,
+        message: &str,
+        system_prompt: &Option<String>,
+        chat_id: &Option<String>,
+        llm_manager: Arc<Mutex<Self>>,
+        rtc_conn: Arc<Mutex<RTCConn>>,
+        label: &str,
+    ) -> HostMessage {
+        use crate::utils::{Status, get_timestamp};
+
+        let msg = message.to_string();
+        let sys_prompt = system_prompt.clone();
+        let cid = chat_id.clone();
+        let lbl = label.to_string();
+        let msg_id = id.to_string();
+
+        tokio::spawn(async move {
+            let (client, chats) = {
+                let mut l = llm_manager.lock().await;
+                l.ensure_chats_loaded().await;
+                (l.get_client(), l.get_chats())
+            };
+            Self::chat_stream_detached(client, chats, msg, sys_prompt, cid, msg_id, rtc_conn, lbl)
+                .await;
+        });
+
+        HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Success,
+            data: None,
+            timestamp: get_timestamp(),
+        }
+    }
+
+    pub async fn handle_load_chat(
+        id: &str,
+        chat_id: &str,
+        llm_manager: Arc<Mutex<Self>>,
+    ) -> HostMessage {
+        use crate::utils::{Status, get_timestamp};
+
+        let mut l = llm_manager.lock().await;
+        let data = l.load_chat(chat_id).await;
+        let status = match data {
+            Some(_) => Status::Success,
+            None => Status::Error("Chat not found".to_string()),
+        };
+        HostMessage::Response {
+            id: id.to_string(),
+            status,
+            data,
+            timestamp: get_timestamp(),
+        }
+    }
+
+    pub async fn handle_list_chats(
+        id: &str,
+        llm_manager: Arc<Mutex<Self>>,
+    ) -> HostMessage {
+        use crate::utils::{Status, get_timestamp};
+
+        let mut l = llm_manager.lock().await;
+        let data = l.list_chats().await;
+        HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Success,
+            data: Some(data),
+            timestamp: get_timestamp(),
+        }
+    }
+
+    pub async fn handle_delete_chat(
+        id: &str,
+        chat_id: &str,
+        llm_manager: Arc<Mutex<Self>>,
+    ) -> HostMessage {
+        use crate::utils::{Status, get_timestamp};
+
+        let mut l = llm_manager.lock().await;
+        let deleted = l.delete_chat(chat_id).await;
+        let status = if deleted {
+            Status::Success
+        } else {
+            Status::Error("Chat not found".to_string())
+        };
+        HostMessage::Response {
+            id: id.to_string(),
+            status,
+            data: None,
+            timestamp: get_timestamp(),
+        }
+    }
+
+    pub async fn handle_stop(
+        id: &str,
+        llm_manager: Arc<Mutex<Self>>,
+    ) -> HostMessage {
+        use crate::utils::{Status, get_timestamp};
+
+        llm_manager.lock().await.stop_server().await;
+        HostMessage::Response {
+            id: id.to_string(),
+            status: Status::Success,
+            data: None,
+            timestamp: get_timestamp(),
+        }
+    }
 }

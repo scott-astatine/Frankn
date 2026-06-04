@@ -10,7 +10,6 @@ import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 /// Metadata for a single file in a sync snapshot.
 class SyncFileInfo {
@@ -81,12 +80,6 @@ class SyncService {
   Future<Map<String, SyncFileInfo>> generateLocalSnapshot(
     String rootPath,
   ) async {
-    _client.log("SYNC_SCAN: Starting local scan of $rootPath");
-
-    // Check permission status
-    final manageStatus = await Permission.manageExternalStorage.status;
-    _client.log("SYNC_SCAN: All-Files Permission Status: $manageStatus");
-
     final Map<String, SyncFileInfo> snapshot = {};
 
     // Normalize path upfront
@@ -100,23 +93,21 @@ class SyncService {
       return snapshot;
     }
 
+    _client.log("SYNC_SCAN: Scanning local path: $normalizedRoot...");
+
     try {
-      // Manual stack-based recursion (Proven to work in your debugDirectory func)
+      // Manual stack-based recursion
       final List<Directory> stack = [dir];
       int fileCount = 0;
       int dirCount = 0;
 
       while (stack.isNotEmpty) {
         final currentDir = stack.removeLast();
-        _client.log("SYNC_SCAN: Entering: ${currentDir.path}");
         dirCount++;
 
         final List<FileSystemEntity> entities = currentDir.listSync(
           recursive: false,
           followLinks: true,
-        );
-        _client.log(
-          "SYNC_SCAN: Found ${entities.length} items in ${currentDir.path}",
         );
 
         for (final entity in entities) {
@@ -139,7 +130,6 @@ class SyncService {
                 hash: hash,
               );
               fileCount++;
-              _client.log("SYNC_SCAN: [+] Found: $relativePath");
             } catch (e) {
               _client.log(
                 "SYNC_SCAN ERROR: Failed to read file ${entity.path}: $e",
@@ -149,12 +139,11 @@ class SyncService {
         }
       }
       _client.log(
-        "SYNC_SCAN COMPLETE: Found $fileCount files in $dirCount directories.",
+        "SYNC_SCAN COMPLETE: Scanned $fileCount files across $dirCount directories.",
       );
     } catch (e) {
       _client.log("SYNC_SCAN FATAL EXCEPTION: $e");
     }
-    _client.log("==================================================");
 
     return snapshot;
   }
@@ -166,23 +155,19 @@ class SyncService {
     required SyncMode mode,
     bool clientIsSource = true,
   }) {
-    _client.log("SYNC: Calculating delta (Mode: $mode)");
     final List<SyncOperation> ops = [];
 
     if (mode == SyncMode.mirroring) {
       for (final path in local.keys) {
         if (!remote.containsKey(path)) {
-          _client.log("SYNC: [MIRROR] Queue Upload: $path");
           ops.add(SyncOperation(SyncOpType.upload, path));
         } else {
           final localFile = local[path]!;
           final remoteFile = remote[path]!;
           if (localFile.hash != remoteFile.hash || localFile.hash == null) {
             if (localFile.mtime > remoteFile.mtime) {
-              _client.log("SYNC: [MIRROR] Update Local -> Remote: $path");
               ops.add(SyncOperation(SyncOpType.upload, path));
             } else if (remoteFile.mtime > localFile.mtime) {
-              _client.log("SYNC: [MIRROR] Update Remote -> Local: $path");
               ops.add(SyncOperation(SyncOpType.download, path));
             }
           }
@@ -190,7 +175,6 @@ class SyncService {
       }
       for (final path in remote.keys) {
         if (!local.containsKey(path)) {
-          _client.log("SYNC: [MIRROR] Queue Download: $path");
           ops.add(SyncOperation(SyncOpType.download, path));
         }
       }
@@ -202,13 +186,11 @@ class SyncService {
           if (remoteFile == null ||
               localFile.hash != remoteFile.hash ||
               localFile.hash == null) {
-            _client.log("SYNC: [BACKUP] Queue Upload: $path");
             ops.add(SyncOperation(SyncOpType.upload, path));
           }
         }
         for (final path in remote.keys) {
           if (!local.containsKey(path)) {
-            _client.log("SYNC: [BACKUP] Queue Remote Delete: $path");
             ops.add(SyncOperation(SyncOpType.deleteRemote, path));
           }
         }
@@ -219,20 +201,17 @@ class SyncService {
           if (localFile == null ||
               remoteFile.hash != localFile.hash ||
               remoteFile.hash == null) {
-            _client.log("SYNC: [DIST] Queue Download: $path");
             ops.add(SyncOperation(SyncOpType.download, path));
           }
         }
         for (final path in local.keys) {
           if (!remote.containsKey(path)) {
-            _client.log("SYNC: [DIST] Queue Local Delete: $path");
             ops.add(SyncOperation(SyncOpType.deleteLocal, path));
           }
         }
       }
     }
 
-    _client.log("SYNC: Delta calc finished. Total ops: ${ops.length}");
     return ops;
   }
 
@@ -358,7 +337,10 @@ class SyncService {
     );
 
     if (deltas.isEmpty) {
-      _client.log("SYNC: Folder is already up to date.");
+      _client.log("SYNC: ==================================================");
+      _client.log("SYNC: Sync status for: ${pair.localPath}");
+      _client.log("SYNC: Status: Working tree clean (already in sync).");
+      _client.log("SYNC: ==================================================");
       await _updateLastSynced(pair);
       _client.sendEvent(IsolateAction.syncBatchProgress, {
         'completed': 0,
@@ -371,24 +353,66 @@ class SyncService {
     final totalItems = deltas.length;
     int completedItems = 0;
 
-    // Calculate total bytes for the batch (both uploads and downloads)
+    // Calculate total bytes and compile Git-status style sync plan
     int totalBytes = 0;
+    int uploadCount = 0;
+    int downloadCount = 0;
+    int delRemoteCount = 0;
+    int delLocalCount = 0;
+    final List<String> planLines = [];
+
     for (var op in deltas) {
+      String statusStr = "";
       if (op.type == SyncOpType.upload) {
+        uploadCount++;
         totalBytes += local[op.path]?.size ?? 0;
+        final isNew = !remote.containsKey(op.path);
+        statusStr = isNew ? "new file (upload)" : "modified (upload)";
       } else if (op.type == SyncOpType.download) {
+        downloadCount++;
         totalBytes += remote[op.path]?.size ?? 0;
+        final isNew = !local.containsKey(op.path);
+        statusStr = isNew ? "new file (download)" : "modified (download)";
+      } else if (op.type == SyncOpType.deleteRemote) {
+        delRemoteCount++;
+        statusStr = "deleted (remote)";
+      } else if (op.type == SyncOpType.deleteLocal) {
+        delLocalCount++;
+        statusStr = "deleted (local)";
       }
+
+      final paddedStatus = statusStr.padRight(22);
+      planLines.add("SYNC: \t$paddedStatus: ${op.path}");
     }
+
+    _client.log("SYNC: ==================================================");
+    _client.log("SYNC: Sync plan for folder: ${pair.localPath}");
+    _client.log("SYNC: Changes to be synchronized:");
+    _client.log("SYNC:   (use in-app controls to cancel or monitor)");
+    _client.log("SYNC: ");
+    for (var line in planLines) {
+      _client.log(line);
+    }
+    _client.log("SYNC: ");
+
+    final List<String> summaryParts = [];
+    if (uploadCount > 0) summaryParts.add("$uploadCount uploads");
+    if (downloadCount > 0) summaryParts.add("$downloadCount downloads");
+    if (delRemoteCount > 0) summaryParts.add("$delRemoteCount remote deletions");
+    if (delLocalCount > 0) summaryParts.add("$delLocalCount local deletions");
+
+    final summaryStr = summaryParts.join(", ");
+    _client.log(
+      "SYNC: Summary: ${deltas.length} changes ($summaryStr). "
+      "Total transfer size: ${FileUtils.formatSize(totalBytes)}",
+    );
+    _client.log("SYNC: ==================================================");
 
     int completedBytes = 0;
     int activeFileBytesTransferred = 0;
     final folderName = pair.localPath.split('/').last;
     final syncNotificationId = pair.localPath.hashCode.abs() % 10000;
 
-    _client.log(
-      "SYNC: Commencing sequential execution of $totalItems operations...",
-    );
     _isSyncCancelled = false;
     _cancelledSyncPairs.remove(pair.localPath);
 

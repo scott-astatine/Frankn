@@ -1,4 +1,4 @@
-use crate::ops::rtc::{PeerMap, RTCConn};
+use crate::ops::rtc::PeerMap;
 use crate::{HostMessage, ops, utils::Status};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -25,7 +25,13 @@ pub enum DcMsg {
     #[serde(rename = "restart_host_server")]
     RestartHostServer,
     #[serde(rename = "system_log")]
-    SystemLog { args: Option<String> },
+    SystemLog {
+        unit: Option<String>,
+        lines: Option<u32>,
+        priority: Option<String>,
+        since: Option<String>,
+        grep: Option<String>,
+    },
 
     // --- Processes ---
     #[serde(rename = "kill")]
@@ -122,33 +128,15 @@ pub enum DcMsg {
     SyncRequest { path: String },
 }
 
-macro_rules! dispatch {
-    ($id:ident, $rtc:ident, $cmd:expr, {
-        $($variant:ident $( { $($arg:ident),* } )? => $func:path),* $(,)?
-    }) => {
-        match $cmd {
-            $(
-                DcMsg::$variant { $($($arg,)*)? .. } => {
-                    $func($id, $($($arg,)*)? $rtc).await
-                }
-            )*
-            _ => HostMessage::Response {
-                id: $id.to_string(),
-                status: Status::Error("Command not dispatched".into()),
-                data: None,
-                timestamp: crate::utils::get_timestamp(),
-            }
-        }
-    };
-}
-
 impl DcMsg {
     pub async fn parse_msg(
         id: &str,
         command: &DcMsg,
-        _params: Option<serde_json::Value>,
         peer_map: PeerMap,
         client_id: &str,
+        label: &str,
+        llm_manager: Arc<Mutex<crate::ops::llm::LlmManager>>,
+        config: Arc<crate::config::HostConfig>,
     ) -> HostMessage {
         let rtc_conn = {
             let map = peer_map.lock().await;
@@ -165,156 +153,127 @@ impl DcMsg {
             }
         };
 
-        dispatch!(id, rtc_conn, command, {
-            // System & Power
-            Ping => ops::system::ping,
-            Disconnect => ops::system::disconnect,
-            Shutdown { args } => ops::system::shutdown,
-            Reboot => ops::system::reboot,
-            LockScreen => ops::system::lock_screen,
-            RestartHostServer => ops::system::restart_host,
-
-            // Media
-            TogglePlayPause => ops::media::toggle_play_pause,
-            PlayNextTrack => ops::media::next_track,
-            PlayPreviousTrack => ops::media::previous_track,
-            SetVolume { level } => ops::media::set_volume,
-            Seek { position } => ops::media::seek,
-            GetMediaStatus => ops::media::get_media_status,
-            ListPlayers => ops::media::list_players,
-            SetActivePlayer { player_name } => ops::media::set_active_player,
-
-            // Audio Mixer
-            GetAudioDevices => ops::media::get_all_audio_devices,
-            SetDeviceVolume { target_id, volume } => ops::media::set_specific_device_volume,
-            SetDefaultAudioDevice { target_id } => ops::media::set_default_audio_device,
-
-            // Processes
-            ListProcesses { sort_by, filter } => ops::proc_manager::list_processes,
-            KillProcess { proc } => ops::proc_manager::kill_process,
-
-            // File System
-            Ls { path, sort_by, show_hidden } => _async_ls,
-            Mkdir { path } => _async_mkdir,
-            DeleteFile { path } => _async_delete_file,
-
-            // System Logs
-            SystemLog { args } => _handle_system_log,
-
-            // SSH
-            StartSsh => ops::ssh::start_ssh_tunnel,
-            StopSsh => ops::ssh::stop_ssh_tunnel,
-
-            // Network
-            GetNetworkStatus => ops::network::get_network_status,
-            ToggleRadio { radio, state } => _async_toggle_radio,
-            ListWifiNetworks => ops::network::list_wifi_networks,
-            ConnectWifi { ssid, password } => _async_connect_wifi,
-            ListBluetoothDevices => ops::network::list_bluetooth_devices,
-            ConnectBluetooth { mac } => _async_connect_bluetooth,
-
-            // Folder Sync
-            SyncRequest { path } => _async_sync_request,
-        })
-    }
-}
-
-// --- Adapters ---
-async fn _async_sync_request(
-    id: &str,
-    path: &String,
-    rtc: Arc<Mutex<RTCConn>>,
-) -> HostMessage {
-    crate::fs_sync::sync::handle_sync_request(id, path, rtc, "frankn_cmd").await
-}
-
-async fn _async_ls(
-    id: &str,
-    path: &String,
-    sort_by: &Option<String>,
-    show_hidden: &Option<bool>,
-    _rtc: Arc<Mutex<RTCConn>>,
-) -> HostMessage {
-    crate::fs_sync::ls(id, path, sort_by.clone(), *show_hidden)
-}
-
-async fn _async_delete_file(id: &str, path: &String, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
-    crate::fs_sync::delete_file(id, path)
-}
-
-async fn _async_mkdir(id: &str, path: &String, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
-    crate::fs_sync::mkdir(id, path)
-}
-
-async fn _handle_system_log(
-    id: &str,
-    args: &Option<String>,
-    _rtc: Arc<Mutex<RTCConn>>,
-) -> HostMessage {
-    #[cfg(target_os = "linux")]
-    {
-        use tokio::process::Command;
-        let mut cmd = Command::new("journalctl");
-        cmd.args(["--no-pager", "--since", "-1m"]);
-        if let Some(service) = args
-            && !service.trim().is_empty()
-        {
-            cmd.arg(service);
-        }
-        let result = cmd.output().await;
-        _handle_cmd_output(id, result)
-    }
-    #[cfg(not(target_os = "linux"))]
-    HostMessage::Response {
-        id: id.to_string(),
-        status: Status::Error("SystemLog only implemented for Linux".to_string()),
-        data: None,
-        timestamp: crate::utils::get_timestamp(),
-    }
-}
-
-fn _handle_cmd_output(id: &str, result: std::io::Result<std::process::Output>) -> HostMessage {
-    match result {
-        Ok(output) => HostMessage::Response {
-            id: id.to_string(),
-            status: if output.status.success() {
-                Status::Success
-            } else {
-                Status::Error("Command failed".to_string())
+        match command {
+            // --- System & Power ---
+            DcMsg::Ping => ops::system::ping(id, rtc_conn).await,
+            DcMsg::Disconnect => ops::system::disconnect(id, rtc_conn).await,
+            DcMsg::Shutdown { args } => ops::system::shutdown(id, args, rtc_conn).await,
+            DcMsg::Reboot => ops::system::reboot(id, rtc_conn).await,
+            DcMsg::LockScreen => ops::system::lock_screen(id, rtc_conn).await,
+            DcMsg::UnlockScreen => HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Error("Unlock screen not implemented natively".to_string()),
+                data: None,
+                timestamp: crate::utils::get_timestamp(),
             },
-            data: Some(serde_json::json!({
-                "stdout": String::from_utf8_lossy(&output.stdout),
-                "stderr": String::from_utf8_lossy(&output.stderr)
-            })),
-            timestamp: crate::utils::get_timestamp(),
-        },
-        Err(e) => HostMessage::Response {
-            id: id.to_string(),
-            status: Status::Error(e.to_string()),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
+            DcMsg::Update => HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Error("System update not implemented natively".to_string()),
+                data: None,
+                timestamp: crate::utils::get_timestamp(),
+            },
+            DcMsg::RestartHostServer => ops::system::restart_host(id, rtc_conn).await,
+            DcMsg::SystemLog { unit, lines, priority, since, grep } => {
+                ops::system::system_log(id, unit, lines, priority, since, grep, rtc_conn).await
+            }
+
+            // --- Processes ---
+            DcMsg::ListProcesses { sort_by, filter } => {
+                ops::proc_manager::list_processes(id, sort_by, filter, rtc_conn).await
+            }
+            DcMsg::KillProcess { proc } => {
+                ops::proc_manager::kill_process(id, proc, rtc_conn).await
+            }
+
+            // --- File System ---
+            DcMsg::Ls {
+                path,
+                sort_by,
+                show_hidden,
+            } => crate::fs_sync::ls(id, path, sort_by.clone(), *show_hidden),
+            DcMsg::Mkdir { path } => crate::fs_sync::mkdir(id, path),
+            DcMsg::DeleteFile { path } => crate::fs_sync::delete_file(id, path),
+
+            // --- LLM ---
+            DcMsg::ListModels => ops::llm::LlmManager::handle_list_models(id, &config).await,
+            DcMsg::LlmStart { model_path } => {
+                ops::llm::LlmManager::handle_start(
+                    id,
+                    model_path,
+                    Arc::clone(&llm_manager),
+                    &config,
+                )
+                .await
+            }
+            DcMsg::LlmChat {
+                message,
+                system_prompt,
+                chat_id,
+            } => {
+                ops::llm::LlmManager::handle_chat(
+                    id,
+                    message,
+                    system_prompt,
+                    chat_id,
+                    Arc::clone(&llm_manager),
+                    Arc::clone(&rtc_conn),
+                    label,
+                )
+                .await
+            }
+            DcMsg::LlmLoadChat { chat_id } => {
+                ops::llm::LlmManager::handle_load_chat(id, chat_id, Arc::clone(&llm_manager)).await
+            }
+            DcMsg::LlmListChats => {
+                ops::llm::LlmManager::handle_list_chats(id, Arc::clone(&llm_manager)).await
+            }
+            DcMsg::LlmDeleteChat { chat_id } => {
+                ops::llm::LlmManager::handle_delete_chat(id, chat_id, Arc::clone(&llm_manager))
+                    .await
+            }
+            DcMsg::LlmStop => ops::llm::LlmManager::handle_stop(id, Arc::clone(&llm_manager)).await,
+
+            // --- Media Control ---
+            DcMsg::GetAudioDevices => ops::media::get_all_audio_devices(id, rtc_conn).await,
+            DcMsg::SetDeviceVolume { target_id, volume } => {
+                ops::media::set_specific_device_volume(id, target_id, volume, rtc_conn).await
+            }
+            DcMsg::SetDefaultAudioDevice { target_id } => {
+                ops::media::set_default_audio_device(id, target_id, rtc_conn).await
+            }
+            DcMsg::TogglePlayPause => ops::media::toggle_play_pause(id, rtc_conn).await,
+            DcMsg::PlayNextTrack => ops::media::next_track(id, rtc_conn).await,
+            DcMsg::PlayPreviousTrack => ops::media::previous_track(id, rtc_conn).await,
+            DcMsg::SetVolume { level } => ops::media::set_volume(id, level, rtc_conn).await,
+            DcMsg::GetMediaStatus => ops::media::get_media_status(id, rtc_conn).await,
+            DcMsg::ListPlayers => ops::media::list_players(id, rtc_conn).await,
+            DcMsg::SetActivePlayer { player_name } => {
+                ops::media::set_active_player(id, player_name, rtc_conn).await
+            }
+            DcMsg::Seek { position } => ops::media::seek(id, position, rtc_conn).await,
+
+            // --- SSH ---
+            DcMsg::StartSsh => ops::ssh::start_ssh_tunnel(id, rtc_conn).await,
+            DcMsg::StopSsh => ops::ssh::stop_ssh_tunnel(id, rtc_conn).await,
+
+            // --- Network ---
+            DcMsg::GetNetworkStatus => ops::network::get_network_status(id, rtc_conn).await,
+            DcMsg::ToggleRadio { radio, state } => {
+                ops::network::toggle_radio(id, radio, *state, rtc_conn).await
+            }
+            DcMsg::ListWifiNetworks => ops::network::list_wifi_networks(id, rtc_conn).await,
+            DcMsg::ConnectWifi { ssid, password } => {
+                ops::network::connect_wifi(id, ssid, password, rtc_conn).await
+            }
+            DcMsg::ListBluetoothDevices => ops::network::list_bluetooth_devices(id, rtc_conn).await,
+            DcMsg::ConnectBluetooth { mac } => {
+                ops::network::connect_bluetooth(id, mac, rtc_conn).await
+            }
+
+            // --- Folder Sync ---
+            DcMsg::SyncRequest { path } => {
+                crate::fs_sync::sync::handle_sync_request(id, path, rtc_conn, "frankn_cmd").await
+            }
+        }
     }
-}
-
-async fn _async_toggle_radio(
-    id: &str,
-    radio: &String,
-    state: &bool,
-    rtc: Arc<Mutex<RTCConn>>,
-) -> HostMessage {
-    ops::network::toggle_radio(id, radio, *state, rtc).await
-}
-
-async fn _async_connect_wifi(
-    id: &str,
-    ssid: &String,
-    password: &Option<String>,
-    rtc: Arc<Mutex<RTCConn>>,
-) -> HostMessage {
-    ops::network::connect_wifi(id, ssid, password, rtc).await
-}
-
-async fn _async_connect_bluetooth(id: &str, mac: &String, rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
-    ops::network::connect_bluetooth(id, mac, rtc).await
 }

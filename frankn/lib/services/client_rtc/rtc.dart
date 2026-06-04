@@ -40,6 +40,7 @@ import 'package:frankn/services/auth_service.dart';
 import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/settings_service.dart';
+import 'package:frankn/services/isolate_protocol.dart';
 
 part 'rtc_message_handler.dart';
 part 'rtc_signaling.dart';
