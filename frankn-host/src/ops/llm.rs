@@ -5,9 +5,7 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::process::Stdio;
 use std::sync::Arc;
-use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Bytes;
 
@@ -26,19 +24,21 @@ pub struct ChatSession {
 }
 
 pub struct LlmManager {
-    process: Option<Child>,
+    active_model: Option<String>,
     client: Client,
     chats: Arc<Mutex<HashMap<String, ChatSession>>>,
     chats_loaded: bool,
+    pub approval_registry: HashMap<String, tokio::sync::oneshot::Sender<bool>>,
 }
 
 impl LlmManager {
     pub fn new() -> Self {
         Self {
-            process: None,
+            active_model: None,
             client: Client::new(),
             chats: Arc::new(Mutex::new(HashMap::new())),
             chats_loaded: false,
+            approval_registry: HashMap::new(),
         }
     }
 
@@ -108,147 +108,150 @@ impl LlmManager {
 
     pub async fn start_server(
         &mut self,
-        model_path: &str,
+        model_name_or_path: &str,
         config: &crate::config::HostConfig,
     ) -> Result<(), String> {
-        if self.process.is_some() {
-            return Ok(());
+        // 1. Verify Ollama is running
+        let health_res = self.client.get("http://localhost:11434/").send().await;
+        if health_res.is_err() {
+            return Err(
+                "Ollama service is not running on http://localhost:11434. Please start Ollama."
+                    .to_string(),
+            );
         }
 
-        // Basic directory traversal protection
-        let path = std::path::Path::new(model_path);
+        // 2. Determine if it is a local GGUF path
+        if model_name_or_path.ends_with(".gguf") || model_name_or_path.ends_with(".ggff") {
+            let path = std::path::Path::new(model_name_or_path);
+            let final_path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                let model_dir = config.llm_model_dir.clone().unwrap_or_else(|| {
+                    dirs::home_dir()
+                        .map(|mut p| {
+                            p.push(".config/frankn/models");
+                            p.to_path_buf()
+                        })
+                        .unwrap_or_else(|| std::path::PathBuf::from("/home/user/Models"))
+                        .to_string_lossy()
+                        .into_owned()
+                });
+                std::path::Path::new(&model_dir).join(model_name_or_path)
+            };
 
-        let final_path = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            // Join with the configured model directory
-            let model_dir = config.llm_model_dir.clone().unwrap_or_else(|| {
-                dirs::home_dir()
-                    .map(|mut p| {
-                        p.push(".config/frankn/models");
-                        p.to_path_buf()
-                    })
-                    .unwrap_or_else(|| std::path::PathBuf::from("/home/user/Models"))
-                    .to_string_lossy()
-                    .into_owned()
-            });
-            std::path::Path::new(&model_dir).join(model_path)
-        };
-
-        if !final_path.exists() {
-            return Err(format!(
-                "Model file does not exist: {}",
-                final_path.display()
-            ));
-        }
-
-        // Ensure llama-server is in PATH
-        match which::which("llama-server") {
-            Ok(_) => {}
-            Err(_) => return Err("llama-server binary not found in PATH.".to_string()),
-        }
-
-        let child = Command::new("llama-server")
-            .args([
-                "-m",
-                &final_path.to_string_lossy(),
-                "--port",
-                "8080",
-                "-c",
-                "8192", // --jinja -c 8192 -ngl 99
-                "-ngl",
-                "99",
-            ])
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped()) // Capture stderr for debugging if it crashes
-            .spawn()
-            .map_err(|e| format!("Failed to spawn llama-server: {}", e))?;
-
-        self.process = Some(child);
-
-        // Wait for server to boot by polling the endpoint instead of hardcoded sleep
-        let mut retries = 0;
-        let mut is_ready = false;
-        while retries < 15 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            if let Ok(res) = self.client.get("http://localhost:8080/health").send().await
-                && res.status().is_success()
-            {
-                is_ready = true;
-                break;
-            }
-
-            // Check if it crashed while we were waiting
-            if let Some(child) = &mut self.process
-                && let Ok(Some(status)) = child.try_wait()
-            {
-                self.process = None;
+            if !final_path.exists() {
                 return Err(format!(
-                    "llama-server crashed during startup with status: {}",
-                    status
+                    "Local model file does not exist: {}",
+                    final_path.display()
                 ));
             }
-            retries += 1;
-        }
 
-        if !is_ready {
-            self.stop_server().await;
-            return Err("llama-server failed to become ready within 7.5 seconds.".to_string());
+            // Extract a clean model name for Ollama registration, e.g., local_model_name
+            let stem = final_path
+                .file_stem()
+                .ok_or_else(|| "Invalid model file name".to_string())?
+                .to_string_lossy()
+                .to_string();
+            let ollama_model_name = format!("local_{}", stem.replace('.', "_").replace(' ', "_"));
+
+            crate::log!(
+                "Registering local GGUF model with Ollama: {} -> {}",
+                final_path.display(),
+                ollama_model_name
+            );
+
+            // Call Ollama create API
+            let create_payload = serde_json::json!({
+                "name": &ollama_model_name,
+                "modelfile": format!("FROM {}", final_path.to_string_lossy())
+            });
+
+            let res = self
+                .client
+                .post("http://localhost:11434/api/create")
+                .json(&create_payload)
+                .send()
+                .await
+                .map_err(|e| format!("Failed to call Ollama create API: {}", e))?;
+
+            if !res.status().is_success() {
+                let err_text = res.text().await.unwrap_or_default();
+                return Err(format!("Ollama failed to create model: {}", err_text));
+            }
+
+            self.active_model = Some(ollama_model_name);
+        } else {
+            // It's a standard pulled model name
+            self.active_model = Some(model_name_or_path.to_string());
         }
 
         Ok(())
     }
 
     pub async fn stop_server(&mut self) {
-        if let Some(mut child) = self.process.take() {
-            let _ = child.kill().await;
-        }
+        self.active_model = None;
     }
 
     pub async fn scan_models(dir_path: &str) -> Result<serde_json::Value, String> {
-        let mut entries = match tokio::fs::read_dir(dir_path).await {
-            Ok(entries) => entries,
-            Err(e) => return Err(format!("Failed to read model directory: {}", e)),
-        };
-
         let mut models = Vec::new();
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let path = entry.path();
-            if path.is_file()
-                && let Some(ext) = path.extension()
-                && (ext == "gguf" || ext == "ggff")
-            {
-                let name = path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .into_owned();
-                let size = match entry.metadata().await {
-                    Ok(meta) => meta.len(),
-                    Err(_) => 0,
-                };
+        let client = reqwest::Client::new();
 
-                models.push(serde_json::json!({
-                    "name": name,
-                    "size": size,
-                }));
+        // 1. Fetch official Ollama models
+        if let Ok(res) = client.get("http://localhost:11434/api/tags").send().await {
+            #[derive(Deserialize)]
+            struct OllamaModel {
+                name: String,
+                size: u64,
+            }
+            #[derive(Deserialize)]
+            struct OllamaTagsResponse {
+                models: Vec<OllamaModel>,
+            }
+            if let Ok(parsed) = res.json::<OllamaTagsResponse>().await {
+                for m in parsed.models {
+                    models.push(serde_json::json!({
+                        "name": m.name,
+                        "size": m.size,
+                    }));
+                }
+            }
+        }
+
+        // 2. Scan local custom model directory (if it exists)
+        if let Ok(mut entries) = tokio::fs::read_dir(dir_path).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                if path.is_file()
+                    && let Some(ext) = path.extension()
+                    && (ext == "gguf" || ext == "ggff")
+                {
+                    let name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned();
+                    let size = match entry.metadata().await {
+                        Ok(meta) => meta.len(),
+                        Err(_) => 0,
+                    };
+
+                    // Avoid duplicate entries if user registered the GGUF in Ollama already
+                    if !models.iter().any(|m| m["name"] == name) {
+                        models.push(serde_json::json!({
+                            "name": name,
+                            "size": size,
+                        }));
+                    }
+                }
             }
         }
 
         Ok(serde_json::json!({ "models": models }))
     }
 
-    pub fn get_client(&self) -> Client {
-        self.client.clone()
-    }
-
-    pub fn get_chats(&self) -> Arc<Mutex<HashMap<String, ChatSession>>> {
-        self.chats.clone()
-    }
-
     pub async fn chat_stream_detached(
-        client: Client,
-        chats: Arc<Mutex<HashMap<String, ChatSession>>>,
+        llm_manager: Arc<Mutex<Self>>,
+        model: String,
         message: String,
         system_prompt: Option<String>,
         chat_id: Option<String>,
@@ -256,6 +259,11 @@ impl LlmManager {
         rtc_conn: Arc<Mutex<RTCConn>>,
         label: String,
     ) {
+        let (client, chats) = {
+            let l = llm_manager.lock().await;
+            (l.client.clone(), l.chats.clone())
+        };
+
         // 1. Send the initial success response to unblock the Flutter client
         let response = HostMessage::Response {
             id: msg_id,
@@ -267,7 +275,8 @@ impl LlmManager {
 
         let cid = chat_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-        let req_messages = {
+        // We load the existing chat history and append the user message
+        let mut req_messages = {
             let mut c = chats.lock().await;
             let session = c.entry(cid.clone()).or_insert_with(|| ChatSession {
                 id: cid.clone(),
@@ -276,17 +285,24 @@ impl LlmManager {
                 updated_at: crate::utils::get_timestamp(),
             });
 
+            // Set system prompt if new session
             if let Some(sp) = system_prompt {
+                // To support agent skills, we append a strict instructions suffix to the system prompt
+                let full_sp = format!(
+                    "{}\n\n[SYSTEM INSTRUCTION: Workstation Agent Skills]\nYou have access to local workstation tools. You can view directories, read/write files, and run commands. To execute a tool, use XML tags format:\n<call:tool_name>\n{{\"param\": \"value\"}}\n</call:tool_name>\n\nAvailable Tools:\n1. list_dir: {{\"path\": \"/path\"}}\n2. read_file: {{\"path\": \"/path\"}}\n3. write_file: {{\"path\": \"/path\", \"content\": \"...\"}}\n4. run_command: {{\"command\": \"command string\"}}\n\nFollow ReAct pattern: Thought -> Action -> Observation. Output thought reasoning inside <think> tags first.",
+                    sp
+                );
+
                 if session.messages.is_empty() || session.messages[0].role != "system" {
                     session.messages.insert(
                         0,
                         ChatMessage {
                             role: "system".to_string(),
-                            content: sp.clone(),
+                            content: full_sp,
                         },
                     );
                 } else {
-                    session.messages[0].content = sp.clone();
+                    session.messages[0].content = full_sp;
                 }
             }
 
@@ -296,8 +312,15 @@ impl LlmManager {
             });
             session.updated_at = crate::utils::get_timestamp();
 
-            let msgs = session
-                .messages
+            let msgs = session.messages.clone();
+            Self::save_chats(&c).await;
+            msgs
+        };
+
+        // ReAct Loop - max 6 turns per conversation turn to prevent infinite loops
+        for turn in 0..6 {
+            crate::log!("AGENT LOOP: Starting turn {}", turn);
+            let req_body_messages = req_messages
                 .iter()
                 .map(|m| {
                     serde_json::json!({
@@ -307,80 +330,148 @@ impl LlmManager {
                 })
                 .collect::<Vec<serde_json::Value>>();
 
-            Self::save_chats(&c).await;
-            msgs
-        };
+            let request_body = serde_json::json!({
+                "model": model,
+                "messages": req_body_messages,
+                "stream": true
+            });
 
-        let request_body = serde_json::json!({
-            "messages": req_messages,
-            "stream": true
-        });
-
-        let res = match client
-            .post("http://localhost:8080/v1/chat/completions")
-            .json(&request_body)
-            .send()
-            .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                crate::elog!("LLM ERROR: failed to send request: {}", e);
-                return;
-            }
-        };
-
-        let mut stream = res.bytes_stream().eventsource();
-        let mut assistant_content = String::new();
-
-        while let Some(event) = stream.next().await {
-            match event {
-                Ok(event) => {
-                    let data = event.data;
-                    if data == "[DONE]" {
-                        let msg = HostMessage::LlmToken {
-                            token: String::new(),
-                            is_final: true,
-                            timestamp: crate::utils::get_timestamp(),
-                        };
-                        Self::send_msg(msg, &rtc_conn, &label).await;
-                        break;
-                    }
-
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data)
-                        && let Some(choices) = parsed.get("choices")
-                        && let Some(first_choice) = choices.get(0)
-                        && let Some(delta) = first_choice.get("delta")
-                        && let Some(content) = delta.get("content")
-                        && let Some(content_str) = content.as_str()
-                    {
-                        assistant_content.push_str(content_str);
-                        let msg = HostMessage::LlmToken {
-                            token: content_str.to_string(),
-                            is_final: false,
-                            timestamp: crate::utils::get_timestamp(),
-                        };
-                        Self::send_msg(msg, &rtc_conn, &label).await;
-                    }
-                }
+            let res = match client
+                .post("http://localhost:11434/v1/chat/completions")
+                .json(&request_body)
+                .send()
+                .await
+            {
+                Ok(r) => r,
                 Err(e) => {
-                    crate::elog!("LLM ERROR: event stream error: {}", e);
+                    crate::elog!("LLM ERROR: failed to send request: {}", e);
                     break;
                 }
+            };
+
+            let mut stream = res.bytes_stream().eventsource();
+            let mut assistant_content = String::new();
+
+            while let Some(event) = stream.next().await {
+                match event {
+                    Ok(event) => {
+                        let data = event.data;
+                        if data == "[DONE]" {
+                            break;
+                        }
+
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data)
+                            && let Some(choices) = parsed.get("choices")
+                            && let Some(first_choice) = choices.get(0)
+                            && let Some(delta) = first_choice.get("delta")
+                            && let Some(content) = delta.get("content")
+                            && let Some(content_str) = content.as_str()
+                        {
+                            assistant_content.push_str(content_str);
+                            let msg = HostMessage::LlmToken {
+                                token: content_str.to_string(),
+                                is_final: false,
+                                timestamp: crate::utils::get_timestamp(),
+                            };
+                            Self::send_msg(msg, &rtc_conn, &label).await;
+                        }
+                    }
+                    Err(e) => {
+                        crate::elog!("LLM ERROR: event stream error: {}", e);
+                        break;
+                    }
+                }
+            }
+
+            // Save this turn's assistant response
+            req_messages.push(ChatMessage {
+                role: "assistant".to_string(),
+                content: assistant_content.clone(),
+            });
+
+            // Parse if the assistant requested a tool call
+            if let Some(tool) = crate::ops::llm_tools::parse_tool_call(&assistant_content) {
+                crate::log!("AGENT LOOP: Tool call detected: {}", tool.name);
+
+                // Notify UI of tool execution start
+                let status_msg = format!("\n\n⚙️ [Harness: Running tool `{}`...]\n\n", tool.name);
+                Self::send_msg(
+                    HostMessage::LlmToken {
+                        token: status_msg,
+                        is_final: false,
+                        timestamp: crate::utils::get_timestamp(),
+                    },
+                    &rtc_conn,
+                    &label,
+                )
+                .await;
+
+                // Execute workstation tool
+                let tool_result = crate::ops::llm_tools::execute_tool(
+                    &tool.name,
+                    &tool.args,
+                    &llm_manager,
+                    &rtc_conn,
+                    &label,
+                )
+                .await;
+
+                let (observation_content, is_error) = match tool_result {
+                    Ok(out) => (out, false),
+                    Err(err) => (err, true),
+                };
+
+                let status_icon = if is_error { "❌" } else { "✓" };
+                let observation = format!(
+                    "<observation:{}>\n{}\n</observation:{}>",
+                    tool.name, observation_content, tool.name
+                );
+
+                // Notify UI of observation
+                let observation_msg = format!(
+                    "\n\n⚙️ [Harness: Tool `{}` observation ({}):\n```\n{}\n```]\n\n",
+                    tool.name, status_icon, observation_content
+                );
+                Self::send_msg(
+                    HostMessage::LlmToken {
+                        token: observation_msg,
+                        is_final: false,
+                        timestamp: crate::utils::get_timestamp(),
+                    },
+                    &rtc_conn,
+                    &label,
+                )
+                .await;
+
+                // Push observation to context history for next turn
+                req_messages.push(ChatMessage {
+                    role: "user".to_string(),
+                    content: observation,
+                });
+            } else {
+                // No tool call requested; model has finished its final turn
+                crate::log!("AGENT LOOP: Complete (No tool calls).");
+                break;
             }
         }
 
-        // Save the assistant's response to the session
+        // Commit full multi-turn trajectory to chat database
         {
             let mut c = chats.lock().await;
             if let Some(session) = c.get_mut(&cid) {
-                session.messages.push(ChatMessage {
-                    role: "assistant".to_string(),
-                    content: assistant_content,
-                });
+                session.messages = req_messages;
                 session.updated_at = crate::utils::get_timestamp();
                 Self::save_chats(&c).await;
             }
         }
+
+        // Finalize stream
+        let final_msg = HostMessage::LlmToken {
+            token: String::new(),
+            is_final: true,
+            timestamp: crate::utils::get_timestamp(),
+        };
+        Self::send_msg(final_msg, &rtc_conn, &label).await;
     }
 
     async fn send_msg(msg: HostMessage, rtc_conn: &Arc<Mutex<RTCConn>>, label: &str) {
@@ -394,10 +485,7 @@ impl LlmManager {
     // DC Message Handlers — called from dc_message_parser::DcMsg::parse_msg
     // =========================================================================
 
-    pub async fn handle_list_models(
-        id: &str,
-        config: &crate::config::HostConfig,
-    ) -> HostMessage {
+    pub async fn handle_list_models(id: &str, config: &crate::config::HostConfig) -> HostMessage {
         use crate::utils::{Status, get_timestamp};
 
         let model_dir = config.llm_model_dir.clone().unwrap_or_else(|| {
@@ -433,7 +521,12 @@ impl LlmManager {
     ) -> HostMessage {
         use crate::utils::{Status, get_timestamp};
 
-        match llm_manager.lock().await.start_server(model_path, config).await {
+        match llm_manager
+            .lock()
+            .await
+            .start_server(model_path, config)
+            .await
+        {
             Ok(_) => HostMessage::Response {
                 id: id.to_string(),
                 status: Status::Success,
@@ -466,13 +559,16 @@ impl LlmManager {
         let lbl = label.to_string();
         let msg_id = id.to_string();
 
+        let llm_m = Arc::clone(&llm_manager);
         tokio::spawn(async move {
-            let (client, chats) = {
-                let mut l = llm_manager.lock().await;
+            let model = {
+                let mut l = llm_m.lock().await;
                 l.ensure_chats_loaded().await;
-                (l.get_client(), l.get_chats())
+                l.active_model
+                    .clone()
+                    .unwrap_or_else(|| "gemma2:9b".to_string())
             };
-            Self::chat_stream_detached(client, chats, msg, sys_prompt, cid, msg_id, rtc_conn, lbl)
+            Self::chat_stream_detached(llm_m, model, msg, sys_prompt, cid, msg_id, rtc_conn, lbl)
                 .await;
         });
 
@@ -505,10 +601,7 @@ impl LlmManager {
         }
     }
 
-    pub async fn handle_list_chats(
-        id: &str,
-        llm_manager: Arc<Mutex<Self>>,
-    ) -> HostMessage {
+    pub async fn handle_list_chats(id: &str, llm_manager: Arc<Mutex<Self>>) -> HostMessage {
         use crate::utils::{Status, get_timestamp};
 
         let mut l = llm_manager.lock().await;
@@ -543,10 +636,7 @@ impl LlmManager {
         }
     }
 
-    pub async fn handle_stop(
-        id: &str,
-        llm_manager: Arc<Mutex<Self>>,
-    ) -> HostMessage {
+    pub async fn handle_stop(id: &str, llm_manager: Arc<Mutex<Self>>) -> HostMessage {
         use crate::utils::{Status, get_timestamp};
 
         llm_manager.lock().await.stop_server().await;

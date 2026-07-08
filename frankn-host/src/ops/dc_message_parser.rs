@@ -73,6 +73,11 @@ pub enum DcMsg {
     LlmListChats,
     #[serde(rename = "llm_stop")]
     LlmStop,
+    #[serde(rename = "tool_approval_response")]
+    ToolApprovalResponse {
+        approval_id: String,
+        approved: bool,
+    },
 
     // --- SSH ---
     #[serde(rename = "get_audio_devices")]
@@ -232,6 +237,18 @@ impl DcMsg {
                     .await
             }
             DcMsg::LlmStop => ops::llm::LlmManager::handle_stop(id, Arc::clone(&llm_manager)).await,
+            DcMsg::ToolApprovalResponse { approval_id, approved } => {
+                let mut l = llm_manager.lock().await;
+                if let Some(tx) = l.approval_registry.remove(approval_id) {
+                    let _ = tx.send(*approved);
+                }
+                HostMessage::Response {
+                    id: id.to_string(),
+                    status: Status::Success,
+                    data: None,
+                    timestamp: crate::utils::get_timestamp(),
+                }
+            }
 
             // --- Media Control ---
             DcMsg::GetAudioDevices => ops::media::get_all_audio_devices(id, rtc_conn).await,

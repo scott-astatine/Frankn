@@ -274,8 +274,10 @@ mixin RtcSignaling on RtcClientBase {
           );
         } else {
           try {
+            final candStr = data['candidate'] as String;
+            log("ICE_GATHER: Received remote ICE candidate: $candStr");
             var candidate = RTCIceCandidate(
-              data['candidate'],
+              candStr,
               data['sdp_mid'],
               data['sdp_m_line_index'],
             );

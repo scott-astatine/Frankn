@@ -9,6 +9,7 @@ import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/widgets/dohee_chat/chat_message.dart';
 import 'package:frankn/widgets/dohee_chat/message_bubble.dart';
+import 'package:frankn/widgets/dohee_chat/antigravity_field.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 
@@ -57,40 +58,27 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: NeoColors.background,
       body: Stack(
         children: [
-          // Background Glow
-          Positioned(
-            top: -100,
-            left: -50,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: NeoColors.fuchsia.withValues(alpha: 0.05),
-              ),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
+          // Antigravity Interactive Particle Field
+          const Positioned.fill(child: AntigravityField()),
 
           // Main Chat Content
           Positioned.fill(
             child: Column(
               children: [
                 Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(
-                      16,
-                      kToolbarHeight + 40,
-                      16,
-                      120,
+                  child: SelectionArea(
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(
+                        16,
+                        kToolbarHeight + 40,
+                        16,
+                        120,
+                      ),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, index) =>
+                          MessageBubble(message: _messages[index]),
                     ),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) =>
-                        MessageBubble(message: _messages[index]),
                   ),
                 ),
               ],
@@ -141,6 +129,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _cmdSub = widget.client.genDcMsgStream.listen((msg) {
       if (!mounted) return;
+      if (msg is HostMsgToolApprovalRequest) {
+        _showApprovalDialog(msg);
+      }
       if (msg is HostMsgResponse) {
         final data = msg.data;
         if (data != null && data is Map) {
@@ -321,9 +312,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                       onTap: () {
-                        widget.client.sendDcMsg(DcMsgLlmLoadChat(
-                          chatId: chat['id'],
-                        ));
+                        widget.client.sendDcMsg(
+                          DcMsgLlmLoadChat(chatId: chat['id']),
+                        );
                         Navigator.pop(context);
                       },
                       trailing: IconButton(
@@ -333,9 +324,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           size: 18,
                         ),
                         onPressed: () {
-                          widget.client.sendDcMsg(DcMsgLlmDeleteChat(
-                            chatId: chat['id'],
-                          ));
+                          widget.client.sendDcMsg(
+                            DcMsgLlmDeleteChat(chatId: chat['id']),
+                          );
                           // Optimistically remove
                           final newChats = List<dynamic>.from(
                             _availableChats.value,
@@ -497,12 +488,106 @@ class _ChatScreenState extends State<ChatScreen> {
               _messages.last.contentNotifier.value += _tokenBuffer;
               _tokenBuffer = "";
               _scrollToBottomIfNeeded();
+              setState(() {});
             }
           });
         }
       }
     }
     _scrollToBottomIfNeeded();
+  }
+
+  void _showApprovalDialog(HostMsgToolApprovalRequest request) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: NeoColors.darkZinc,
+          shape: Border.all(color: NeoColors.cyan, width: 2),
+          title: Text(
+            "🛡️ Direct Action Approval Required",
+            style: GoogleFonts.jetBrainsMono(
+              color: NeoColors.cyan,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "The agent is requesting to execute the following workstation operation:",
+                  style: GoogleFonts.inter(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "TOOL: ${request.tool.toUpperCase()}",
+                  style: GoogleFonts.jetBrainsMono(
+                    color: NeoColors.fuchsia,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.maxFinite,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.black38,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: NeoColors.zinc.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    request.args,
+                    style: GoogleFonts.jetBrainsMono(
+                      color: NeoColors.cyan.withValues(alpha: 0.8),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _sendApprovalResponse(request.approvalId, false);
+              },
+              child: Text(
+                "🛑 REJECT",
+                style: GoogleFonts.jetBrainsMono(color: AppColors.errorRed),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: NeoColors.cyan.withValues(alpha: 0.2),
+                side: const BorderSide(color: NeoColors.cyan),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _sendApprovalResponse(request.approvalId, true);
+              },
+              child: Text(
+                "✓ APPROVE",
+                style: GoogleFonts.jetBrainsMono(color: NeoColors.cyan),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _sendApprovalResponse(String approvalId, bool approved) {
+    widget.client.sendDcMsg(
+      DcMsgToolApprovalResponse(approvalId: approvalId, approved: approved),
+    );
   }
 
   void _loadChatData(Map<String, dynamic> data) {
@@ -565,11 +650,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _isStreaming = true;
     });
 
-    widget.client.sendDcMsg(DcMsgLlmChat(
-      message: text,
-      systemPrompt: _systemPrompt,
-      chatId: _chatId,
-    ));
+    widget.client.sendDcMsg(
+      DcMsgLlmChat(message: text, systemPrompt: _systemPrompt, chatId: _chatId),
+    );
     _scrollToBottomIfNeeded(force: true);
   }
 
@@ -614,7 +697,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         borderSide: BorderSide(color: Colors.white10),
                       ),
                     ),
-                    items: ["Local (llama.cpp)", "Ollama (Coming Soon)"]
+                    items: ["Ollama", "Local (llama.cpp) (Deprecated)"]
                         .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                         .toList(),
                     onChanged: (val) {

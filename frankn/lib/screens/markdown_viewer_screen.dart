@@ -1,0 +1,478 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_highlighter/flutter_highlighter.dart';
+import 'package:flutter_highlighter/themes/monokai-sublime.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_latex/flutter_markdown_latex.dart';
+import 'package:frankn/screens/code_editor_screen.dart';
+import 'package:frankn/services/file_transfer_mixin.dart';
+import 'package:frankn/services/isolate_protocol.dart';
+import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/utils/dc_msg_util.dart';
+import 'package:frankn/utils/utils.dart';
+import 'package:frankn/widgets/dohee_chat/neo_latex_element_builder.dart';
+import 'package:frankn/widgets/dohee_chat/neo_latex_inline_syntax.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:markdown/markdown.dart' as md;
+
+class ViewerColors {
+  static const primary = Color(0xFF6366F1); // Indigo
+  static const primaryLight = Color(0xFF818CF8); // Indigo Light
+  static const accent = Color(0xFFEC4899); // Pink/Fuchsia Accent
+  static const textWhite = Color(0xFFE0E0E0);
+  static const textGrey = Color(0xFFAAAAAA);
+}
+
+class MarkdownViewerScreen extends StatefulWidget {
+  final RtcThinClient client;
+  final String remotePath;
+  final String fileName;
+
+  const MarkdownViewerScreen({
+    super.key,
+    required this.client,
+    required this.remotePath,
+    required this.fileName,
+  });
+
+  @override
+  State<MarkdownViewerScreen> createState() => _MarkdownViewerScreenState();
+}
+
+class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
+    with FileTransferMixin {
+  @override
+  RtcThinClient get client => widget.client;
+
+  String? _activeDownloadId;
+  StreamSubscription? _transferSub;
+  String _markdownContent = "";
+  bool _isInitialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    setupTransferListener();
+
+    _transferSub = client.transferProgressStream.listen((msg) {
+      if (msg is TransferProgressComplete) {
+        if (msg.id == _activeDownloadId || msg.fileName == widget.fileName) {
+          final String? path = msg.finalPath;
+          if (path != null) {
+            _readLocalFile(path);
+          }
+        }
+      } else if (msg is TransferProgressFailed) {
+        if (msg.id == _activeDownloadId) {
+          if (mounted) {
+            setState(() {
+              isLoading = false;
+              _hasError = true;
+            });
+          }
+        }
+      }
+    });
+
+    _loadFile();
+  }
+
+  @override
+  void refreshDirectory() {}
+
+  void _loadFile() async {
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+        _hasError = false;
+      });
+    }
+    _activeDownloadId = await downloadFile(
+      widget.remotePath,
+      showNotification: false,
+      isTemporary: true,
+    );
+  }
+
+  Future<void> _readLocalFile(String path) async {
+    try {
+      final file = File(path);
+      final content = await file.readAsString();
+      if (mounted) {
+        setState(() {
+          _markdownContent = content;
+          _isInitialized = true;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      client.log("MARKDOWN VIEWER ERROR: Failed to read file: $e");
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _transferSub?.cancel();
+    if (!_isInitialized && _activeDownloadId != null) {
+      client.sendIntent(
+        IsolateAction.cancelTransfer,
+        {'id': _activeDownloadId},
+      );
+      client.log("MARKDOWN VIEWER: Cancelled background download due to exit");
+    }
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
+  void _switchToEditor() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CodeEditorScreen(
+          client: widget.client,
+          remotePath: widget.remotePath,
+          fileName: widget.fileName,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: AppColors.deepSpace.withValues(alpha: 0.9),
+          border: const Border(
+            bottom: BorderSide(color: ViewerColors.primary, width: 0.5),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(
+                Icons.chevron_left,
+                color: ViewerColors.primaryLight,
+                size: 24,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.fileName.toUpperCase(),
+                    style: GoogleFonts.jetBrainsMono(
+                      color: AppColors.textWhite,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    widget.remotePath,
+                    style: GoogleFonts.jetBrainsMono(
+                      color: AppColors.textGrey,
+                      fontSize: 8,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              icon: const Icon(
+                Icons.edit_note,
+                color: ViewerColors.primaryLight,
+                size: 18,
+              ),
+              label: Text(
+                "EDIT",
+                style: GoogleFonts.jetBrainsMono(
+                  color: ViewerColors.primaryLight,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                backgroundColor: AppColors.voidBlack,
+                shape: RoundedRectangleBorder(
+                  side: const BorderSide(color: ViewerColors.primary, width: 0.5),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              onPressed: _switchToEditor,
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: ViewerColors.primaryLight),
+            const SizedBox(height: 16),
+            Text(
+              transferMsg.isEmpty ? "FETCHING DOCUMENT..." : transferMsg,
+              style: GoogleFonts.jetBrainsMono(
+                color: ViewerColors.primaryLight,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.errorRed, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              "FAILED TO LOAD DOCUMENT",
+              style: GoogleFonts.jetBrainsMono(
+                color: AppColors.errorRed,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadFile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.deepSpace,
+                side: const BorderSide(color: ViewerColors.primary, width: 0.5),
+              ),
+              child: Text(
+                "RETRY CONNECTION",
+                style: GoogleFonts.jetBrainsMono(color: ViewerColors.primaryLight),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_markdownContent.isEmpty) {
+      return Center(
+        child: Text(
+          "DOCUMENT EMPTY",
+          style: GoogleFonts.jetBrainsMono(
+            color: AppColors.textGrey,
+            fontSize: 11,
+          ),
+        ),
+      );
+    }
+
+    return Markdown(
+      data: _markdownContent,
+      selectable: true,
+      builders: {
+        'code': _ViewerCodeElementBuilder(),
+        'latex': NeoLatexElementBuilder(),
+      },
+      extensionSet: md.ExtensionSet(
+        [
+          LatexBlockSyntax(),
+          ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+        ],
+        [
+          LatexInlineSyntax(),
+          NeoLatexInlineSyntax(),
+          ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+        ],
+      ),
+      styleSheet: MarkdownStyleSheet(
+        p: GoogleFonts.inter(
+          color: Colors.white.withValues(alpha: 0.95),
+          fontSize: 15,
+          height: 1.6,
+        ),
+        code: GoogleFonts.jetBrainsMono(
+          backgroundColor: Colors.transparent,
+          color: ViewerColors.primaryLight,
+        ),
+        h1: GoogleFonts.inter(
+          color: ViewerColors.primaryLight,
+          fontWeight: FontWeight.bold,
+          fontSize: 22,
+        ),
+        h2: GoogleFonts.inter(
+          color: ViewerColors.primaryLight,
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
+        ),
+        h3: GoogleFonts.inter(
+          color: ViewerColors.primaryLight,
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+        listBullet: GoogleFonts.inter(color: ViewerColors.accent),
+        horizontalRuleDecoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: ViewerColors.primary.withValues(alpha: 0.25),
+              width: 0.5,
+            ),
+          ),
+        ),
+        codeblockDecoration: const BoxDecoration(
+          color: Colors.transparent,
+        ),
+        codeblockPadding: EdgeInsets.zero,
+        tableHead: GoogleFonts.inter(
+          color: ViewerColors.primaryLight,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+        tableBody: GoogleFonts.inter(
+          color: Colors.white.withValues(alpha: 0.85),
+          fontSize: 13,
+        ),
+        tableCellsPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        tableBorder: TableBorder(
+          horizontalInside: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.15), width: 0.5),
+          verticalInside: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.15), width: 0.5),
+          top: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
+          bottom: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
+          left: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
+          right: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        tableColumnWidth: const IntrinsicColumnWidth(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.voidBlack,
+      body: Column(
+        children: [
+          _buildHeader(),
+          Expanded(
+            child: _buildBody(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ViewerCodeElementBuilder extends MarkdownElementBuilder {
+  @override
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    var language = '';
+    if (element.attributes['class'] != null) {
+      String lgPattern = 'language-';
+      if (element.attributes['class']!.startsWith(lgPattern)) {
+        language = element.attributes['class']!.substring(lgPattern.length);
+      }
+    }
+
+    if (language.isEmpty && !element.textContent.contains('\n')) {
+      return null;
+    }
+
+    final customTheme = Map<String, TextStyle>.from(monokaiSublimeTheme);
+    customTheme['root'] = (customTheme['root'] ?? const TextStyle()).copyWith(
+      backgroundColor: Colors.transparent,
+    );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.transparent, // Fade in with the background
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.15), width: 0.5),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.code_rounded,
+                      color: ViewerColors.primaryLight,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      language.isEmpty ? "TERMINAL" : language.toUpperCase(),
+                      style: GoogleFonts.jetBrainsMono(
+                        color: ViewerColors.primaryLight,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: element.textContent));
+                  },
+                  child: const Icon(
+                    Icons.copy_all_rounded,
+                    color: ViewerColors.textGrey,
+                    size: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: HighlightView(
+              element.textContent,
+              language: language.isEmpty ? 'bash' : language,
+              theme: customTheme,
+              padding: const EdgeInsets.all(16),
+              textStyle: GoogleFonts.jetBrainsMono(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

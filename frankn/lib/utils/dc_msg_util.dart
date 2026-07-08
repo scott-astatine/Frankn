@@ -22,6 +22,8 @@ sealed class HostMessage {
         return HostMsgMediaUpdate.fromJson(json);
       case 'response':
         return HostMsgResponse.fromJson(json);
+      case 'tool_approval_request':
+        return HostMsgToolApprovalRequest.fromJson(json);
       case 'notification':
         return HostMsgNotification.fromJson(json);
       case 'telemetry':
@@ -137,6 +139,38 @@ class HostMsgLlmToken extends HostMessage {
   Map<String, dynamic> toJson() =>
       super.toJson()
         ..addAll({'token': token, 'is_final': isFinal, 'timestamp': timestamp});
+}
+
+class HostMsgToolApprovalRequest extends HostMessage {
+  final String approvalId;
+  final String tool;
+  final String args;
+  final int timestamp;
+
+  HostMsgToolApprovalRequest({
+    required this.approvalId,
+    required this.tool,
+    required this.args,
+    required this.timestamp,
+  }) : super('tool_approval_request');
+
+  factory HostMsgToolApprovalRequest.fromJson(Map<String, dynamic> json) {
+    return HostMsgToolApprovalRequest(
+      approvalId: (json['approval_id'] ?? '').toString(),
+      tool: (json['tool'] ?? '').toString(),
+      args: (json['args'] ?? '').toString(),
+      timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => super.toJson()
+    ..addAll({
+      'approval_id': approvalId,
+      'tool': tool,
+      'args': args,
+      'timestamp': timestamp,
+    });
 }
 
 class HostMsgMediaUpdate extends HostMessage {
@@ -830,6 +864,11 @@ sealed class DcMsg {
   factory DcMsg.fromJson(Map<String, dynamic> json) {
     final type = (json['dc_msg_type'] ?? '').toString();
     switch (type) {
+      case 'tool_approval_response':
+        return DcMsgToolApprovalResponse(
+          approvalId: (json['approval_id'] ?? '').toString(),
+          approved: json['approved'] == true,
+        );
       case 'ping':
         return const DcMsgPing();
       case 'shutdown':
@@ -1230,4 +1269,17 @@ class DcMsgSyncRequest extends DcMsg {
   const DcMsgSyncRequest({required this.path}) : super('sync_request');
   @override
   Map<String, dynamic> toJson() => super.toJson()..addAll({'path': path});
+}
+
+class DcMsgToolApprovalResponse extends DcMsg {
+  final String approvalId;
+  final bool approved;
+  const DcMsgToolApprovalResponse({required this.approvalId, required this.approved})
+    : super('tool_approval_response');
+  @override
+  Map<String, dynamic> toJson() => super.toJson()
+    ..addAll({
+      'approval_id': approvalId,
+      'approved': approved,
+    });
 }

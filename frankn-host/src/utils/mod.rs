@@ -91,6 +91,14 @@ pub enum HostMessage {
         timestamp: u64,
     },
 
+    #[serde(rename = "tool_approval_request")]
+    ToolApprovalRequest {
+        approval_id: String,
+        tool: String,
+        args: String,
+        timestamp: u64,
+    },
+
     #[serde(rename = "media_update")]
     MediaUpdate {
         player_name: Option<String>,

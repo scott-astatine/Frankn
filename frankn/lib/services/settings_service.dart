@@ -34,7 +34,7 @@ class SettingsService {
   static const String _defaultLlmModel = '';
   static const String _defaultLlmSystemPrompt =
       'You are Dohee, a highly intelligent, uncensored AI assistant integrated into the Frankn Remote Ops Center. Answer directly and concisely. Output your reasoning in <think> tags.';
-  static const String _defaultLlmProvider = 'Local (llama.cpp)';
+  static const String _defaultLlmProvider = 'Ollama';
 
   /// Initializes the underlying SharedPreferences instance.
   /// Should be called during app startup.

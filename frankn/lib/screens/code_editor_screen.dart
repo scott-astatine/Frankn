@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:frankn/screens/markdown_viewer_screen.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
@@ -227,6 +228,26 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
             },
           ),
           const SizedBox(width: 8),
+          if (widget.fileName.endsWith('.md') || widget.fileName.endsWith('.markdown')) ...[
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: const Icon(Icons.visibility, color: AppColors.neonCyan, size: 16),
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MarkdownViewerScreen(
+                      client: widget.client,
+                      remotePath: widget.remotePath,
+                      fileName: widget.fileName,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
           if (_isSaving)
             const SizedBox(
               width: 14,

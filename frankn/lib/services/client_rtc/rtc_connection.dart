@@ -188,6 +188,7 @@ mixin RtcConnection on RtcClientBase {
 
       // Forward ICE candidates to signaling server for NAT traversal
       peerConnection!.onIceCandidate = (candidate) {
+        log("ICE_GATHER: Generated local ICE candidate: ${candidate.candidate}");
         _sendToSignaling(SignalingMessage.IceCandidate, {
           'to': hostId,
           'candidate': candidate.candidate,

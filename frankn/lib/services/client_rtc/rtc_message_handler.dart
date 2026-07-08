@@ -558,6 +558,8 @@ mixin RtcMessageHandler on RtcClientBase {
           genDcMsgController.add(msg);
         case HostMsgUnknown():
           log("Unknown host message type: ${msg.type}");
+        case HostMsgToolApprovalRequest():
+          genDcMsgController.add(msg);
       }
     } catch (e, stack) {
       log("PARSE ERROR: $e\n$stack");

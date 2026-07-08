@@ -45,8 +45,6 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Explicitly install the rustls crypto provider to prevent panics when
-    // multiple tokio tasks attempt to use cryptography (WebRTC Signaling + Reqwest LLM).
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let cli = Cli::parse();
@@ -213,6 +211,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
                     sdp_m_line_index,
                     ..
                 } => {
+                    crate::log!("ICE_GATHER: Received remote ICE candidate: {}", candidate);
                     let pm = Arc::clone(&peer_map);
                     tokio::spawn(async move {
                         let map = pm.lock().await;
@@ -269,6 +268,10 @@ async fn handle_new_connection(
                 let cid_cl = cid.clone();
                 tokio::spawn(async move {
                     if let Ok(init) = c.to_json() {
+                        crate::log!(
+                            "ICE_GATHER: Generated local ICE candidate: {}",
+                            init.candidate
+                        );
                         let _ = sig_cl
                             .send_ice_candidate(
                                 &cid_cl,

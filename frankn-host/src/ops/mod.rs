@@ -2,6 +2,7 @@ pub mod dc_message_parser;
 pub mod media;
 pub mod rtc;
 pub mod llm;
+pub mod llm_tools;
 pub mod proc_manager;
 pub mod notifications;
 pub mod ssh;

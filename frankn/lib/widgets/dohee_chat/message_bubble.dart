@@ -8,7 +8,6 @@ import 'package:frankn/widgets/dohee_chat/neo_code_element_builder.dart';
 import 'package:frankn/widgets/dohee_chat/neo_latex_element_builder.dart';
 import 'package:frankn/widgets/dohee_chat/neo_latex_inline_syntax.dart';
 import 'package:frankn/widgets/dohee_chat/neo_think_block.dart';
-import 'package:frankn/widgets/dohee_chat/scanline_painter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 
@@ -58,19 +57,10 @@ class MessageBubble extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.85,
-            ),
+            padding: const EdgeInsets.only(left: 14, top: 4, bottom: 4),
             decoration: const BoxDecoration(
-              color: NeoColors.darkZinc,
               border: Border(
                 left: BorderSide(color: NeoColors.fuchsia, width: 2),
-              ),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(16),
-                bottomRight: Radius.circular(16),
               ),
             ),
             child: ValueListenableBuilder<String>(
@@ -126,7 +116,7 @@ class MessageBubble extends StatelessWidget {
                             content.contains('</think>'))
                     ? " █"
                     : ""),
-            selectable: true,
+            selectable: false,
             builders: {
               'code': NeoCodeElementBuilder(),
               'latex': NeoLatexElementBuilder(),
@@ -172,21 +162,12 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 30),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(right: 4),
+            padding: const EdgeInsets.only(left: 4),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Text(
-                  message.timestamp,
-                  style: GoogleFonts.jetBrainsMono(
-                    color: NeoColors.zinc,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(width: 10),
                 Text(
                   "[ OPR_TX ]",
                   style: GoogleFonts.jetBrainsMono(
@@ -196,56 +177,36 @@ class MessageBubble extends StatelessWidget {
                     letterSpacing: 1,
                   ),
                 ),
+                const SizedBox(width: 10),
+                Text(
+                  message.timestamp,
+                  style: GoogleFonts.jetBrainsMono(
+                    color: NeoColors.zinc,
+                    fontSize: 10,
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 10),
-          Stack(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.8,
-                ),
-                decoration: const BoxDecoration(
-                  color: NeoColors.darkZinc,
-                  border: Border(
-                    right: BorderSide(color: NeoColors.cyan, width: 2),
-                  ),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(4),
-                    bottomLeft: Radius.circular(16),
-                  ),
-                ),
-                child: ValueListenableBuilder<String>(
-                  valueListenable: message.contentNotifier,
-                  builder: (context, content, _) => SelectableText(
-                    content,
-                    style: GoogleFonts.inter(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontSize: 15,
-                      height: 1.4,
-                    ),
-                  ),
+          Container(
+            padding: const EdgeInsets.only(left: 14, top: 4, bottom: 4),
+            decoration: const BoxDecoration(
+              border: Border(
+                left: BorderSide(color: NeoColors.cyan, width: 2),
+              ),
+            ),
+            child: ValueListenableBuilder<String>(
+              valueListenable: message.contentNotifier,
+              builder: (context, content, _) => Text(
+                content,
+                style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 15,
+                  height: 1.4,
                 ),
               ),
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(4),
-                    bottomLeft: Radius.circular(16),
-                  ),
-                  child: IgnorePointer(
-                    child: CustomPaint(painter: ScanlinePainter()),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
