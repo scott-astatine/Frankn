@@ -11,6 +11,8 @@ class FileBrowserAppBar {
     required VoidCallback onSearch,
     required VoidCallback onNavigateUp,
     required Function(String) onSort,
+    required bool showHidden,
+    required VoidCallback onToggleShowHidden,
     VoidCallback? onUpload,
     int selectedCount = 0,
     VoidCallback? onDeleteSelected,
@@ -112,6 +114,8 @@ class FileBrowserAppBar {
           onSelected: (val) {
             if (val == "upload") {
               onUpload?.call();
+            } else if (val == "toggle_hidden") {
+              onToggleShowHidden();
             } else {
               onSort(val);
             }
@@ -193,6 +197,30 @@ class FileBrowserAppBar {
                     l10n.sortByDate.toUpperCase(),
                     style: const TextStyle(
                       color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                      fontFamily: 'JetBrainsMonoNerdFont',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(height: 8),
+            PopupMenuItem(
+              value: "toggle_hidden",
+              child: Row(
+                children: [
+                  Icon(
+                    showHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: AppColors.cyberYellow,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    showHidden ? "HIDE HIDDEN FILES" : "SHOW HIDDEN FILES",
+                    style: const TextStyle(
+                      color: AppColors.cyberYellow,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1,

@@ -47,6 +47,10 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
         searchController: _browserState.searchController,
         onSearchChanged: (val) => _browserState.setSearchQuery(val),
         onExitSearch: () => _browserState.exitSearch(),
+        showHidden: _browserState.showHidden,
+        onToggleShowHidden: () {
+          _browserState.setShowHidden(!_browserState.showHidden);
+        },
         onUpload: () => uploadFile(_browserState.currentPath),
         onSort: (val) {
           if (val == "name") _browserState.setSortBy(SortOption.name);

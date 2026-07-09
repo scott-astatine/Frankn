@@ -27,6 +27,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
   List<File> _files = [];
   bool _isLoading = false;
   String? _errorMessage;
+  bool _showHidden = false;
 
   @override
   void initState() {
@@ -69,7 +70,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
 
       await for (final entity in dir.list(followLinks: false)) {
         final name = entity.path.split(Platform.pathSeparator).last;
-        if (name.startsWith('.')) continue; // skip hidden files
+        if (!_showHidden && name.startsWith('.')) continue; // skip hidden files if showHidden is false
 
         if (entity is Directory) {
           tempDirs.add(entity);
@@ -261,6 +262,20 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
                         letterSpacing: 1.5,
                       ),
                     ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _showHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: AppColors.cyberYellow,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _showHidden = !_showHidden;
+                      });
+                      _loadDirectory(_currentPath);
+                    },
+                    tooltip: _showHidden ? "Hide Hidden Files" : "Show Hidden Files",
                   ),
                   IconButton(
                     icon: const Icon(Icons.create_new_folder_outlined, color: AppColors.neonCyan, size: 20),
