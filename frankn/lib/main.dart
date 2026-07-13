@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
@@ -11,12 +10,12 @@ import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
-import 'package:frankn/utils/theme.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   FlutterForegroundTask.initCommunicationPort();
 
   print("UI Isolate: Initializing services...");
@@ -88,7 +87,7 @@ Future<void> initForegroundService() async {
     notificationText: 'Initializing Neural Link...',
     notificationIcon: const NotificationIcon(
       metaDataName: 'com.pravera.flutter_foreground_task.NOTIFICATION_ICON',
-      backgroundColor: AppColors.voidBlack,
+      backgroundColor: AppColors.background,
     ),
     callback: startCallback,
   );

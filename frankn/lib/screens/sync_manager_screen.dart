@@ -91,14 +91,14 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                   ? l10n.folderSyncComplete
                   : l10n.folderSyncCompleteNoChanges,
             ),
-            backgroundColor: AppColors.matrixGreen,
+            backgroundColor: AppColors.accentSuccess,
           ),
         );
       } else if (event.currentFile.startsWith('ERROR')) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(event.currentFile),
-            backgroundColor: AppColors.errorRed,
+            backgroundColor: AppColors.accentError,
           ),
         );
       }
@@ -119,7 +119,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.fullStorageAccessRequired),
-          backgroundColor: AppColors.errorRed,
+          backgroundColor: AppColors.accentError,
         ),
       );
     }
@@ -140,7 +140,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
           builder: (context, setDialogState) {
             return CyberAlertDialog(
               title: initialPair == null ? l10n.establishNewLink : l10n.modifyLink,
-              borderColor: AppColors.neonCyan,
+              borderColor: AppColors.accentPrimary,
               titleColor: Colors.white,
               content: SingleChildScrollView(
                 child: Column(
@@ -246,7 +246,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.neonCyan,
+                    backgroundColor: AppColors.accentPrimary,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -316,7 +316,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
             child: DropdownButton<SyncMode>(
               value: value,
               isExpanded: true,
-              dropdownColor: AppColors.voidBlack,
+              dropdownColor: AppColors.background,
               icon: const Icon(
                 Icons.keyboard_arrow_down_rounded,
                 color: Colors.white38,
@@ -366,8 +366,8 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
           ),
         ),
         value: value,
-        activeThumbColor: AppColors.neonCyan,
-        activeTrackColor: AppColors.neonCyan.withValues(alpha: 0.3),
+        activeThumbColor: AppColors.accentPrimary,
+        activeTrackColor: AppColors.accentPrimary.withValues(alpha: 0.3),
         inactiveThumbColor: Colors.grey,
         inactiveTrackColor: Colors.white10,
         onChanged: onChanged,
@@ -401,7 +401,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
             child: DropdownButton<int>(
               value: value,
               isExpanded: true,
-              dropdownColor: AppColors.voidBlack,
+              dropdownColor: AppColors.background,
               icon: const Icon(
                 Icons.timer_outlined,
                 color: Colors.white38,
@@ -489,7 +489,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Icon(actionIcon, color: AppColors.neonCyan, size: 18),
+                Icon(actionIcon, color: AppColors.accentPrimary, size: 18),
               ],
             ),
           ),
@@ -565,11 +565,11 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
         backgroundColor: _isSyncing
             ? Colors.white10
             : const Color(0xFF083344), // Very dark cyan
-        foregroundColor: _isSyncing ? Colors.white24 : AppColors.neonCyan,
+        foregroundColor: _isSyncing ? Colors.white24 : AppColors.accentPrimary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(
-            color: _isSyncing ? Colors.white10 : AppColors.neonCyan,
+            color: _isSyncing ? Colors.white10 : AppColors.accentPrimary,
             width: 1.5,
           ),
         ),
@@ -595,7 +595,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                 height: 14,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppColors.neonCyan,
+                  color: AppColors.accentPrimary,
                 ),
               ),
               const SizedBox(width: 12),
@@ -613,7 +613,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
               Text(
                 "$_syncCurrent / $_syncTotal",
                 style: GoogleFonts.jetBrainsMono(
-                  color: AppColors.neonCyan,
+                  color: AppColors.accentPrimary,
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
                 ),
@@ -622,7 +622,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
               IconButton(
                 icon: const Icon(
                   Icons.stop_circle_outlined,
-                  color: AppColors.errorRed,
+                  color: AppColors.accentError,
                   size: 20,
                 ),
                 onPressed: () {
@@ -639,7 +639,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
             child: LinearProgressIndicator(
               value: progress,
               backgroundColor: Colors.white10,
-              color: AppColors.neonCyan,
+              color: AppColors.accentPrimary,
               minHeight: 3,
             ),
           ),
@@ -699,7 +699,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                     isMirror
                         ? Icons.sync_alt_rounded
                         : Icons.cloud_upload_outlined,
-                    color: isMirror ? AppColors.neonCyan : AppColors.neonCyan,
+                    color: isMirror ? AppColors.accentPrimary : AppColors.accentPrimary,
                     size: 20,
                   ),
                   const SizedBox(width: 12),
@@ -786,7 +786,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.neonCyan.withValues(
+                                color: AppColors.accentPrimary.withValues(
                                   alpha: 0.1,
                                 ),
                                 borderRadius: BorderRadius.circular(4),
@@ -797,14 +797,14 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                                     isMirror
                                         ? Icons.swap_vert_rounded
                                         : Icons.arrow_upward_rounded,
-                                    color: AppColors.neonCyan,
+                                    color: AppColors.accentPrimary,
                                     size: 10,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
                                     isMirror ? l10n.mirror : l10n.backup,
                                     style: GoogleFonts.jetBrainsMono(
-                                      color: AppColors.neonCyan,
+                                      color: AppColors.accentPrimary,
                                       fontSize: 8,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -850,7 +850,7 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                                   ).toIso8601String().substring(11, 16),
                                 ),
                                 style: GoogleFonts.jetBrainsMono(
-                                  color: AppColors.matrixGreen.withValues(
+                                  color: AppColors.accentSuccess.withValues(
                                     alpha: 0.7,
                                   ),
                                   fontSize: 9,
@@ -890,12 +890,12 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
                   onPressed: _isSyncing ? null : () => _triggerSync(pair),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF083344), // Very dark cyan
-                    foregroundColor: AppColors.neonCyan,
+                    foregroundColor: AppColors.accentPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                       side: BorderSide(
-                        color: AppColors.neonCyan.withValues(alpha: 0.3),
+                        color: AppColors.accentPrimary.withValues(alpha: 0.3),
                       ),
                     ),
                     elevation: 0,
@@ -925,12 +925,12 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: (inSync ? AppColors.matrixGreen : AppColors.neonPink).withValues(
+        color: (inSync ? AppColors.accentSuccess : AppColors.accentSecondary).withValues(
           alpha: 0.1,
         ),
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
-          color: (inSync ? AppColors.matrixGreen : AppColors.neonPink)
+          color: (inSync ? AppColors.accentSuccess : AppColors.accentSecondary)
               .withValues(alpha: 0.3),
         ),
       ),
@@ -939,14 +939,14 @@ class _SyncManagerScreenState extends State<SyncManagerScreen> {
         children: [
           Icon(
             inSync ? Icons.check_circle_outline : Icons.pending_outlined,
-            color: inSync ? AppColors.matrixGreen : AppColors.neonPink,
+            color: inSync ? AppColors.accentSuccess : AppColors.accentSecondary,
             size: 10,
           ),
           const SizedBox(width: 4),
           Text(
             inSync ? l10n.inSync : l10n.changesPending(pending),
             style: GoogleFonts.jetBrainsMono(
-              color: inSync ? AppColors.matrixGreen : AppColors.neonPink,
+              color: inSync ? AppColors.accentSuccess : AppColors.accentSecondary,
               fontSize: 8,
               fontWeight: FontWeight.bold,
             ),

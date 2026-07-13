@@ -118,7 +118,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
               _hasTelemetry
                   ? "${_cpu.toStringAsFixed(1)}%"
                   : l10n.syncing.toUpperCase(),
-              AppColors.neonCyan,
+              AppColors.accentPrimary,
             ),
             _buildHUDDivider(),
             _buildStatItem(
@@ -132,7 +132,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
             _buildStatItem(
               l10n.ping,
               _ping > 0 ? "${_ping}ms" : l10n.syncing.toUpperCase(),
-              AppColors.matrixGreen,
+              AppColors.accentSuccess,
             ),
           ],
         ),
@@ -153,7 +153,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
           label.toUpperCase(),
           style: const TextStyle(
             fontSize: 10,
-            color: AppColors.textGrey,
+            color: AppColors.textSecondary,
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
           ),
@@ -188,7 +188,7 @@ class _FranknDashboardState extends State<FranknDashboard> {
               Text(
                 l10n.liveLog.toUpperCase(),
                 style: const TextStyle(
-                  color: AppColors.neonCyan,
+                  color: AppColors.accentPrimary,
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.5,

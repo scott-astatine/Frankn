@@ -419,8 +419,8 @@ class FranknTaskHandler extends TaskHandler {
                 body: "'$fileName' uploaded successfully.",
                 notificationLayout: NotificationLayout.Default,
                 category: NotificationCategory.Status,
-                color: AppColors.matrixGreen,
-                backgroundColor: AppColors.panelGrey,
+                color: AppColors.accentSuccess,
+                backgroundColor: AppColors.surfaceSecondary,
               ),
             );
           }
@@ -452,8 +452,8 @@ class FranknTaskHandler extends TaskHandler {
                 body: "'$fileName' failed to upload.",
                 notificationLayout: NotificationLayout.Default,
                 category: NotificationCategory.Status,
-                color: AppColors.errorRed,
-                backgroundColor: AppColors.panelGrey,
+                color: AppColors.accentError,
+                backgroundColor: AppColors.surfaceSecondary,
               ),
             );
           }

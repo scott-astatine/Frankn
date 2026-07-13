@@ -14,8 +14,8 @@ class CyberAlertDialog extends StatelessWidget {
     required this.title,
     required this.content,
     required this.actions,
-    this.borderColor = AppColors.neonPink,
-    this.titleColor = AppColors.neonPink,
+    this.borderColor = AppColors.accentSecondary,
+    this.titleColor = AppColors.accentSecondary,
   });
 
   @override
@@ -50,7 +50,7 @@ class CyberAlertDialog extends StatelessWidget {
               ),
               Positioned.fill(
                 child: Container(
-                  color: AppColors.voidBlack.withValues(alpha: 0.10),
+                  color: AppColors.background.withValues(alpha: 0.10),
                 ),
               ),
               Padding(

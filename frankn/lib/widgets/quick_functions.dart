@@ -63,7 +63,7 @@ class QuickFunction extends StatelessWidget {
         _opBtn(
           l10n.fileBrowser,
           Icons.folder_outlined,
-          AppColors.cyberYellow,
+          AppColors.accentWarning,
           () {
             Navigator.push(
               context,
@@ -76,7 +76,7 @@ class QuickFunction extends StatelessWidget {
         _opBtn(
           l10n.terminal,
           Icons.terminal_outlined,
-          AppColors.matrixGreen,
+          AppColors.accentSuccess,
           () {
             Navigator.push(
               context,
@@ -84,16 +84,16 @@ class QuickFunction extends StatelessWidget {
             );
           },
         ),
-        _opBtn(l10n.trackpad, Icons.mouse, AppColors.textGrey, () {
+        _opBtn(l10n.trackpad, Icons.mouse, AppColors.textSecondary, () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => TrackpadScreen(client: client)),
           );
         }),
-        _opBtn(l10n.doheeChat, Icons.auto_awesome, AppColors.neonRed, () {
+        _opBtn(l10n.doheeChat, Icons.auto_awesome, AppColors.accentDanger, () {
           _showNeuralChatDialog(context, client);
         }),
-        _opBtn(l10n.processes, Icons.show_chart, AppColors.textGrey, () {
+        _opBtn(l10n.processes, Icons.show_chart, AppColors.textSecondary, () {
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -101,7 +101,7 @@ class QuickFunction extends StatelessWidget {
             ),
           );
         }),
-        _opBtn(l10n.sysLog, Icons.article_outlined, AppColors.matrixGreen, () {
+        _opBtn(l10n.sysLog, Icons.article_outlined, AppColors.accentSuccess, () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => SyslogScreen(client: client)),

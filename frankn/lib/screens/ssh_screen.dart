@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/cyber_button.dart';
@@ -62,7 +61,6 @@ class _SShScreenState extends State<SShScreen> {
 
   @override
   void dispose() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _controller.dispose();
     super.dispose();
   }
@@ -71,7 +69,6 @@ class _SShScreenState extends State<SShScreen> {
   void initState() {
     super.initState();
     _controller = SshController(widget.client);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
     _controller.terminal.write('\x1b[36mFRANKN TERMINAL v1.2\x1b[0m\r\n');
     _controller.terminal.write('Status: \x1b[32mREADY\x1b[0m\r\n');
@@ -104,9 +101,9 @@ class _SShScreenState extends State<SShScreen> {
   Widget _buildHud(bool isKeyboardActive) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.voidBlack.withValues(alpha: 0.9),
+        color: AppColors.background.withValues(alpha: 0.9),
         border: const Border(
-          top: BorderSide(color: AppColors.neonCyan, width: 0.5),
+          top: BorderSide(color: AppColors.accentPrimary, width: 0.5),
         ),
       ),
       child: Column(
@@ -136,8 +133,8 @@ class _SShScreenState extends State<SShScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => CyberAlertDialog(
-        borderColor: error != null ? AppColors.errorRed : AppColors.neonCyan,
-        titleColor: error != null ? AppColors.errorRed : AppColors.neonCyan,
+        borderColor: error != null ? AppColors.accentError : AppColors.accentPrimary,
+        titleColor: error != null ? AppColors.accentError : AppColors.accentPrimary,
         title: error != null ? "AUTHENTICATION FAILED" : "SSH AUTHENTICATION",
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -148,7 +145,7 @@ class _SShScreenState extends State<SShScreen> {
                 child: Text(
                   error,
                   style: const TextStyle(
-                    color: AppColors.errorRed,
+                    color: AppColors.accentError,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
@@ -159,9 +156,9 @@ class _SShScreenState extends State<SShScreen> {
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: "USERNAME",
-                labelStyle: TextStyle(color: AppColors.textGrey, fontSize: 10),
+                labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 10),
                 enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.neonCyan),
+                  borderSide: BorderSide(color: AppColors.accentPrimary),
                 ),
               ),
             ),
@@ -172,9 +169,9 @@ class _SShScreenState extends State<SShScreen> {
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: "PASSCODE (LEAVE BLANK FOR HOST PWD)",
-                labelStyle: TextStyle(color: AppColors.textGrey, fontSize: 10),
+                labelStyle: TextStyle(color: AppColors.textSecondary, fontSize: 10),
                 enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.textGrey),
+                  borderSide: BorderSide(color: AppColors.textSecondary),
                 ),
               ),
             ),
@@ -189,7 +186,7 @@ class _SShScreenState extends State<SShScreen> {
             child: const Text(
               "ABORT",
               style: TextStyle(
-                color: AppColors.errorRed,
+                color: AppColors.accentError,
                 fontWeight: FontWeight.bold,
               ),
             ),

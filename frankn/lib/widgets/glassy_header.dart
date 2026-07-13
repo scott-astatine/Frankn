@@ -13,7 +13,7 @@ class GlassyHeader extends StatelessWidget {
     required this.innerBoxIsScrolled,
     required this.child,
     this.height = 64.0,
-    this.accentColor = AppColors.neonCyan,
+    this.accentColor = AppColors.accentPrimary,
   });
 
   @override
@@ -25,8 +25,8 @@ class GlassyHeader extends StatelessWidget {
           height: height,
           decoration: BoxDecoration(
             color: innerBoxIsScrolled
-                ? AppColors.deepSpace.withValues(alpha: 0.6)
-                : AppColors.deepSpace.withValues(alpha: 0.9),
+                ? AppColors.background.withValues(alpha: 0.6)
+                : AppColors.background.withValues(alpha: 0.9),
             border: Border(
               bottom: BorderSide(
                 color: innerBoxIsScrolled

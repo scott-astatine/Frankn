@@ -16,7 +16,7 @@ class SettingsTile extends StatelessWidget {
     this.subtitle,
     this.onTap,
     this.trailing,
-    this.iconColor = AppColors.neonCyan,
+    this.iconColor = AppColors.accentPrimary,
   });
 
   @override
@@ -58,7 +58,7 @@ class SettingsTile extends StatelessWidget {
                       Text(
                         subtitle,
                         style: const TextStyle(
-                          color: AppColors.textGrey,
+                          color: AppColors.textSecondary,
                           fontSize: 12,
                         ),
                       ),
@@ -87,7 +87,7 @@ class SettingsSectionHeader extends StatelessWidget {
       child: Text(
         title,
         style: TextStyle(
-          color: AppColors.neonCyan.withAlpha(128),
+          color: AppColors.accentPrimary.withAlpha(128),
           fontSize: 11,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.5,

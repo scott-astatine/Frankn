@@ -47,10 +47,10 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
           constraints: BoxConstraints(maxHeight: screenHeight * 0.8),
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
           decoration: BoxDecoration(
-            color: AppColors.voidBlack.withValues(alpha: 0.10),
+            color: AppColors.background.withValues(alpha: 0.10),
             border: Border(
               top: BorderSide(
-                color: AppColors.errorRed.withValues(alpha: 0.4),
+                color: AppColors.accentError.withValues(alpha: 0.4),
                 width: 1.5,
               ),
             ),
@@ -67,14 +67,14 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                     children: [
                       const Icon(
                         Icons.gpp_maybe_outlined,
-                        color: AppColors.errorRed,
+                        color: AppColors.accentError,
                         size: 20,
                       ),
                       const SizedBox(width: 12),
                       Text(
                         l10n.adminOverride,
                         style: const TextStyle(
-                          color: AppColors.errorRed,
+                          color: AppColors.accentError,
                           fontWeight: FontWeight.w900,
                           fontSize: 14,
                           letterSpacing: 2,
@@ -106,14 +106,14 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                           _buildCompactActionButton(
                             Icons.wifi_rounded,
                             "WI-FI",
-                            _wifiEnabled ? AppColors.neonCyan : Colors.white24,
+                            _wifiEnabled ? AppColors.accentPrimary : Colors.white24,
                             () => showWifiManagerDialog(context, widget.client),
                           ),
                           const SizedBox(width: 12),
                           _buildCompactActionButton(
                             Icons.bluetooth_rounded,
                             "BLUETOOTH",
-                            _btEnabled ? AppColors.neonPink : Colors.white24,
+                            _btEnabled ? AppColors.accentSecondary : Colors.white24,
                             () => showBluetoothManagerDialog(
                               context,
                               widget.client,
@@ -135,13 +135,13 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                             children: [
                               const Icon(
                                 Icons.volume_up,
-                                color: AppColors.neonCyan,
+                                color: AppColors.accentPrimary,
                                 size: 20,
                               ),
                               Expanded(
                                 child: SliderTheme(
                                   data: SliderThemeData(
-                                    activeTrackColor: AppColors.neonCyan,
+                                    activeTrackColor: AppColors.accentPrimary,
                                     inactiveTrackColor: Colors.white10,
                                     thumbColor: Colors.white,
                                     trackHeight: 2,
@@ -162,7 +162,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                               Text(
                                 "${(_volume * 100).round()}%",
                                 style: const TextStyle(
-                                  color: AppColors.neonCyan,
+                                  color: AppColors.accentPrimary,
                                   fontSize: 10,
                                   fontFamily: 'JetBrainsMonoNerdFont',
                                   fontWeight: FontWeight.w900,
@@ -186,31 +186,31 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                           _buildGridButton(
                             Icons.lock_outline,
                             l10n.lockHost,
-                            AppColors.neonCyan,
+                            AppColors.accentPrimary,
                             () => widget.client.sendDcMsg(const DcMsgLockScreen()),
                           ),
                           _buildGridButton(
                             Icons.lock_open,
                             l10n.unlockHost,
-                            AppColors.neonCyan,
+                            AppColors.accentPrimary,
                             () => widget.client.sendDcMsg(const DcMsgUnlockScreen()),
                           ),
                           _buildGridButton(
                             Icons.sync,
                             l10n.restartSvc,
-                            AppColors.cyberYellow,
+                            AppColors.accentWarning,
                             () => widget.client.sendDcMsg(const DcMsgRestartHostServer()),
                           ),
                           _buildGridButton(
                             Icons.cloud_download_outlined,
                             l10n.sysUpdate,
-                            AppColors.cyberYellow,
+                            AppColors.accentWarning,
                             () => widget.client.sendDcMsg(const DcMsgUpdate()),
                           ),
                           _buildGridButton(
                             Icons.restart_alt,
                             l10n.reboot,
-                            AppColors.textGrey,
+                            AppColors.textSecondary,
                             () => _confirmDestructiveAction(
                               context,
                               l10n.reboot,
@@ -220,7 +220,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                           _buildGridButton(
                             Icons.power_settings_new,
                             l10n.shutdown,
-                            AppColors.errorRed,
+                            AppColors.accentError,
                             () => _confirmDestructiveAction(
                               context,
                               l10n.shutdown,
@@ -242,10 +242,10 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                           },
                           borderRadius: BorderRadius.circular(12),
                           child: CyberCard(
-                            borderColor: AppColors.neonPink.withValues(
+                            borderColor: AppColors.accentSecondary.withValues(
                               alpha: 0.3,
                             ),
-                            bgColor: AppColors.neonPink.withValues(alpha: 0.05),
+                            bgColor: AppColors.accentSecondary.withValues(alpha: 0.05),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               child: Row(
@@ -253,14 +253,14 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
                                 children: [
                                   const Icon(
                                     Icons.link_off,
-                                    color: AppColors.neonPink,
+                                    color: AppColors.accentSecondary,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 12),
                                   Text(
                                     l10n.disconnectLink,
                                     style: const TextStyle(
-                                      color: AppColors.neonPink,
+                                      color: AppColors.accentSecondary,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 11,
                                       letterSpacing: 1,
@@ -400,8 +400,8 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
       context: context,
       builder: (context) => CyberAlertDialog(
         title: l10n.criticalAction(title),
-        borderColor: AppColors.errorRed,
-        titleColor: AppColors.errorRed,
+        borderColor: AppColors.accentError,
+        titleColor: AppColors.accentError,
         content: Text(
           l10n.remoteCommandConfirm,
           style: const TextStyle(color: Colors.white70, fontSize: 13),
@@ -411,7 +411,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.abort,
-              style: const TextStyle(color: AppColors.textGrey),
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
           ),
           TextButton(
@@ -423,7 +423,7 @@ class _SystemTrayModalState extends State<SystemTrayModal> {
             child: Text(
               l10n.confirm,
               style: const TextStyle(
-                color: AppColors.errorRed,
+                color: AppColors.accentError,
                 fontWeight: FontWeight.bold,
               ),
             ),

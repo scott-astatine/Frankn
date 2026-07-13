@@ -561,7 +561,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
               child: Text(
                 "🛑 REJECT",
-                style: GoogleFonts.jetBrainsMono(color: AppColors.errorRed),
+                style: GoogleFonts.jetBrainsMono(color: AppColors.accentError),
               ),
             ),
             ElevatedButton(

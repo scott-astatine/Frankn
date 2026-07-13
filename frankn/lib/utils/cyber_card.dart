@@ -22,7 +22,7 @@ class CyberCard extends StatelessWidget {
       decoration: BoxDecoration(
         color:
             bgColor ??
-            AppColors.deepSpace.withValues(alpha: 0.3), // Deep deck grey
+            AppColors.surface.withValues(alpha: 0.3), // Deep deck grey
         border: Border.all(
           color: borderColor ?? Colors.white.withValues(alpha: 0.05),
           width: 1,

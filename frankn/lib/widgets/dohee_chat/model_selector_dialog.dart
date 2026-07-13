@@ -83,7 +83,7 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
           onPressed: () => Navigator.pop(context),
           child: Text(
             l10n.cancel,
-            style: const TextStyle(color: AppColors.textGrey),
+            style: const TextStyle(color: AppColors.textSecondary),
           ),
         ),
       ],
@@ -94,7 +94,7 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
     if (_error != null) {
       return Text(
         _error!,
-        style: const TextStyle(color: AppColors.errorRed, fontSize: 12),
+        style: const TextStyle(color: AppColors.accentError, fontSize: 12),
       );
     }
 
@@ -104,11 +104,11 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(color: AppColors.neonPink),
+            const CircularProgressIndicator(color: AppColors.accentSecondary),
             const SizedBox(height: 16),
             Text(
               l10n.scanningVault,
-              style: const TextStyle(color: AppColors.neonPink, fontSize: 10),
+              style: const TextStyle(color: AppColors.accentSecondary, fontSize: 10),
             ),
           ],
         ),
@@ -118,7 +118,7 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
     if (_models!.isEmpty) {
       return Text(
         l10n.noModelsFound,
-        style: const TextStyle(color: AppColors.textGrey, fontSize: 12),
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
       );
     }
 
@@ -133,13 +133,13 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: CyberCard(
-            borderColor: AppColors.neonPink.withValues(alpha: 0.3),
+            borderColor: AppColors.accentSecondary.withValues(alpha: 0.3),
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 4,
               ),
-              leading: const Icon(Icons.memory, color: AppColors.neonPink),
+              leading: const Icon(Icons.memory, color: AppColors.accentSecondary),
               title: Text(
                 name,
                 style: const TextStyle(
@@ -150,7 +150,7 @@ class _ModelSelectorDialogState extends State<ModelSelectorDialog> {
               ),
               subtitle: Text(
                 size,
-                style: const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
               ),
               onTap: () {
                 Navigator.pop(context, name); // Return selected name

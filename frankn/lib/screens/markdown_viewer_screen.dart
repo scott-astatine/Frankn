@@ -35,13 +35,7 @@ class MarkdownViewerScreen extends StatefulWidget {
   State<MarkdownViewerScreen> createState() => _MarkdownViewerScreenState();
 }
 
-class ViewerColors {
-  static const primary = Color(0xFF6366F1); // Indigo
-  static const primaryLight = Color(0xFF818CF8); // Indigo Light
-  static const accent = Color(0xFFEC4899); // Pink/Fuchsia Accent
-  static const textWhite = Color(0xFFE0E0E0);
-  static const textGrey = Color(0xFFAAAAAA);
-}
+
 
 class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
     with FileTransferMixin {
@@ -57,7 +51,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.voidBlack,
+      backgroundColor: AppColors.background,
       body: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
@@ -89,14 +83,12 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
       });
       client.log("MARKDOWN VIEWER: Cancelled background download due to exit");
     }
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     setupTransferListener();
 
     _transferSub = client.transferProgressStream.listen((msg) {
@@ -131,12 +123,12 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(color: ViewerColors.primaryLight),
+            const CircularProgressIndicator(color: AppColors.markdownPrimaryLight),
             const SizedBox(height: 16),
             Text(
               transferMsg.isEmpty ? "FETCHING DOCUMENT..." : transferMsg,
               style: GoogleFonts.jetBrainsMono(
-                color: ViewerColors.primaryLight,
+                color: AppColors.markdownPrimaryLight,
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
@@ -153,14 +145,14 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
           children: [
             const Icon(
               Icons.error_outline,
-              color: AppColors.errorRed,
+              color: AppColors.accentError,
               size: 48,
             ),
             const SizedBox(height: 16),
             Text(
               "FAILED TO LOAD DOCUMENT",
               style: GoogleFonts.jetBrainsMono(
-                color: AppColors.errorRed,
+                color: AppColors.accentError,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
@@ -169,13 +161,13 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
             ElevatedButton(
               onPressed: _loadFile,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.deepSpace,
-                side: const BorderSide(color: ViewerColors.primary, width: 0.5),
+                backgroundColor: AppColors.surface,
+                side: const BorderSide(color: AppColors.markdownPrimary, width: 0.5),
               ),
               child: Text(
                 "RETRY CONNECTION",
                 style: GoogleFonts.jetBrainsMono(
-                  color: ViewerColors.primaryLight,
+                  color: AppColors.markdownPrimaryLight,
                 ),
               ),
             ),
@@ -189,7 +181,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
         child: Text(
           "DOCUMENT EMPTY",
           style: GoogleFonts.jetBrainsMono(
-            color: AppColors.textGrey,
+            color: AppColors.textSecondary,
             fontSize: 11,
           ),
         ),
@@ -220,28 +212,28 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
         ),
         code: GoogleFonts.jetBrainsMono(
           backgroundColor: Colors.transparent,
-          color: ViewerColors.primaryLight,
+          color: AppColors.markdownPrimaryLight,
         ),
         h1: GoogleFonts.inter(
-          color: ViewerColors.primaryLight,
+          color: AppColors.markdownPrimaryLight,
           fontWeight: FontWeight.bold,
           fontSize: 22,
         ),
         h2: GoogleFonts.inter(
-          color: ViewerColors.primaryLight,
+          color: AppColors.markdownPrimaryLight,
           fontWeight: FontWeight.bold,
           fontSize: 18,
         ),
         h3: GoogleFonts.inter(
-          color: ViewerColors.primaryLight,
+          color: AppColors.markdownPrimaryLight,
           fontWeight: FontWeight.bold,
           fontSize: 16,
         ),
-        listBullet: GoogleFonts.inter(color: ViewerColors.accent),
+        listBullet: GoogleFonts.inter(color: AppColors.markdownAccent),
         horizontalRuleDecoration: BoxDecoration(
           border: Border(
             top: BorderSide(
-              color: ViewerColors.primary.withValues(alpha: 0.25),
+              color: AppColors.markdownPrimary.withValues(alpha: 0.25),
               width: 0.5,
             ),
           ),
@@ -249,7 +241,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
         codeblockDecoration: const BoxDecoration(color: Colors.transparent),
         codeblockPadding: EdgeInsets.zero,
         tableHead: GoogleFonts.inter(
-          color: ViewerColors.primaryLight,
+          color: AppColors.markdownPrimaryLight,
           fontWeight: FontWeight.bold,
           fontSize: 13,
         ),
@@ -263,27 +255,27 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
         ),
         tableBorder: TableBorder(
           horizontalInside: BorderSide(
-            color: ViewerColors.primary.withValues(alpha: 0.15),
+            color: AppColors.markdownPrimary.withValues(alpha: 0.15),
             width: 0.5,
           ),
           verticalInside: BorderSide(
-            color: ViewerColors.primary.withValues(alpha: 0.15),
+            color: AppColors.markdownPrimary.withValues(alpha: 0.15),
             width: 0.5,
           ),
           top: BorderSide(
-            color: ViewerColors.primary.withValues(alpha: 0.3),
+            color: AppColors.markdownPrimary.withValues(alpha: 0.3),
             width: 1.0,
           ),
           bottom: BorderSide(
-            color: ViewerColors.primary.withValues(alpha: 0.3),
+            color: AppColors.markdownPrimary.withValues(alpha: 0.3),
             width: 1.0,
           ),
           left: BorderSide(
-            color: ViewerColors.primary.withValues(alpha: 0.3),
+            color: AppColors.markdownPrimary.withValues(alpha: 0.3),
             width: 1.0,
           ),
           right: BorderSide(
-            color: ViewerColors.primary.withValues(alpha: 0.3),
+            color: AppColors.markdownPrimary.withValues(alpha: 0.3),
             width: 1.0,
           ),
           borderRadius: BorderRadius.circular(8),
@@ -301,13 +293,13 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
           height: 64,
           decoration: BoxDecoration(
             color: innerBoxIsScrolled
-                ? AppColors.deepSpace.withValues(alpha: 0.6)
-                : AppColors.deepSpace.withValues(alpha: 0.9),
+                ? AppColors.surface.withValues(alpha: 0.6)
+                : AppColors.surface.withValues(alpha: 0.9),
             border: Border(
               bottom: BorderSide(
                 color: innerBoxIsScrolled
                     ? Colors.transparent
-                    : ViewerColors.primary.withValues(alpha: 0.3),
+                    : AppColors.markdownPrimary.withValues(alpha: 0.3),
                 width: 0.5,
               ),
             ),
@@ -320,7 +312,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
                 IconButton(
                   icon: const Icon(
                     Icons.chevron_left,
-                    color: ViewerColors.primaryLight,
+                    color: AppColors.markdownPrimaryLight,
                     size: 24,
                   ),
                   onPressed: () => Navigator.pop(context),
@@ -329,7 +321,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
                   child: Text(
                     widget.fileName,
                     style: GoogleFonts.jetBrainsMono(
-                      color: AppColors.textWhite,
+                      color: AppColors.textPrimary,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1,
@@ -341,14 +333,14 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
                 IconButton(
                   icon: const Icon(
                     Icons.edit,
-                    color: ViewerColors.primaryLight,
+                    color: AppColors.markdownPrimaryLight,
                     size: 18,
                   ),
                   onPressed: _switchToEditor,
                   style: IconButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(36, 36),
-                    backgroundColor: AppColors.voidBlack.withValues(alpha: 0.5),
+                    backgroundColor: AppColors.background.withValues(alpha: 0.5),
                     shape: const CircleBorder(),
                   ),
                 ),
@@ -437,7 +429,7 @@ class _ViewerCodeElementBuilder extends MarkdownElementBuilder {
         color: Colors.transparent, // Fade in with the background
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: ViewerColors.primary.withValues(alpha: 0.3),
+          color: AppColors.markdownPrimary.withValues(alpha: 0.3),
           width: 1.0,
         ),
       ),
@@ -449,7 +441,7 @@ class _ViewerCodeElementBuilder extends MarkdownElementBuilder {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: ViewerColors.primary.withValues(alpha: 0.15),
+                  color: AppColors.markdownPrimary.withValues(alpha: 0.15),
                   width: 0.5,
                 ),
               ),
@@ -461,14 +453,14 @@ class _ViewerCodeElementBuilder extends MarkdownElementBuilder {
                   children: [
                     const Icon(
                       Icons.code_rounded,
-                      color: ViewerColors.primaryLight,
+                      color: AppColors.markdownPrimaryLight,
                       size: 14,
                     ),
                     const SizedBox(width: 8),
                     Text(
                       language.isEmpty ? "TERMINAL" : language.toUpperCase(),
                       style: GoogleFonts.jetBrainsMono(
-                        color: ViewerColors.primaryLight,
+                        color: AppColors.markdownPrimaryLight,
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1,
@@ -482,7 +474,7 @@ class _ViewerCodeElementBuilder extends MarkdownElementBuilder {
                   },
                   child: const Icon(
                     Icons.copy_all_rounded,
-                    color: ViewerColors.textGrey,
+                    color: AppColors.textSecondary,
                     size: 16,
                   ),
                 ),

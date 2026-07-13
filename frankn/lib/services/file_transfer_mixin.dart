@@ -57,7 +57,7 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
             msg,
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          backgroundColor: AppColors.matrixGreen,
+          backgroundColor: AppColors.accentSuccess,
         ),
       );
       refreshDirectory();
@@ -129,9 +129,9 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
             SnackBar(
               content: Text(
                 "⚡ DEFAULT LANDING PAD SET TO: ${selectedDir.split('/').last.toUpperCase()}",
-                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.neonCyan),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.accentPrimary),
               ),
-              backgroundColor: AppColors.voidBlack,
+              backgroundColor: AppColors.background,
               duration: const Duration(seconds: 2),
             ),
           );

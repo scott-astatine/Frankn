@@ -144,7 +144,7 @@ class _HostListPanelState extends State<HostListPanel> {
               Text(
                 l10n.liveLog.toUpperCase(),
                 style: const TextStyle(
-                  color: AppColors.neonCyan,
+                  color: AppColors.accentPrimary,
                   fontSize: 12,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.5,
@@ -198,7 +198,7 @@ class _HostListPanelState extends State<HostListPanel> {
                           style: TextStyle(
                             fontFamily: 'JetBrainsMonoNerdFont',
                             fontSize: SettingsService().terminalFontSize,
-                            color: AppColors.matrixGreen.withValues(alpha: 0.7),
+                            color: AppColors.accentSuccess.withValues(alpha: 0.7),
                           ),
                         ),
                       );
@@ -270,7 +270,7 @@ class _HostListPanelState extends State<HostListPanel> {
     bool isSaved = false,
     bool isOnline = false,
   }) {
-    final Color accentColor = isSaved ? AppColors.neonPink : AppColors.neonCyan;
+    final Color accentColor = isSaved ? AppColors.accentSecondary : AppColors.accentPrimary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -387,8 +387,8 @@ class _HostListPanelState extends State<HostListPanel> {
 
           return CyberAlertDialog(
             title: l10n.uplinkSecurity.toUpperCase(),
-            borderColor: AppColors.neonCyan,
-            titleColor: AppColors.neonCyan,
+            borderColor: AppColors.accentPrimary,
+            titleColor: AppColors.accentPrimary,
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -397,13 +397,13 @@ class _HostListPanelState extends State<HostListPanel> {
                     padding: const EdgeInsets.all(8),
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: AppColors.errorRed.withValues(alpha: 0.1),
-                      border: Border.all(color: AppColors.errorRed),
+                      color: AppColors.accentError.withValues(alpha: 0.1),
+                      border: Border.all(color: AppColors.accentError),
                     ),
                     child: Text(
                       errorMessage!.toUpperCase(),
                       style: const TextStyle(
-                        color: AppColors.errorRed,
+                        color: AppColors.accentError,
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
                       ),
@@ -417,7 +417,7 @@ class _HostListPanelState extends State<HostListPanel> {
                     child: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 20),
                       child: CircularProgressIndicator(
-                        color: AppColors.neonCyan,
+                        color: AppColors.accentPrimary,
                       ),
                     ),
                   )
@@ -445,11 +445,11 @@ class _HostListPanelState extends State<HostListPanel> {
                     decoration: InputDecoration(
                       hintText: l10n.enterPasscode.toUpperCase(),
                       hintStyle: const TextStyle(
-                        color: AppColors.textGrey,
+                        color: AppColors.textSecondary,
                         fontSize: 12,
                       ),
                       enabledBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.neonCyan),
+                        borderSide: BorderSide(color: AppColors.accentPrimary),
                       ),
                     ),
                   ),
@@ -463,7 +463,7 @@ class _HostListPanelState extends State<HostListPanel> {
                 },
                 child: Text(
                   l10n.cancel.toUpperCase(),
-                  style: const TextStyle(color: AppColors.textGrey),
+                  style: const TextStyle(color: AppColors.textSecondary),
                 ),
               ),
               if (!isLoading)
@@ -484,7 +484,7 @@ class _HostListPanelState extends State<HostListPanel> {
                     l10n.establish.toUpperCase(),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: AppColors.neonCyan,
+                      color: AppColors.accentPrimary,
                     ),
                   ),
                 ),

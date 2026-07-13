@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:frankn/screens/markdown_viewer_screen.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
 import 'package:frankn/services/isolate_protocol.dart';
@@ -56,7 +55,6 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
   void initState() {
     super.initState();
     _controller = CodeLineEditingController();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     setupTransferListener();
     
     // Listen for the specific completion of this file in the background
@@ -122,7 +120,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
               "FILE SAVED TO HOST",
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            backgroundColor: AppColors.matrixGreen,
+            backgroundColor: AppColors.accentSuccess,
           ),
         );
       }
@@ -131,7 +129,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("SAVE FAILED: $e"),
-            backgroundColor: AppColors.errorRed,
+            backgroundColor: AppColors.accentError,
           ),
         );
       }
@@ -151,7 +149,6 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
       client.log("CODE EDITOR: Cancelled background download due to exit");
     }
     _controller.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -160,7 +157,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
     final bool isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Scaffold(
-      backgroundColor: AppColors.voidBlack,
+      backgroundColor: AppColors.background,
       body: Stack(
         children: [
           Positioned.fill(
@@ -183,9 +180,9 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
     return Container(
       height: 32,
       decoration: BoxDecoration(
-        color: AppColors.deepSpace.withValues(alpha: 0.8),
+        color: AppColors.surface.withValues(alpha: 0.8),
         border: const Border(
-          top: BorderSide(color: AppColors.neonCyan, width: 0.5),
+          top: BorderSide(color: AppColors.accentPrimary, width: 0.5),
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -195,7 +192,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
             onTap: () => Navigator.pop(context),
             child: const Icon(
               Icons.chevron_left,
-              color: AppColors.neonCyan,
+              color: AppColors.accentPrimary,
               size: 18,
             ),
           ),
@@ -204,7 +201,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
             child: Text(
               "${widget.fileName}  —  ${widget.remotePath}",
               style: const TextStyle(
-                color: AppColors.textGrey,
+                color: AppColors.textSecondary,
                 fontSize: 10,
                 fontFamily: 'Courier',
                 fontWeight: FontWeight.bold,
@@ -215,7 +212,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            icon: const Icon(Icons.share, color: AppColors.neonCyan, size: 16),
+            icon: const Icon(Icons.share, color: AppColors.accentPrimary, size: 16),
             onPressed: () {
               if (_localFile != null) {
                 SharePlus.instance.share(
@@ -232,7 +229,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
             IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              icon: const Icon(Icons.visibility, color: AppColors.neonCyan, size: 16),
+              icon: const Icon(Icons.visibility, color: AppColors.accentPrimary, size: 16),
               onPressed: () {
                 Navigator.pushReplacement(
                   context,
@@ -254,14 +251,14 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
               height: 14,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: AppColors.neonCyan,
+                color: AppColors.accentPrimary,
               ),
             )
           else
             IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              icon: const Icon(Icons.save, color: AppColors.neonCyan, size: 16),
+              icon: const Icon(Icons.save, color: AppColors.accentPrimary, size: 16),
               onPressed: _handleSave,
             ),
         ],
@@ -275,12 +272,12 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(color: AppColors.neonCyan),
+            const CircularProgressIndicator(color: AppColors.accentPrimary),
             const SizedBox(height: 16),
             Text(
               transferMsg.isEmpty ? "LOADING FILE..." : transferMsg,
               style: const TextStyle(
-                color: AppColors.neonCyan,
+                color: AppColors.accentPrimary,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),

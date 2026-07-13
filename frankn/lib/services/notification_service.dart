@@ -73,8 +73,8 @@ class NotificationService {
           channelKey: 'frankn_host_alerts',
           channelName: 'Host Alerts',
           channelDescription: 'Notifications mirrored from the Frankn Host',
-          defaultColor: AppColors.neonCyan,
-          ledColor: AppColors.neonCyan,
+          defaultColor: AppColors.accentPrimary,
+          ledColor: AppColors.accentPrimary,
           ledOnMs: 150,
           ledOffMs: 300,
           enableLights: true,
@@ -128,8 +128,8 @@ class NotificationService {
         notificationLayout: NotificationLayout.Default,
         category: NotificationCategory.Message,
         payload: {'host_id': msg.id.toString()},
-        color: AppColors.neonCyan,
-        backgroundColor: AppColors.panelGrey,
+        color: AppColors.accentPrimary,
+        backgroundColor: AppColors.surfaceSecondary,
       ),
       actionButtons: [
         NotificationActionButton(
@@ -162,8 +162,8 @@ Future<void> showProgressNotification(
           : NotificationLayout.ProgressBar,
       progress: progress,
       category: NotificationCategory.Progress,
-      color: AppColors.neonCyan,
-      backgroundColor: AppColors.panelGrey,
+      color: AppColors.accentPrimary,
+      backgroundColor: AppColors.surfaceSecondary,
       locked: progress < 100,
       payload: transferId != null ? {'transfer_id': transferId} : null,
     ),
@@ -173,7 +173,7 @@ Future<void> showProgressNotification(
               key: 'CANCEL_TRANSFER',
               label: 'CANCEL',
               actionType: ActionType.KeepOnTop,
-              color: AppColors.errorRed,
+              color: AppColors.accentError,
             ),
           ]
         : [
@@ -204,8 +204,8 @@ Future<void> showProgressNotification(
         notificationLayout: NotificationLayout.Default,
         category: NotificationCategory.Status,
         payload: {'file_path': filePath},
-        color: isFailed ? AppColors.errorRed : AppColors.matrixGreen,
-        backgroundColor: AppColors.panelGrey,
+        color: isFailed ? AppColors.accentError : AppColors.accentSuccess,
+        backgroundColor: AppColors.surfaceSecondary,
       ),
       actionButtons: isFailed
           ? [
@@ -262,8 +262,8 @@ Future<void> showProgressNotification(
         summary: folderPath,
         category:
             isComplete ? NotificationCategory.Status : NotificationCategory.Progress,
-        color: isComplete ? AppColors.matrixGreen : AppColors.neonCyan,
-        backgroundColor: AppColors.panelGrey,
+        color: isComplete ? AppColors.accentSuccess : AppColors.accentPrimary,
+        backgroundColor: AppColors.surfaceSecondary,
         locked: !isComplete,
         payload: {'sync_pair_id': folderPath},
       ),
@@ -280,7 +280,7 @@ Future<void> showProgressNotification(
                 key: 'CANCEL_SYNC',
                 label: 'CANCEL',
                 actionType: ActionType.KeepOnTop,
-                color: AppColors.errorRed,
+                color: AppColors.accentError,
               ),
             ],
     );

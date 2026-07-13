@@ -4,17 +4,17 @@ import 'package:frankn/utils/utils.dart';
 
 class SshTheme {
   static final terminalTheme = TerminalTheme(
-    cursor: AppColors.neonCyan,
-    selection: AppColors.neonCyan.withValues(alpha: 0.3),
-    foreground: AppColors.textWhite,
+    cursor: AppColors.accentPrimary,
+    selection: AppColors.accentPrimary.withValues(alpha: 0.3),
+    foreground: AppColors.textPrimary,
     background: Colors.transparent,
     black: const Color(0xFF000000),
-    red: AppColors.errorRed,
-    green: AppColors.matrixGreen,
-    yellow: AppColors.cyberYellow,
+    red: AppColors.accentError,
+    green: AppColors.accentSuccess,
+    yellow: AppColors.accentWarning,
     blue: const Color(0xFF0066FF),
-    magenta: AppColors.neonPink,
-    cyan: AppColors.neonCyan,
+    magenta: AppColors.accentSecondary,
+    cyan: AppColors.accentPrimary,
     white: const Color(0xFFFFFFFF),
     brightBlack: const Color(0xFF666666),
     brightRed: const Color(0xFFFF3333),
@@ -24,8 +24,8 @@ class SshTheme {
     brightMagenta: const Color(0xFFFF66FF),
     brightCyan: const Color(0xFF66FFFF),
     brightWhite: const Color(0xFFFFFFFF),
-    searchHitBackground: AppColors.cyberYellow,
-    searchHitBackgroundCurrent: AppColors.neonPink,
-    searchHitForeground: AppColors.voidBlack,
+    searchHitBackground: AppColors.accentWarning,
+    searchHitBackgroundCurrent: AppColors.accentSecondary,
+    searchHitForeground: AppColors.background,
   );
 }

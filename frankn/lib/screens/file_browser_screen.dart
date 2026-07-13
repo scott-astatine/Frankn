@@ -32,7 +32,7 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.voidBlack,
+      backgroundColor: AppColors.background,
       body: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
@@ -45,34 +45,47 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
               elevation: 0,
               automaticallyImplyLeading: false,
               titleSpacing: 0,
-              toolbarHeight: 64,
+              toolbarHeight: 104,
               title: GlassyHeader(
+                height: 104,
                 innerBoxIsScrolled: innerBoxIsScrolled,
-                child: FileBrowserAppBar.buildDefaultContent(
-                  context: context,
-                  currentPath: _browserState.currentPath,
-                  isGridView: _isGridView,
-                  selectedCount: _browserState.selectedPaths.length,
-                  onToggleView: () => setState(() => _isGridView = !_isGridView),
-                  onSearch: () => _browserState.setIsSearching(true),
-                  onNavigateUp: () => _browserState.navigateUp(),
-                  onClearSelection: () => _browserState.clearSelection(),
-                  onDeleteSelected: _handleBulkDelete,
-                  onDownloadSelected: _handleBulkDownload,
-                  isSearching: _browserState.isSearching,
-                  searchController: _browserState.searchController,
-                  onSearchChanged: (val) => _browserState.setSearchQuery(val),
-                  onExitSearch: () => _browserState.exitSearch(),
-                  showHidden: _browserState.showHidden,
-                  onToggleShowHidden: () {
-                    _browserState.setShowHidden(!_browserState.showHidden);
-                  },
-                  onUpload: () => uploadFile(_browserState.currentPath),
-                  onSort: (val) {
-                    if (val == "name") _browserState.setSortBy(SortOption.name);
-                    if (val == "size") _browserState.setSortBy(SortOption.size);
-                    if (val == "modified") _browserState.setSortBy(SortOption.modified);
-                  },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FileBrowserAppBar.buildDefaultContent(
+                      context: context,
+                      currentPath: _browserState.currentPath,
+                      isGridView: _isGridView,
+                      selectedCount: _browserState.selectedPaths.length,
+                      onToggleView: () => setState(() => _isGridView = !_isGridView),
+                      onSearch: () => _browserState.setIsSearching(true),
+                      onNavigateUp: () => _browserState.navigateUp(),
+                      onClearSelection: () => _browserState.clearSelection(),
+                      onDeleteSelected: _handleBulkDelete,
+                      onDownloadSelected: _handleBulkDownload,
+                      isSearching: _browserState.isSearching,
+                      searchController: _browserState.searchController,
+                      onSearchChanged: (val) => _browserState.setSearchQuery(val),
+                      onExitSearch: () => _browserState.exitSearch(),
+                      showHidden: _browserState.showHidden,
+                      onToggleShowHidden: () {
+                        _browserState.setShowHidden(!_browserState.showHidden);
+                      },
+                      onUpload: () => uploadFile(_browserState.currentPath),
+                      onSort: (val) {
+                        if (val == "name") _browserState.setSortBy(SortOption.name);
+                        if (val == "size") _browserState.setSortBy(SortOption.size);
+                        if (val == "modified") _browserState.setSortBy(SortOption.modified);
+                      },
+                    ),
+                    FileBrowserAppBar.buildBreadcrumbs(
+                      path: _browserState.currentPath,
+                      onBreadcrumbTap: (path) {
+                        _browserState.setCurrentPath(path);
+                        _browserState.refreshDirectory();
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -82,17 +95,10 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
           builder: (context) {
             return Column(
               children: [
-                FileBrowserAppBar.buildBreadcrumbs(
-                  path: _browserState.currentPath,
-                  onBreadcrumbTap: (path) {
-                    _browserState.setCurrentPath(path);
-                    _browserState.refreshDirectory();
-                  },
-                ),
                 if (_browserState.isLoading)
                   const LinearProgressIndicator(
                     minHeight: 2,
-                    color: AppColors.neonCyan,
+                    color: AppColors.accentPrimary,
                     backgroundColor: Colors.transparent,
                   ),
                 Expanded(child: _buildMainContent(l10n)),

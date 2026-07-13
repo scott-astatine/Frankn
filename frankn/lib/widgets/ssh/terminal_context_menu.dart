@@ -30,10 +30,10 @@ class TerminalContextMenu extends StatelessWidget {
         position.dx + 1,
         position.dy + 1,
       ),
-      color: AppColors.panelGrey,
+      color: AppColors.surfaceSecondary,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: AppColors.neonCyan, width: 1),
+        side: const BorderSide(color: AppColors.accentPrimary, width: 1),
       ),
       items: [
         // Note: Copy is handled natively by the terminal view's selection
@@ -65,7 +65,7 @@ class TerminalContextMenu extends StatelessWidget {
   Widget _buildMenuItem(String label, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: AppColors.neonCyan),
+        Icon(icon, size: 14, color: AppColors.accentPrimary),
         const SizedBox(width: 8),
         Text(
           label,

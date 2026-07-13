@@ -33,7 +33,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
     final l10n = AppLocalizations.of(context)!;
     return CyberAlertDialog(
       title: l10n.wifiNetworks,
-      borderColor: AppColors.neonCyan,
+      borderColor: AppColors.accentPrimary,
       titleColor: Colors.white,
       content: SizedBox(
         width: 300,
@@ -45,7 +45,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(24.0),
-                  child: CircularProgressIndicator(color: AppColors.neonCyan),
+                  child: CircularProgressIndicator(color: AppColors.accentPrimary),
                 ),
               )
             else if (_networks.isEmpty)
@@ -55,7 +55,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
                   child: Text(
                     l10n.noNetworksFound,
                     style:
-                        const TextStyle(color: AppColors.textGrey, fontSize: 12),
+                        const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ),
               )
@@ -72,12 +72,12 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
                     return ListTile(
                       leading: Icon(
                         inUse ? Icons.wifi : Icons.wifi_outlined,
-                        color: inUse ? AppColors.neonCyan : Colors.white38,
+                        color: inUse ? AppColors.accentPrimary : Colors.white38,
                       ),
                       title: Text(
                         net['ssid'] ?? 'Unknown',
                         style: TextStyle(
-                          color: inUse ? AppColors.neonCyan : Colors.white,
+                          color: inUse ? AppColors.accentPrimary : Colors.white,
                           fontSize: 13,
                           fontWeight:
                               inUse ? FontWeight.bold : FontWeight.normal,
@@ -87,7 +87,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
                           ? Text(
                               l10n.connected,
                               style: const TextStyle(
-                                color: AppColors.neonCyan,
+                                color: AppColors.accentPrimary,
                                 fontSize: 10,
                               ),
                             )
@@ -100,14 +100,14 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
                               net['security'] != "NONE")
                             const Icon(
                               Icons.lock,
-                              color: AppColors.textGrey,
+                              color: AppColors.textSecondary,
                               size: 14,
                             ),
                           const SizedBox(width: 8),
                           Text(
                             "${net['signal']}%",
                             style: const TextStyle(
-                              color: AppColors.textGrey,
+                              color: AppColors.textSecondary,
                               fontSize: 10,
                             ),
                           ),
@@ -127,7 +127,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
           onPressed: () => Navigator.pop(context),
           child: Text(
             l10n.close,
-            style: const TextStyle(color: AppColors.textGrey),
+            style: const TextStyle(color: AppColors.textSecondary),
           ),
         ),
       ],
@@ -183,7 +183,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
         context: context,
         builder: (ctx) => CyberAlertDialog(
           title: l10n.connectToSsid(ssid),
-          borderColor: AppColors.neonCyan,
+          borderColor: AppColors.accentPrimary,
           titleColor: Colors.white,
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -200,7 +200,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
                     ),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.neonCyan),
+                    borderSide: BorderSide(color: AppColors.accentPrimary),
                   ),
                 ),
                 onChanged: (v) => pwd = v,
@@ -212,7 +212,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
               onPressed: () => Navigator.pop(ctx),
               child: Text(
                 l10n.cancel,
-                style: const TextStyle(color: AppColors.textGrey),
+                style: const TextStyle(color: AppColors.textSecondary),
               ),
             ),
             TextButton(
@@ -226,7 +226,7 @@ class _WifiManagerDialogState extends State<WifiManagerDialog> {
               },
               child: Text(
                 l10n.confirm,
-                style: const TextStyle(color: AppColors.neonCyan),
+                style: const TextStyle(color: AppColors.accentPrimary),
               ),
             ),          ],
         ),

@@ -47,13 +47,13 @@ class _CyberButtonState extends State<CyberButton>
   Color _getVariantColor() {
     switch (widget.variant) {
       case CyberButtonVariant.warning:
-        return AppColors.cyberYellow;
+        return AppColors.accentWarning;
       case CyberButtonVariant.destructive:
-        return AppColors.errorRed;
+        return AppColors.accentError;
       case CyberButtonVariant.secondary:
-        return AppColors.neonPink;
+        return AppColors.accentSecondary;
       default:
-        return AppColors.neonCyan;
+        return AppColors.accentPrimary;
     }
   }
 
@@ -105,13 +105,17 @@ class _CyberButtonState extends State<CyberButton>
                     ),
                     const SizedBox(width: 6),
                   ],
-                  Text(
-                    widget.text.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                      letterSpacing: 1,
+                  Flexible(
+                    child: Text(
+                      widget.text.toUpperCase(),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        letterSpacing: 1,
+                      ),
                     ),
                   ),
                 ],

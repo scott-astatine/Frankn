@@ -102,8 +102,8 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
     showDialog(
       context: context,
       builder: (context) => CyberAlertDialog(
-        borderColor: AppColors.errorRed,
-        titleColor: AppColors.errorRed,
+        borderColor: AppColors.accentError,
+        titleColor: AppColors.accentError,
         title: "${l10n.terminateIntent.toUpperCase()} // ${name.toUpperCase()}",
         content: Text(
           l10n.killProcessConfirm(pid),
@@ -114,7 +114,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.abort.toUpperCase(),
-              style: const TextStyle(color: AppColors.textGrey),
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
           ),
           CyberButton(
@@ -137,7 +137,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: AppColors.voidBlack,
+      backgroundColor: AppColors.background,
       body: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
@@ -169,7 +169,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
                   child: _isLoading && _processes.isEmpty
                       ? const Center(
                           child: CircularProgressIndicator(
-                            color: AppColors.neonCyan,
+                            color: AppColors.accentPrimary,
                           ),
                         )
                       : ListView.builder(
@@ -193,7 +193,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.neonCyan),
+            icon: const Icon(Icons.arrow_back, color: AppColors.accentPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           if (_isSearching)
@@ -218,7 +218,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
               child: Text(
                 l10n.processes.toUpperCase(),
                 style: GoogleFonts.nanumMyeongjo(
-                  color: AppColors.neonCyan,
+                  color: AppColors.accentPrimary,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 2,
                 ),
@@ -227,7 +227,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
           IconButton(
             icon: Icon(
               _isSearching ? Icons.close : Icons.search,
-              color: AppColors.neonCyan,
+              color: AppColors.accentPrimary,
               size: 20,
             ),
             onPressed: () => setState(() {
@@ -240,7 +240,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
             }),
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.sort, color: AppColors.neonCyan, size: 20),
+            icon: const Icon(Icons.sort, color: AppColors.accentPrimary, size: 20),
             onSelected: (val) {
               setState(() => _sortBy = val);
               _fetchProcesses();
@@ -282,7 +282,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
           IconButton(
             icon: const Icon(
               Icons.refresh,
-              color: AppColors.neonCyan,
+              color: AppColors.accentPrimary,
               size: 20,
             ),
             onPressed: _fetchProcesses,
@@ -306,14 +306,14 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
             "SYSTEM_LOAD",
             "${cpu.toStringAsFixed(1)}%",
             cpu / 100,
-            AppColors.neonCyan,
+            AppColors.accentPrimary,
           ),
           const SizedBox(height: 16),
           _buildStatBar(
             "MEMORY_UTILIZATION",
             "${memPerc.toStringAsFixed(1)}%",
             memPerc / 100,
-            AppColors.neonPink,
+            AppColors.accentSecondary,
           ),
         ],
       ),
@@ -397,7 +397,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
       padding: const EdgeInsets.only(bottom: 12),
       child: CyberCard(
         borderColor: isExpanded
-            ? AppColors.textGrey.withValues(alpha: 0.2)
+            ? AppColors.textSecondary.withValues(alpha: 0.2)
             : Colors.white.withValues(alpha: 0.02),
         child: InkWell(
           onTap: () => setState(() => _expandedPid = isExpanded ? null : pid),
@@ -427,14 +427,14 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
                               const SizedBox(width: 8),
                               _buildBadge(
                                 "C: ${cpu.toStringAsFixed(1)}%",
-                                AppColors.cyberYellow.withValues(alpha: 0.15),
-                                textColor: AppColors.cyberYellow,
+                                AppColors.accentWarning.withValues(alpha: 0.15),
+                                textColor: AppColors.accentWarning,
                               ),
                               const SizedBox(width: 8),
                               _buildBadge(
                                 "M: $mem",
-                                AppColors.matrixGreen.withValues(alpha: 0.15),
-                                textColor: AppColors.matrixGreen,
+                                AppColors.accentSuccess.withValues(alpha: 0.15),
+                                textColor: AppColors.accentSuccess,
                               ),
                             ],
                           ),
@@ -443,7 +443,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
                     ),
                     Icon(
                       Icons.close,
-                      color: isExpanded ? AppColors.errorRed : Colors.white10,
+                      color: isExpanded ? AppColors.accentError : Colors.white10,
                       size: 20,
                     ),
                   ],
@@ -455,7 +455,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
                       _buildDetailItem(
                         l10n.status.toUpperCase(),
                         proc['status']?.toString() ?? "RUNNING",
-                        valueColor: AppColors.matrixGreen,
+                        valueColor: AppColors.accentSuccess,
                       ),
                       const SizedBox(width: 48),
                       _buildDetailItem("USER", proc['user'].toString()),
@@ -467,7 +467,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
                     style: const TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w900,
-                      color: AppColors.textGrey,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -521,7 +521,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
           fontFamily: 'JetBrainsMonoNerdFont',
           fontSize: 9,
           fontWeight: FontWeight.bold,
-          color: textColor ?? AppColors.textGrey,
+          color: textColor ?? AppColors.textSecondary,
         ),
       ),
     );
@@ -536,7 +536,7 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
           style: const TextStyle(
             fontSize: 9,
             fontWeight: FontWeight.w900,
-            color: AppColors.textGrey,
+            color: AppColors.textSecondary,
           ),
         ),
         const SizedBox(height: 4),

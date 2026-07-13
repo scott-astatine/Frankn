@@ -27,7 +27,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processes => 'Processes';
 
   @override
-  String get sysLog => 'Sys Log';
+  String get sysLog => 'System Log';
 
   @override
   String get generalConfig => 'General';

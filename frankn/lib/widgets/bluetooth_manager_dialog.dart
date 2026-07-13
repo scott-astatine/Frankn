@@ -86,7 +86,7 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(24.0),
-                  child: CircularProgressIndicator(color: AppColors.neonPink),
+                  child: CircularProgressIndicator(color: AppColors.accentSecondary),
                 ),
               )
             else if (_devices.isEmpty)
@@ -96,7 +96,7 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
                   child: Text(
                     l10n.noDevicesFound,
                     style:
-                        const TextStyle(color: AppColors.textGrey, fontSize: 12),
+                        const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ),
               )
@@ -115,12 +115,12 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
                             ? Icons.bluetooth_connected
                             : Icons.bluetooth,
                         color:
-                            isConnected ? AppColors.neonPink : Colors.white38,
+                            isConnected ? AppColors.accentSecondary : Colors.white38,
                       ),
                       title: Text(
                         dev['name'] ?? 'Unknown',
                         style: TextStyle(
-                          color: isConnected ? AppColors.neonPink : Colors.white,
+                          color: isConnected ? AppColors.accentSecondary : Colors.white,
                           fontSize: 13,
                           fontWeight:
                               isConnected ? FontWeight.bold : FontWeight.normal,
@@ -130,14 +130,14 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
                           ? Text(
                               l10n.connected,
                               style: const TextStyle(
-                                color: AppColors.neonPink,
+                                color: AppColors.accentSecondary,
                                 fontSize: 10,
                               ),
                             )
                           : Text(
                               dev['mac'] ?? '',
                               style: const TextStyle(
-                                color: AppColors.textGrey,
+                                color: AppColors.textSecondary,
                                 fontSize: 10,
                               ),
                             ),
@@ -154,7 +154,7 @@ class _BluetoothManagerDialogState extends State<BluetoothManagerDialog> {
           onPressed: () => Navigator.pop(context),
           child: Text(
             l10n.close,
-            style: const TextStyle(color: AppColors.textGrey),
+            style: const TextStyle(color: AppColors.textSecondary),
           ),
         ),
       ],

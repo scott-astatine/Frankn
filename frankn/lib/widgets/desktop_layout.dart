@@ -15,7 +15,7 @@ class DesktopLayout extends StatelessWidget {
     return Row(
       children: [
         Expanded(flex: 1, child: HostListPanel(client: _client)),
-        const VerticalDivider(color: AppColors.neonCyan, width: 1),
+        const VerticalDivider(color: AppColors.accentPrimary, width: 1),
         Expanded(
           flex: 3,
           child: StreamBuilder<HostConnectionState>(
@@ -29,7 +29,7 @@ class DesktopLayout extends StatelessWidget {
                 child: Text(
                   "WAITING FOR UPLINK...",
                   style: TextStyle(
-                    color: AppColors.textGrey,
+                    color: AppColors.textSecondary,
                     letterSpacing: 1.5,
                   ),
                 ),

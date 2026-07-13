@@ -53,14 +53,14 @@ class SshKeyBar extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 2),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.panelGrey,
-          foregroundColor: AppColors.neonCyan,
+          backgroundColor: AppColors.surfaceSecondary,
+          foregroundColor: AppColors.accentPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           minimumSize: const Size(0, 32),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(4),
             side: BorderSide(
-              color: AppColors.neonCyan.withValues(alpha: 0.3),
+              color: AppColors.accentPrimary.withValues(alpha: 0.3),
               width: 0.5,
             ),
           ),
@@ -79,17 +79,17 @@ class SshKeyBar extends StatelessWidget {
   }
 
   Widget _buildModifierBtn(String label, ModState state, VoidCallback onTap) {
-    Color color = AppColors.neonCyan;
-    Color bgColor = AppColors.panelGrey;
-    Color borderColor = AppColors.neonCyan.withValues(alpha: 0.3);
+    Color color = AppColors.accentPrimary;
+    Color bgColor = AppColors.surfaceSecondary;
+    Color borderColor = AppColors.accentPrimary.withValues(alpha: 0.3);
 
     if (state == ModState.active) {
       color = Colors.black;
-      bgColor = AppColors.neonCyan;
+      bgColor = AppColors.accentPrimary;
     } else if (state == ModState.locked) {
       color = Colors.black;
-      bgColor = AppColors.neonPink;
-      borderColor = AppColors.neonPink;
+      bgColor = AppColors.accentSecondary;
+      borderColor = AppColors.accentSecondary;
     }
 
     return Container(

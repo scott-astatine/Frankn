@@ -165,13 +165,13 @@ mixin RtcSignaling on RtcClientBase {
       notificationText: text,
       notificationIcon: const NotificationIcon(
         metaDataName: 'com.pravera.flutter_foreground_task.NOTIFICATION_ICON',
-        backgroundColor: AppColors.neonCyan,
+        backgroundColor: AppColors.accentPrimary,
       ),
       notificationButtons: [
         const NotificationButton(
           id: 'disconnect',
           text: '🛑 DISCONNECT',
-          textColor: AppColors.errorRed,
+          textColor: AppColors.accentError,
         ),
       ],
       callback: startCallback,
@@ -195,7 +195,7 @@ mixin RtcSignaling on RtcClientBase {
           const NotificationButton(
             id: 'disconnect',
             text: '🛑 DISCONNECT',
-            textColor: AppColors.errorRed,
+            textColor: AppColors.accentError,
           ),
         ],
       );

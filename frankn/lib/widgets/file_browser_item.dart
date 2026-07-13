@@ -61,7 +61,7 @@ class FileBrowserItem extends StatelessWidget {
               ),
               border: Border(
                 top: BorderSide(
-                  color: AppColors.neonCyan.withValues(alpha: 0.8),
+                  color: AppColors.accentPrimary.withValues(alpha: 0.8),
                   width: 2,
                 ),
               ),
@@ -73,7 +73,7 @@ class FileBrowserItem extends StatelessWidget {
                 Text(
                   "${l10n.intentHandler.toUpperCase()} // ${name.toUpperCase()}",
                   style: const TextStyle(
-                    color: AppColors.neonCyan,
+                    color: AppColors.accentPrimary,
                     fontWeight: FontWeight.w900,
                     fontSize: 14,
                     letterSpacing: 2,
@@ -87,7 +87,7 @@ class FileBrowserItem extends StatelessWidget {
                   children: [
                     Icon(
                       isDir ? Icons.folder_open_rounded : Icons.insert_drive_file_outlined,
-                      color: isDir ? AppColors.neonCyan.withValues(alpha: 0.6) : AppColors.neonPink.withValues(alpha: 0.6),
+                      color: isDir ? AppColors.accentPrimary.withValues(alpha: 0.6) : AppColors.accentSecondary.withValues(alpha: 0.6),
                       size: 14,
                     ),
                     const SizedBox(width: 6),
@@ -113,7 +113,7 @@ class FileBrowserItem extends StatelessWidget {
                     Text(
                       "SYS_RESRC: LOCAL_FS",
                       style: TextStyle(
-                        color: AppColors.textGrey.withValues(alpha: 0.8),
+                        color: AppColors.textSecondary.withValues(alpha: 0.8),
                         fontSize: 11,
                         fontFamily: 'JetBrainsMonoNerdFont',
                       ),
@@ -208,7 +208,7 @@ class FileBrowserItem extends StatelessWidget {
         ? l10n.directory.toUpperCase()
         : FileUtils.formatSize(entry.size);
     final String modified = entry.modified;
-    final Color color = isDir ? AppColors.cyberYellow : AppColors.neonCyan;
+    final Color color = isDir ? AppColors.accentWarning : AppColors.accentPrimary;
 
     return Padding(
       padding: isGrid
@@ -222,7 +222,7 @@ class FileBrowserItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           child: CyberCard(
             borderColor: isSelected
-                ? AppColors.neonCyan
+                ? AppColors.accentPrimary
                 : (color.withValues(alpha: 0.1)),
             child: Padding(
               padding: const EdgeInsets.all(10),
@@ -243,7 +243,7 @@ class FileBrowserItem extends StatelessWidget {
           height: 56,
           decoration: BoxDecoration(
             color: isSelected
-                ? AppColors.neonCyan.withValues(alpha: 0.2)
+                ? AppColors.accentPrimary.withValues(alpha: 0.2)
                 : color.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(12),
           ),
@@ -253,7 +253,7 @@ class FileBrowserItem extends StatelessWidget {
                 : (entry.isDir
                     ? Icons.folder_outlined
                     : Icons.insert_drive_file_outlined),
-            color: isSelected ? AppColors.neonCyan : color,
+            color: isSelected ? AppColors.accentPrimary : color,
             size: 28,
           ),
         ),
@@ -291,7 +291,7 @@ class FileBrowserItem extends StatelessWidget {
           height: 48,
           decoration: BoxDecoration(
             color: isSelected
-                ? AppColors.neonCyan.withValues(alpha: 0.2)
+                ? AppColors.accentPrimary.withValues(alpha: 0.2)
                 : color.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -301,7 +301,7 @@ class FileBrowserItem extends StatelessWidget {
                 : (entry.isDir
                     ? Icons.folder_outlined
                     : Icons.insert_drive_file_outlined),
-            color: isSelected ? AppColors.neonCyan : color,
+            color: isSelected ? AppColors.accentPrimary : color,
             size: 24,
           ),
         ),

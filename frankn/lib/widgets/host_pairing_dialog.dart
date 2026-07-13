@@ -25,7 +25,7 @@ class _HostPairingDialogState extends State<HostPairingDialog> {
     final l10n = AppLocalizations.of(context)!;
     return CyberAlertDialog(
       title: l10n.newNeuralLink,
-      borderColor: AppColors.neonCyan,
+      borderColor: AppColors.accentPrimary,
       titleColor: Colors.white,
       content: SingleChildScrollView(
         child: Column(
@@ -52,7 +52,7 @@ class _HostPairingDialogState extends State<HostPairingDialog> {
           child: Text(
             l10n.abort,
             style: const TextStyle(
-              color: AppColors.textGrey,
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.bold,
               fontSize: 12,
             ),
@@ -117,7 +117,7 @@ class _HostPairingDialogState extends State<HostPairingDialog> {
         Text(
           label,
           style: const TextStyle(
-            color: AppColors.neonCyan,
+            color: AppColors.accentPrimary,
             fontSize: 10,
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
@@ -128,18 +128,18 @@ class _HostPairingDialogState extends State<HostPairingDialog> {
           style: const TextStyle(
             fontFamily: 'JetBrainsMonoNerdFont',
             fontSize: 13,
-            color: AppColors.textWhite,
+            color: AppColors.textPrimary,
           ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(color: Colors.white24),
             enabledBorder: UnderlineInputBorder(
               borderSide: BorderSide(
-                color: AppColors.neonCyan.withValues(alpha: 0.3),
+                color: AppColors.accentPrimary.withValues(alpha: 0.3),
               ),
             ),
             focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.neonCyan),
+              borderSide: BorderSide(color: AppColors.accentPrimary),
             ),
           ),
         ),
@@ -184,7 +184,7 @@ class _HostPairingDialogState extends State<HostPairingDialog> {
                   onPressed: () => setState(() => _isScanning = true),
                   icon: const Icon(
                     Icons.qr_code_rounded,
-                    color: AppColors.neonCyan,
+                    color: AppColors.accentPrimary,
                     size: 100,
                   ),
                 ),
@@ -193,12 +193,12 @@ class _HostPairingDialogState extends State<HostPairingDialog> {
                   icon: const Icon(
                     Icons.image_outlined,
                     size: 12,
-                    color: AppColors.textGrey,
+                    color: AppColors.textSecondary,
                   ),
                   label: Text(
                     l10n.importFromImage,
                     style: const TextStyle(
-                      color: AppColors.textGrey,
+                      color: AppColors.textSecondary,
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
                     ),

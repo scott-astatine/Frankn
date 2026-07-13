@@ -50,12 +50,12 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
         backgroundColor: const Color(0xFF0F0F0F),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.neonCyan),
+          side: const BorderSide(color: AppColors.accentPrimary),
         ),
         title: const Text(
           "CREATE NEW FOLDER",
           style: TextStyle(
-            color: AppColors.neonCyan,
+            color: AppColors.accentPrimary,
             fontWeight: FontWeight.w900,
             fontSize: 14,
             letterSpacing: 1,
@@ -71,14 +71,14 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
               borderSide: BorderSide(color: Colors.white10),
             ),
             focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.neonCyan),
+              borderSide: BorderSide(color: AppColors.accentPrimary),
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("ABORT", style: TextStyle(color: AppColors.textGrey)),
+            child: const Text("ABORT", style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () {
@@ -103,7 +103,7 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
             },
             child: const Text(
               "CREATE",
-              style: TextStyle(color: AppColors.neonCyan, fontWeight: FontWeight.bold),
+              style: TextStyle(color: AppColors.accentPrimary, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -116,9 +116,9 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.8,
       decoration: const BoxDecoration(
-        color: AppColors.voidBlack,
+        color: AppColors.background,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: AppColors.neonCyan, width: 1)),
+        border: Border(top: BorderSide(color: AppColors.accentPrimary, width: 1)),
       ),
       child: Column(
         children: [
@@ -127,13 +127,13 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                const Icon(Icons.folder_open, color: AppColors.neonCyan),
+                const Icon(Icons.folder_open, color: AppColors.accentPrimary),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
                     "SELECT_REMOTE_DIRECTORY",
                     style: TextStyle(
-                      color: AppColors.neonCyan,
+                      color: AppColors.accentPrimary,
                       fontWeight: FontWeight.w900,
                       fontSize: 14,
                       letterSpacing: 1,
@@ -141,7 +141,7 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.create_new_folder_outlined, color: AppColors.neonCyan),
+                  icon: const Icon(Icons.create_new_folder_outlined, color: AppColors.accentPrimary),
                   onPressed: _createNewFolder,
                 ),
                 IconButton(
@@ -164,7 +164,7 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
           if (_browserState.isLoading)
             const LinearProgressIndicator(
               minHeight: 2,
-              color: AppColors.neonCyan,
+              color: AppColors.accentPrimary,
               backgroundColor: Colors.transparent,
             ),
 
@@ -178,7 +178,7 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
                 if (!entry.isDir) return const SizedBox.shrink();
 
                 return ListTile(
-                  leading: const Icon(Icons.folder, color: AppColors.matrixGreen, size: 20),
+                  leading: const Icon(Icons.folder, color: AppColors.accentSuccess, size: 20),
                   title: Text(
                     entry.name,
                     style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
@@ -199,9 +199,9 @@ class _RemoteDirSelectorState extends State<RemoteDirSelector> {
               child: ElevatedButton(
                 onPressed: () => Navigator.pop(context, _browserState.currentPath),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.neonCyan.withValues(alpha: 0.1),
-                  foregroundColor: AppColors.neonCyan,
-                  side: const BorderSide(color: AppColors.neonCyan, width: 1),
+                  backgroundColor: AppColors.accentPrimary.withValues(alpha: 0.1),
+                  foregroundColor: AppColors.accentPrimary,
+                  side: const BorderSide(color: AppColors.accentPrimary, width: 1),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),

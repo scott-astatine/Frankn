@@ -87,7 +87,7 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: AppColors.neonPink.withValues(alpha: 0.2),
+            color: AppColors.accentSecondary.withValues(alpha: 0.2),
             width: 1.0,
           ),
           boxShadow: const [
@@ -114,7 +114,7 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
               //   child: Container(
               //     decoration: const BoxDecoration(
               //       gradient: LinearGradient(
-              //         colors: [Colors.black87, AppColors.deepSpace],
+              //         colors: [Colors.black87, AppColors.surface],
               //         begin: Alignment.bottomCenter,
               //         end: Alignment.topCenter,
               //       ),
@@ -136,14 +136,14 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                             children: [
                               const Icon(
                                 Icons.tune,
-                                color: AppColors.neonPink,
+                                color: AppColors.accentSecondary,
                                 size: 20,
                               ),
                               const SizedBox(width: 12),
                               Text(
                                 l10n.audioMatrix.toUpperCase(),
                                 style: const TextStyle(
-                                  color: AppColors.neonPink,
+                                  color: AppColors.accentSecondary,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 2,
@@ -169,7 +169,7 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                               height: 200,
                               child: Center(
                                 child: CircularProgressIndicator(
-                                  color: AppColors.neonPink,
+                                  color: AppColors.accentSecondary,
                                 ),
                               ),
                             )
@@ -183,15 +183,15 @@ class _VolumeMixerDialogState extends State<VolumeMixerDialog> {
                                     .toDouble();
                                 final bool isOverdrive = currentVol > 1.0;
                                 final Color accentColor = isOverdrive
-                                    ? AppColors.errorRed
-                                    : AppColors.neonPink;
+                                    ? AppColors.accentError
+                                    : AppColors.accentSecondary;
 
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 8),
                                   child: CyberCard(
                                     bgColor: !isActive
                                         ? Colors.transparent
-                                        : AppColors.deepSpace.withValues(
+                                        : AppColors.surface.withValues(
                                             alpha: 0.5,
                                           ),
                                     borderColor: isActive

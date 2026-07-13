@@ -79,7 +79,7 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
       backgroundColor: Colors.transparent,
       contentPadding: EdgeInsets.zero,
       content: CyberCard(
-        borderColor: AppColors.neonPink.withValues(alpha: 0.3),
+        borderColor: AppColors.accentSecondary.withValues(alpha: 0.3),
         child: Container(
           width: 300,
           padding: const EdgeInsets.all(24),
@@ -89,7 +89,7 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.monitor_outlined, color: AppColors.neonPink),
+                  const Icon(Icons.monitor_outlined, color: AppColors.accentSecondary),
                   const SizedBox(width: 12),
                   const Text(
                     "SELECT PLAYER",
@@ -107,7 +107,7 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24.0),
-                    child: CircularProgressIndicator(color: AppColors.neonPink),
+                    child: CircularProgressIndicator(color: AppColors.accentSecondary),
                   ),
                 )
               else if (_players.isEmpty)
@@ -116,7 +116,7 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                     padding: EdgeInsets.all(24.0),
                     child: Text(
                       "NO PLAYERS FOUND",
-                      style: TextStyle(color: AppColors.textGrey, fontSize: 12),
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     ),
                   ),
                 )
@@ -135,12 +135,12 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                         ),
                         decoration: BoxDecoration(
                           color: isActive
-                              ? AppColors.neonPink.withValues(alpha: 0.1)
+                              ? AppColors.accentSecondary.withValues(alpha: 0.1)
                               : Colors.white.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: isActive
-                                ? AppColors.neonPink.withValues(alpha: 0.5)
+                                ? AppColors.accentSecondary.withValues(alpha: 0.5)
                                 : Colors.transparent,
                           ),
                         ),
@@ -151,7 +151,7 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                               _cleanName(p),
                               style: TextStyle(
                                 color: isActive
-                                    ? AppColors.neonPink
+                                    ? AppColors.accentSecondary
                                     : Colors.white,
                                 fontWeight: isActive
                                     ? FontWeight.bold
@@ -162,7 +162,7 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                             if (isActive)
                               const Icon(
                                 Icons.check,
-                                color: AppColors.neonPink,
+                                color: AppColors.accentSecondary,
                                 size: 16,
                               ),
                           ],
@@ -178,7 +178,7 @@ class _PlayerSelectorDialogState extends State<_PlayerSelectorDialog> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
                     "CANCEL",
-                    style: TextStyle(color: AppColors.textGrey),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ),
               ),

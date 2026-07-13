@@ -147,16 +147,18 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
               width: 68,
               height: 68,
               decoration: BoxDecoration(
-                color: AppColors.neonPink.withValues(alpha: 0.1),
+                color: AppColors.accentSecondary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: AppColors.neonPink.withValues(alpha: 0.2),
+                  color: AppColors.accentSecondary.withValues(alpha: 0.2),
                   width: 1,
                 ),
                 boxShadow: _mediaIsPlaying
                     ? [
                         BoxShadow(
-                          color: AppColors.neonPink.withValues(alpha: 0.1),
+                          color: AppColors.accentSecondary.withValues(
+                            alpha: 0.1,
+                          ),
                           blurRadius: 15,
                           spreadRadius: 2,
                         ),
@@ -167,7 +169,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                 _mediaIsPlaying
                     ? Icons.pause_rounded
                     : Icons.play_arrow_rounded,
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 size: 60,
               ),
             ),
@@ -191,7 +193,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           // border: Border.all(
-          //   color: AppColors.neonPink.withValues(alpha: 0.2),
+          //   color: AppColors.accentSecondary.withValues(alpha: 0.2),
           //   width: 1.0,
           // ),
           boxShadow: const [
@@ -253,15 +255,16 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                             margin: EdgeInsetsGeometry.all(4),
                             width: 78,
                             height: 78,
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: AppColors.textPrimary.withValues(
+                              alpha: 0.05,
+                            ),
                             child: _artData != null
                                 ? _buildArtImage(_artData!, fit: BoxFit.cover)
                                 : Center(
                                     child: Icon(
                                       Icons.music_note,
-                                      color: AppColors.neonPink.withValues(
-                                        alpha: 0.5,
-                                      ),
+                                      color: AppColors.accentSecondary
+                                          .withValues(alpha: 0.5),
                                     ),
                                   ),
                           ),
@@ -277,7 +280,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.textPrimary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 18,
                                   shadows: [
@@ -295,7 +298,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  color: AppColors.textGrey,
+                                  color: AppColors.textSecondary,
                                   fontSize: 14,
                                   shadows: [
                                     Shadow(
@@ -330,7 +333,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                             children: [
                               AnimatedIconButton(
                                 icon: Icons.monitor_outlined,
-                                color: AppColors.neonPink,
+                                color: AppColors.accentSecondary,
                                 size: 18,
                                 onTap: () => showPlayerSelectorDialog(
                                   context,
@@ -342,7 +345,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                               AnimatedIconButton(
                                 icon: Icons.replay_10_rounded,
                                 size: 24,
-                                color: Colors.white70,
+                                color: AppColors.textSecondary,
                                 onTap: () => _seekRelative(-10),
                               ),
                             ],
@@ -355,7 +358,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                               AnimatedIconButton(
                                 icon: Icons.skip_previous_rounded,
                                 size: 28,
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 onTap: () => widget.client.sendDcMsg(
                                   const DcMsgPlayPreviousTrack(),
                                 ),
@@ -366,7 +369,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                               AnimatedIconButton(
                                 icon: Icons.skip_next,
                                 size: 28,
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 onTap: () => widget.client.sendDcMsg(
                                   const DcMsgPlayNextTrack(),
                                 ),
@@ -381,14 +384,14 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                               AnimatedIconButton(
                                 icon: Icons.forward_10_rounded,
                                 size: 24,
-                                color: Colors.white70,
+                                color: AppColors.textSecondary,
                                 onTap: () => _seekRelative(10),
                               ),
                               const SizedBox(width: 20),
                               AnimatedIconButton(
                                 icon: Icons.tune_rounded,
                                 size: 18,
-                                color: Colors.white70,
+                                color: AppColors.textSecondary,
                                 onTap: () => showDialog(
                                   context: context,
                                   builder: (context) =>
@@ -434,7 +437,9 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
               }
 
               void commitSeek() {
-                widget.client.sendDcMsg(DcMsgSeek(position: _mediaPosition.toInt()));
+                widget.client.sendDcMsg(
+                  DcMsgSeek(position: _mediaPosition.toInt()),
+                );
               }
 
               return GestureDetector(
@@ -467,14 +472,17 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                         child: Container(
                           height: 6,
                           width: double.infinity,
-                          color: Colors.white.withValues(alpha: 0.1),
+                          color: AppColors.textPrimary.withValues(alpha: 0.1),
                           alignment: Alignment.centerLeft,
                           child: FractionallySizedBox(
                             widthFactor: progress,
                             child: Container(
                               decoration: const BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [AppColors.neonPink, Colors.pinkAccent],
+                                  colors: [
+                                    AppColors.accentSecondary,
+                                    Colors.pinkAccent,
+                                  ],
                                 ),
                               ),
                             ),
@@ -492,7 +500,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                             width: 12,
                             height: 12,
                             decoration: const BoxDecoration(
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(color: Colors.black54, blurRadius: 4),
@@ -515,7 +523,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                 _formatDuration(_mediaPosition),
                 style: const TextStyle(
                   fontFamily: 'JetBrainsMonoNerdFont',
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),
@@ -524,7 +532,7 @@ class _NeuralDeckPlayerState extends State<NeuralDeckPlayer> {
                 _formatDuration(_mediaLength),
                 style: TextStyle(
                   fontFamily: 'JetBrainsMonoNerdFont',
-                  color: Colors.white.withValues(alpha: 0.7),
+                  color: AppColors.textPrimary.withValues(alpha: 0.7),
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),

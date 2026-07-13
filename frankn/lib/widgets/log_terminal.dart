@@ -24,16 +24,16 @@ class LogTerminal extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.voidBlack.withValues(alpha: 0.95),
+        color: AppColors.background.withValues(alpha: 0.95),
         border: Border(
           top: BorderSide(
-            color: AppColors.neonCyan.withValues(alpha: 0.3),
+            color: AppColors.accentPrimary.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.neonCyan.withValues(alpha: 0.05),
+            color: AppColors.accentPrimary.withValues(alpha: 0.05),
             blurRadius: 10,
             spreadRadius: 2,
           ),
@@ -53,7 +53,7 @@ class LogTerminal extends StatelessWidget {
                   horizontal: 12,
                   vertical: 2,
                 ),
-                color: AppColors.neonCyan.withValues(alpha: 0.05),
+                color: AppColors.accentPrimary.withValues(alpha: 0.05),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -61,14 +61,14 @@ class LogTerminal extends StatelessWidget {
                       children: [
                         const Icon(
                           Icons.terminal,
-                          color: AppColors.matrixGreen,
+                          color: AppColors.accentSuccess,
                           size: 12,
                         ),
                         const SizedBox(width: 8),
                         Text(
                           "TERMINAL_OUT // ${isMinimized ? 'MIN' : 'ACT'}",
                           style: const TextStyle(
-                            color: AppColors.neonCyan,
+                            color: AppColors.accentPrimary,
                             fontSize: 8,
                             letterSpacing: 1.5,
                             fontWeight: FontWeight.bold,
@@ -120,7 +120,7 @@ class LogTerminal extends StatelessWidget {
     return IconButton(
       icon: Icon(
         icon,
-        color: AppColors.neonCyan.withValues(alpha: 0.6),
+        color: AppColors.accentPrimary.withValues(alpha: 0.6),
         size: 16,
       ),
       onPressed: onTap,
@@ -133,11 +133,11 @@ class LogTerminal extends StatelessWidget {
     log = log.toLowerCase();
     
     Color textColor = switch (log) {
-      final l when l.contains("error") || l.contains("failed") => AppColors.errorRed,
-      final l when l.contains("warn") || l.contains("debug") => AppColors.cyberYellow,
-      final l when l.contains("host") => AppColors.neonPink,
-      final l when l.contains("success") || l.contains("granted") => AppColors.neonCyan,
-      _ => AppColors.matrixGreen,
+      final l when l.contains("error") || l.contains("failed") => AppColors.accentError,
+      final l when l.contains("warn") || l.contains("debug") => AppColors.accentWarning,
+      final l when l.contains("host") => AppColors.accentSecondary,
+      final l when l.contains("success") || l.contains("granted") => AppColors.accentPrimary,
+      _ => AppColors.accentSuccess,
     };
 
     return Text.rich(
@@ -146,7 +146,7 @@ class LogTerminal extends StatelessWidget {
           TextSpan(
             text: log.startsWith(">") ? "> " : "",
             style: const TextStyle(
-              color: AppColors.textGrey,
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.bold,
             ),
           ),

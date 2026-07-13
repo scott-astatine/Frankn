@@ -3,52 +3,26 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 
+export 'theme.dart';
+
 late Directory globalTempDir;
 
 enum SignalConnectionState { disconnected, connecting, connected, failed }
 
 enum HostConnectionState {
-  disconnected,       // Default state
-  reconnectWaiting,   // Backoff timer active
-  connecting,         // Fetching signaling credentials
-  signaling,          // WebSocket signaling handshake in progress
-  iceConnecting,      // WebRTC ICE gathering/consent in progress
-  connected,          // Legacy compatibility placeholder
-  authenticating,     // Argon2id challenge-response active
-  authenticated,      // Secure link established and authenticated
-  failed,             // Handshake failed (enters backoff)
-  disconnecting,      // Active user termination
+  disconnected, // Default state
+  reconnectWaiting, // Backoff timer active
+  connecting, // Fetching signaling credentials
+  signaling, // WebSocket signaling handshake in progress
+  iceConnecting, // WebRTC ICE gathering/consent in progress
+  connected, // Legacy compatibility placeholder
+  authenticating, // Argon2id challenge-response active
+  authenticated, // Secure link established and authenticated
+  failed, // Handshake failed (enters backoff)
+  disconnecting, // Active user termination
 }
 
 enum ModState { off, active, locked }
-
-class NeoColors {
-  static const background = Color(0xFF09090B);
-  static const darkZinc = Color(0xFF18181B);
-  static const zinc = Color(0xFF71717A);
-  static const cyan = Color(0xFF06B6D4);
-  static const fuchsia = Color(0xFFD946EF);
-  static const matrixGreen = Color(0xFF10B981);
-}
-
-class AppColors {
-  // Backgrounds
-  static const Color voidBlack = Color(0xFF050505);
-  static const Color deepSpace = Color(0xFF0B0D17);
-  static const Color panelGrey = Color(0xFF1A1A2E);
-
-  // Neon Accents
-  static const Color neonCyan = Color(0xFF00F3FF);
-  static const Color neonPink = Color(0xFFFF00FF);
-  static const Color cyberYellow = Color(0xFFFFEE00);
-  static const Color matrixGreen = Color(0xFF00FF41);
-  static const Color neonRed = Color(0xeecc203A);
-
-  // Functional Colors
-  static const Color errorRed = Color(0xFFFF2A2A);
-  static const Color textWhite = Color(0xFFE0E0E0);
-  static const Color textGrey = Color(0xFFAAAAAA);
-}
 
 class AppConstants {
   // Layout Breakpoints

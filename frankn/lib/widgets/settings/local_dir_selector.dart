@@ -142,12 +142,12 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
         backgroundColor: const Color(0xFF0A0A0C),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.neonCyan, width: 1.5),
+          side: const BorderSide(color: AppColors.accentPrimary, width: 1.5),
         ),
         title: Text(
           "INITIALIZE LOCAL DIRECTORY",
           style: GoogleFonts.jetBrainsMono(
-            color: AppColors.neonCyan,
+            color: AppColors.accentPrimary,
             fontWeight: FontWeight.w900,
             fontSize: 13,
             letterSpacing: 1,
@@ -163,7 +163,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
               borderSide: BorderSide(color: Colors.white10),
             ),
             focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.neonCyan),
+              borderSide: BorderSide(color: AppColors.accentPrimary),
             ),
           ),
         ),
@@ -196,9 +196,9 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
                     SnackBar(
                       content: Text(
                         "⚡ DIRECTORY CREATION FAILED: $e",
-                        style: const TextStyle(color: AppColors.errorRed, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: AppColors.accentError, fontWeight: FontWeight.bold),
                       ),
-                      backgroundColor: AppColors.voidBlack,
+                      backgroundColor: AppColors.background,
                     ),
                   );
                 }
@@ -207,7 +207,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
             },
             child: Text(
               "CREATE",
-              style: GoogleFonts.jetBrainsMono(color: AppColors.neonCyan, fontSize: 11, fontWeight: FontWeight.bold),
+              style: GoogleFonts.jetBrainsMono(color: AppColors.accentPrimary, fontSize: 11, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -222,9 +222,9 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.8,
       decoration: const BoxDecoration(
-        color: AppColors.voidBlack,
+        color: AppColors.background,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: AppColors.neonCyan, width: 1.5)),
+        border: Border(top: BorderSide(color: AppColors.accentPrimary, width: 1.5)),
       ),
       child: SafeArea(
         child: Column(
@@ -248,7 +248,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
                 children: [
                   Icon(
                     widget.pickFiles ? Icons.insert_drive_file_outlined : Icons.folder_open_outlined,
-                    color: AppColors.neonCyan,
+                    color: AppColors.accentPrimary,
                     size: 20,
                   ),
                   const SizedBox(width: 12),
@@ -256,7 +256,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
                     child: Text(
                       titleLabel,
                       style: GoogleFonts.jetBrainsMono(
-                        color: AppColors.neonCyan,
+                        color: AppColors.accentPrimary,
                         fontWeight: FontWeight.w900,
                         fontSize: 13,
                         letterSpacing: 1.5,
@@ -266,7 +266,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
                   IconButton(
                     icon: Icon(
                       _showHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: AppColors.cyberYellow,
+                      color: AppColors.accentWarning,
                       size: 20,
                     ),
                     onPressed: () {
@@ -278,7 +278,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
                     tooltip: _showHidden ? "Hide Hidden Files" : "Show Hidden Files",
                   ),
                   IconButton(
-                    icon: const Icon(Icons.create_new_folder_outlined, color: AppColors.neonCyan, size: 20),
+                    icon: const Icon(Icons.create_new_folder_outlined, color: AppColors.accentPrimary, size: 20),
                     onPressed: _createNewFolder,
                     tooltip: "Create Directory",
                   ),
@@ -307,7 +307,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
             if (_isLoading)
               const LinearProgressIndicator(
                 minHeight: 2,
-                color: AppColors.neonCyan,
+                color: AppColors.accentPrimary,
                 backgroundColor: Colors.transparent,
               )
             else
@@ -333,9 +333,9 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
                       Navigator.pop(context, _currentPath);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.neonCyan.withValues(alpha: 0.1),
-                      foregroundColor: AppColors.neonCyan,
-                      side: const BorderSide(color: AppColors.neonCyan, width: 1.5),
+                      backgroundColor: AppColors.accentPrimary.withValues(alpha: 0.1),
+                      foregroundColor: AppColors.accentPrimary,
+                      side: const BorderSide(color: AppColors.accentPrimary, width: 1.5),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,
@@ -372,11 +372,11 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
         if (showParentItem) {
           if (listIndex == 0) {
             return ListTile(
-              leading: const Icon(Icons.subdirectory_arrow_left_rounded, color: AppColors.neonPink, size: 18),
+              leading: const Icon(Icons.subdirectory_arrow_left_rounded, color: AppColors.accentSecondary, size: 18),
               title: Text(
                 "..",
                 style: GoogleFonts.jetBrainsMono(
-                  color: AppColors.textGrey,
+                  color: AppColors.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -396,7 +396,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
           final dir = _subDirs[listIndex];
           final dirName = dir.path.split(Platform.pathSeparator).last;
           return ListTile(
-            leading: const Icon(Icons.folder_outlined, color: AppColors.cyberYellow, size: 20),
+            leading: const Icon(Icons.folder_outlined, color: AppColors.accentWarning, size: 20),
             title: Text(
               dirName,
               style: GoogleFonts.jetBrainsMono(
@@ -420,7 +420,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
         final fileIcon = FileUtils.getFileIcon(fileName);
 
         return ListTile(
-          leading: Icon(fileIcon, color: AppColors.neonCyan, size: 18),
+          leading: Icon(fileIcon, color: AppColors.accentPrimary, size: 18),
           title: Text(
             fileName,
             style: GoogleFonts.jetBrainsMono(
@@ -478,16 +478,16 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             decoration: BoxDecoration(
-              color: AppColors.errorRed.withValues(alpha: 0.05),
+              color: AppColors.accentError.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.3), width: 1.5),
+              border: Border.all(color: AppColors.accentError.withValues(alpha: 0.3), width: 1.5),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(
                   Icons.gpp_bad_outlined,
-                  color: AppColors.errorRed,
+                  color: AppColors.accentError,
                   size: 40,
                 ),
                 const SizedBox(height: 16),
@@ -495,7 +495,7 @@ class _LocalDirSelectorState extends State<LocalDirSelector> {
                   _errorMessage!,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.jetBrainsMono(
-                    color: AppColors.errorRed,
+                    color: AppColors.accentError,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     height: 1.5,

@@ -29,25 +29,25 @@ class FileBrowserAppBar {
       return Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.close, color: AppColors.neonCyan),
+            icon: const Icon(Icons.close, color: AppColors.accentPrimary),
             onPressed: onClearSelection,
           ),
           Expanded(
             child: Text(
-              "$selectedCount ${l10n.selected.toUpperCase()}",
+              "$selectedCount ${l10n.selected}",
               style: const TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 14,
-                color: AppColors.textWhite,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.download, color: AppColors.neonCyan),
+            icon: const Icon(Icons.download, color: AppColors.accentPrimary),
             onPressed: onDownloadSelected,
           ),
           IconButton(
-            icon: const Icon(Icons.delete, color: AppColors.errorRed),
+            icon: const Icon(Icons.delete, color: AppColors.accentError),
             onPressed: onDeleteSelected,
           ),
         ],
@@ -58,7 +58,7 @@ class FileBrowserAppBar {
       return Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.neonCyan),
+            icon: const Icon(Icons.arrow_back, color: AppColors.accentPrimary),
             onPressed: onExitSearch,
           ),
           Expanded(
@@ -67,7 +67,7 @@ class FileBrowserAppBar {
               autofocus: true,
               style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: InputDecoration(
-                hintText: l10n.search.toUpperCase(),
+                hintText: l10n.search,
                 hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
                 border: InputBorder.none,
               ),
@@ -75,7 +75,7 @@ class FileBrowserAppBar {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 20, color: AppColors.neonCyan),
+            icon: const Icon(Icons.close, size: 20, color: AppColors.accentPrimary),
             onPressed: () {
               searchController?.clear();
               onSearchChanged?.call("");
@@ -88,16 +88,16 @@ class FileBrowserAppBar {
     return Row(
       children: [
         IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.neonCyan),
+          icon: const Icon(Icons.arrow_back, color: AppColors.accentPrimary),
           onPressed: () => Navigator.pop(context),
         ),
         Expanded(
           child: Text(
-            l10n.fileBrowser.toUpperCase().replaceAll(" ", "_"),
+            l10n.fileBrowser,
             style: const TextStyle(
               fontWeight: FontWeight.w900,
               fontSize: 14,
-              color: AppColors.neonCyan,
+              color: AppColors.accentPrimary,
             ),
           ),
         ),
@@ -105,24 +105,24 @@ class FileBrowserAppBar {
           icon: Icon(
             isGridView ? Icons.view_list : Icons.grid_view,
             size: 20,
-            color: AppColors.neonCyan,
+            color: AppColors.accentPrimary,
           ),
           onPressed: onToggleView,
         ),
         IconButton(
-          icon: const Icon(Icons.search, size: 20, color: AppColors.neonCyan),
+          icon: const Icon(Icons.search, size: 20, color: AppColors.accentPrimary),
           onPressed: onSearch,
         ),
         PopupMenuButton<String>(
           icon: const Icon(
             Icons.more_vert,
-            color: AppColors.neonCyan,
+            color: AppColors.accentPrimary,
             size: 20,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-              color: AppColors.neonCyan.withValues(alpha: 0.3),
+              color: AppColors.accentPrimary.withValues(alpha: 0.3),
               width: 1.5,
             ),
           ),
@@ -135,15 +135,15 @@ class FileBrowserAppBar {
               onSort(val);
             }
           },
-          color: AppColors.voidBlack,
+          color: AppColors.background,
           itemBuilder: (context) => [
             PopupMenuItem(
               enabled: false,
               height: 32,
               child: Text(
-                "[CONSOLE_ACTIONS]",
+                "[Console Actions]",
                 style: TextStyle(
-                  color: AppColors.neonCyan.withValues(alpha: 0.8),
+                  color: AppColors.accentPrimary.withValues(alpha: 0.8),
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 2,
@@ -158,14 +158,14 @@ class FileBrowserAppBar {
                 children: [
                   const Icon(
                     Icons.sort_by_alpha,
-                    color: AppColors.neonCyan,
+                    color: AppColors.accentPrimary,
                     size: 16,
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    l10n.sortByName.toUpperCase(),
+                    l10n.sortByName,
                     style: const TextStyle(
-                      color: Colors.white70,
+                      color: AppColors.textPrimary,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1,
@@ -181,14 +181,14 @@ class FileBrowserAppBar {
                 children: [
                   const Icon(
                     Icons.analytics_outlined,
-                    color: AppColors.neonCyan,
+                    color: AppColors.accentPrimary,
                     size: 16,
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    l10n.sortBySize.toUpperCase(),
+                    l10n.sortBySize,
                     style: const TextStyle(
-                      color: Colors.white70,
+                      color: AppColors.textPrimary,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1,
@@ -204,14 +204,14 @@ class FileBrowserAppBar {
                 children: [
                   const Icon(
                     Icons.schedule_rounded,
-                    color: AppColors.neonCyan,
+                    color: AppColors.accentPrimary,
                     size: 16,
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    l10n.sortByDate.toUpperCase(),
+                    l10n.sortByDate,
                     style: const TextStyle(
-                      color: Colors.white70,
+                      color: AppColors.textPrimary,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1,
@@ -228,14 +228,14 @@ class FileBrowserAppBar {
                 children: [
                   Icon(
                     showHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: AppColors.cyberYellow,
+                    color: AppColors.accentWarning,
                     size: 16,
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    showHidden ? "HIDE HIDDEN FILES" : "SHOW HIDDEN FILES",
+                    showHidden ? "Hide Hidden Files" : "Show Hidden Files",
                     style: const TextStyle(
-                      color: AppColors.cyberYellow,
+                      color: AppColors.textPrimary,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1,
@@ -252,14 +252,14 @@ class FileBrowserAppBar {
                 children: [
                   const Icon(
                     Icons.cloud_upload_outlined,
-                    color: AppColors.neonPink,
+                    color: AppColors.accentSecondary,
                     size: 16,
                   ),
                   const SizedBox(width: 10),
-                  const Text(
-                    "UPLOAD FILE",
-                    style: TextStyle(
-                      color: AppColors.neonPink,
+                  Text(
+                    "Upload File",
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1,
@@ -295,8 +295,7 @@ class FileBrowserAppBar {
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
-        color: AppColors.voidBlack,
-        border: Border(bottom: BorderSide(color: Colors.white10)),
+        color: Colors.transparent,
       ),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -322,7 +321,7 @@ class FileBrowserAppBar {
                 fontFamily: 'JetBrainsMonoNerdFont',
                 fontSize: 10,
                 fontWeight: isLast ? FontWeight.w900 : FontWeight.bold,
-                color: isLast ? AppColors.neonCyan : AppColors.textGrey,
+                color: isLast ? AppColors.accentPrimary : AppColors.textSecondary,
               ),
             ),
           );

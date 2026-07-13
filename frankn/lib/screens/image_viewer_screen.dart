@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
@@ -39,7 +38,6 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
   @override
   void initState() {
     super.initState();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     setupTransferListener();
 
     // Listen for the specific completion of this file in the background
@@ -89,7 +87,6 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
       );
       client.log("IMAGE VIEWER: Cancelled background download for $_activeDownloadId due to exit");
     }
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -119,12 +116,12 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(color: AppColors.neonCyan),
+            const CircularProgressIndicator(color: AppColors.accentPrimary),
             const SizedBox(height: 16),
             Text(
               transferMsg.isEmpty ? "FETCHING IMAGE..." : transferMsg,
               style: const TextStyle(
-                color: AppColors.neonCyan,
+                color: AppColors.accentPrimary,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
@@ -145,9 +142,9 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
     return Container(
       height: 32,
       decoration: BoxDecoration(
-        color: AppColors.deepSpace.withValues(alpha: 0.8),
+        color: AppColors.surface.withValues(alpha: 0.8),
         border: const Border(
-          top: BorderSide(color: AppColors.neonCyan, width: 0.5),
+          top: BorderSide(color: AppColors.accentPrimary, width: 0.5),
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -157,7 +154,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
             onTap: () => Navigator.pop(context),
             child: const Icon(
               Icons.chevron_left,
-              color: AppColors.neonCyan,
+              color: AppColors.accentPrimary,
               size: 18,
             ),
           ),
@@ -166,7 +163,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
             child: Text(
               "${widget.fileName}  —  ${widget.remotePath}",
               style: const TextStyle(
-                color: AppColors.textGrey,
+                color: AppColors.textSecondary,
                 fontSize: 10,
                 fontFamily: 'Courier',
                 fontWeight: FontWeight.bold,
@@ -177,7 +174,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            icon: const Icon(Icons.share, color: AppColors.neonCyan, size: 16),
+            icon: const Icon(Icons.share, color: AppColors.accentPrimary, size: 16),
             onPressed: () {
               if (_imageFile != null) {
                 SharePlus.instance.share(
@@ -190,7 +187,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen>
             },
           ),
           const SizedBox(width: 12),
-          const Icon(Icons.image_outlined, color: AppColors.neonCyan, size: 16),
+          const Icon(Icons.image_outlined, color: AppColors.accentPrimary, size: 16),
         ],
       ),
     );

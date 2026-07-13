@@ -38,7 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             topRight: Radius.circular(24),
           ),
           border: Border(
-            top: BorderSide(color: AppColors.neonPink, width: 1.5),
+            top: BorderSide(color: AppColors.accentSecondary, width: 1.5),
           ),
         ),
         child: Column(
@@ -81,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         trailing: isSelected
-            ? const Icon(Icons.check, color: AppColors.neonPink)
+            ? const Icon(Icons.check, color: AppColors.accentSecondary)
             : null,
         onTap: onTap,
       ),
@@ -102,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             topRight: Radius.circular(24),
           ),
           border: Border(
-            top: BorderSide(color: AppColors.neonPink, width: 1.5),
+            top: BorderSide(color: AppColors.accentSecondary, width: 1.5),
           ),
         ),
         child: Column(
@@ -120,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     trailing: _settings.terminalFontSize == size.toDouble()
-                        ? const Icon(Icons.check, color: AppColors.neonPink)
+                        ? const Icon(Icons.check, color: AppColors.accentSecondary)
                         : null,
                     onTap: () async {
                       await _settings.setTerminalFontSize(size.toDouble());
@@ -151,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             topRight: Radius.circular(24),
           ),
           border: Border(
-            top: BorderSide(color: AppColors.neonPink, width: 1.5),
+            top: BorderSide(color: AppColors.accentSecondary, width: 1.5),
           ),
         ),
         child: Column(
@@ -169,7 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     trailing: _settings.trackpadSensitivity == size
-                        ? const Icon(Icons.check, color: AppColors.neonPink)
+                        ? const Icon(Icons.check, color: AppColors.accentSecondary)
                         : null,
                     onTap: () async {
                       await _settings.setTrackpadSensitivity(size);
@@ -207,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               borderSide: BorderSide(color: Colors.white10),
             ),
             focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppColors.neonPink),
+              borderSide: BorderSide(color: AppColors.accentSecondary),
             ),
           ),
         ),
@@ -216,7 +216,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.abort,
-              style: const TextStyle(color: AppColors.textGrey),
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
           ),
           TextButton(
@@ -233,7 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Text(
               l10n.update,
               style: const TextStyle(
-                color: AppColors.neonPink,
+                color: AppColors.accentSecondary,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -264,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderSide: BorderSide(color: Colors.white10),
               ),
               focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: AppColors.neonPink),
+                borderSide: BorderSide(color: AppColors.accentSecondary),
               ),
             ),
           ),
@@ -273,7 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () => Navigator.pop(context),
               child: Text(
                 l10n.abort,
-                style: const TextStyle(color: AppColors.textGrey),
+                style: const TextStyle(color: AppColors.textSecondary),
               ),
             ),
             TextButton(
@@ -293,7 +293,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         l10n.reinitializingNeuralLink,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      backgroundColor: AppColors.matrixGreen,
+                      backgroundColor: AppColors.accentSuccess,
                     ),
                   );
                 } else {
@@ -303,7 +303,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         l10n.invalidUrlFormat,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      backgroundColor: AppColors.errorRed,
+                      backgroundColor: AppColors.accentError,
                     ),
                   );
                 }
@@ -311,7 +311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Text(
                 l10n.update,
                 style: const TextStyle(
-                  color: AppColors.neonPink,
+                  color: AppColors.accentSecondary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -338,7 +338,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.voidBlack,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -414,7 +414,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context, 'CLOSE'),
-                          child: Text(l10n.close, style: const TextStyle(color: AppColors.textGrey)),
+                          child: Text(l10n.close, style: const TextStyle(color: AppColors.textSecondary)),
                         ),
                         if (_settings.defaultDownloadDir != null)
                           TextButton(
@@ -422,7 +422,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Text(
                               l10n.clearDefault,
                               style: const TextStyle(
-                                color: AppColors.errorRed,
+                                color: AppColors.accentError,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -432,7 +432,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Text(
                             l10n.chooseFolder,
                             style: const TextStyle(
-                              color: AppColors.neonCyan,
+                              color: AppColors.accentPrimary,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -641,7 +641,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: () => Navigator.pop(context, false),
                       child: Text(
                         l10n.abort,
-                        style: const TextStyle(color: AppColors.textGrey),
+                        style: const TextStyle(color: AppColors.textSecondary),
                       ),
                     ),
                     TextButton(

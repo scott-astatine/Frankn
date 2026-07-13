@@ -22,7 +22,7 @@ class SshStatusBar extends StatelessWidget {
         children: [
           Icon(
             Icons.circle,
-            color: isConnected ? AppColors.matrixGreen : AppColors.errorRed,
+            color: isConnected ? AppColors.accentSuccess : AppColors.accentError,
             size: 6,
           ),
           const SizedBox(width: 6),
@@ -30,7 +30,7 @@ class SshStatusBar extends StatelessWidget {
             isConnected ? "UPLINK_STABLE" : "OFFLINE",
             style: const TextStyle(
               fontSize: 8,
-              color: AppColors.textGrey,
+              color: AppColors.textSecondary,
               fontFamily: 'Courier',
             ),
           ),
@@ -41,7 +41,7 @@ class SshStatusBar extends StatelessWidget {
               height: 10,
               child: CircularProgressIndicator(
                 strokeWidth: 1,
-                color: AppColors.neonCyan,
+                color: AppColors.accentPrimary,
               ),
             ),
           const SizedBox(width: 8),
@@ -49,7 +49,7 @@ class SshStatusBar extends StatelessWidget {
             "FRANKN_SHELL_v1.0",
             style: TextStyle(
               fontSize: 8,
-              color: AppColors.textGrey,
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -59,7 +59,7 @@ class SshStatusBar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: const BoxDecoration(
-                color: AppColors.errorRed,
+                color: AppColors.accentError,
                 borderRadius: BorderRadius.all(Radius.circular(2)),
               ),
               child: Row(

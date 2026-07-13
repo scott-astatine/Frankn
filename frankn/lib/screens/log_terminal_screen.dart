@@ -37,7 +37,7 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: AppColors.voidBlack,
+      backgroundColor: AppColors.background,
       body: NestedScrollView(
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
@@ -74,10 +74,10 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                               Text(
+                              Text(
                                 "> ",
                                 style: TextStyle(
-                                  color: AppColors.neonCyan,
+                                  color: AppColors.accentPrimary,
                                   fontFamily: 'JetBrainsMonoNerdFont',
                                   fontSize: SettingsService().terminalFontSize,
                                   fontWeight: FontWeight.bold,
@@ -88,8 +88,9 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
                                   _logs.reversed.toList()[index],
                                   style: TextStyle(
                                     fontFamily: 'JetBrainsMonoNerdFont',
-                                    color: AppColors.matrixGreen,
-                                    fontSize: SettingsService().terminalFontSize,
+                                    color: AppColors.accentSuccess,
+                                    fontSize:
+                                        SettingsService().terminalFontSize,
                                     height: 1.4,
                                   ),
                                 ),
@@ -110,30 +111,27 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
   }
 
   Widget _buildHeader(AppLocalizations l10n) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.neonCyan),
-            onPressed: () => Navigator.pop(context),
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.accentPrimary),
+          onPressed: () => Navigator.pop(context),
+        ),
+        Text(
+          l10n.liveLog.toUpperCase(),
+          style: const TextStyle(
+            color: AppColors.accentPrimary,
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
+            letterSpacing: 2,
           ),
-          Text(
-            l10n.liveLog.toUpperCase(),
-            style: const TextStyle(
-              color: AppColors.neonCyan,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-              letterSpacing: 2,
-            ),
-          ),
-          const Spacer(),
-          const Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: Icon(Icons.terminal, color: Colors.white10, size: 20),
-          ),
-        ],
-      ),
+        ),
+        const Spacer(),
+        const Padding(
+          padding: EdgeInsets.only(right: 16),
+          child: Icon(Icons.terminal, color: Colors.white10, size: 20),
+        ),
+      ],
     );
   }
 }

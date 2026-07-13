@@ -285,7 +285,7 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
     final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Scaffold(
-      backgroundColor: AppColors.voidBlack,
+      backgroundColor: AppColors.background,
       body: Stack(
         children: [
           // Hidden Input for Voice/Keyboard
@@ -356,7 +356,7 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
                     child: Icon(
                       Icons.touch_app_outlined,
                       size: 80,
-                      color: AppColors.neonCyan.withValues(alpha: 0.05),
+                      color: AppColors.accentPrimary.withValues(alpha: 0.05),
                     ),
                   ),
                 ),
@@ -370,13 +370,13 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
               bottom: 30,
               right: 30,
               child: FloatingActionButton(
-                backgroundColor: AppColors.neonCyan.withValues(alpha: 0.1),
-                foregroundColor: AppColors.neonCyan,
+                backgroundColor: AppColors.accentPrimary.withValues(alpha: 0.1),
+                foregroundColor: AppColors.accentPrimary,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: AppColors.neonCyan.withValues(alpha: 0.3),
+                    color: AppColors.accentPrimary.withValues(alpha: 0.3),
                   ),
                 ),
                 onPressed: () {
@@ -399,7 +399,7 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
                   color: const Color(0xFF0F1A1F),
                   border: Border(
                     top: BorderSide(
-                      color: AppColors.neonCyan.withValues(alpha: 0.2),
+                      color: AppColors.accentPrimary.withValues(alpha: 0.2),
                     ),
                   ),
                   boxShadow: [
@@ -472,14 +472,14 @@ class _TrackpadScreenState extends State<TrackpadScreen> {
     Color borderColor = Colors.white10;
 
     if (state == ModState.active) {
-      color = AppColors.neonCyan;
-      glow = AppColors.neonCyan.withValues(alpha: 0.15);
-      borderColor = AppColors.neonCyan.withValues(alpha: 0.5);
+      color = AppColors.accentPrimary;
+      glow = AppColors.accentPrimary.withValues(alpha: 0.15);
+      borderColor = AppColors.accentPrimary.withValues(alpha: 0.5);
     }
     if (state == ModState.locked) {
-      color = AppColors.neonPink;
-      glow = AppColors.neonPink.withValues(alpha: 0.2);
-      borderColor = AppColors.neonPink.withValues(alpha: 0.6);
+      color = AppColors.accentSecondary;
+      glow = AppColors.accentSecondary.withValues(alpha: 0.2);
+      borderColor = AppColors.accentSecondary.withValues(alpha: 0.6);
     }
 
     return Expanded(

@@ -10,16 +10,16 @@ class StatusBadge extends StatelessWidget {
     Color color;
     switch (state) {
       case SignalConnectionState.connected:
-        color = AppColors.matrixGreen;
+        color = AppColors.accentSuccess;
         break;
       case SignalConnectionState.connecting:
-        color = AppColors.cyberYellow;
+        color = AppColors.accentWarning;
         break;
       case SignalConnectionState.failed:
-        color = AppColors.errorRed;
+        color = AppColors.accentError;
         break;
       default:
-        color = AppColors.textGrey;
+        color = AppColors.textSecondary;
     }
 
     return Container(

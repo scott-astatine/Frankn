@@ -137,7 +137,7 @@ abstract class AppLocalizations {
   /// No description provided for @sysLog.
   ///
   /// In en, this message translates to:
-  /// **'Sys Log'**
+  /// **'System Log'**
   String get sysLog;
 
   /// No description provided for @generalConfig.
