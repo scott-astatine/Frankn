@@ -8,11 +8,16 @@ late Directory globalTempDir;
 enum SignalConnectionState { disconnected, connecting, connected, failed }
 
 enum HostConnectionState {
-  disconnected,
-  connecting,
-  connected,
-  failed,
-  authenticated,
+  disconnected,       // Default state
+  reconnectWaiting,   // Backoff timer active
+  connecting,         // Fetching signaling credentials
+  signaling,          // WebSocket signaling handshake in progress
+  iceConnecting,      // WebRTC ICE gathering/consent in progress
+  connected,          // Legacy compatibility placeholder
+  authenticating,     // Argon2id challenge-response active
+  authenticated,      // Secure link established and authenticated
+  failed,             // Handshake failed (enters backoff)
+  disconnecting,      // Active user termination
 }
 
 enum ModState { off, active, locked }

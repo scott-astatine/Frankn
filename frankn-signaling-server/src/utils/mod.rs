@@ -67,6 +67,7 @@ pub enum SignalingMessage {
         to: String,
         sdp: String,
         timestamp: u64,
+        session_id: Option<String>,
     },
 
     #[serde(rename = "answer")]
@@ -75,6 +76,7 @@ pub enum SignalingMessage {
         to: String,
         sdp: String,
         timestamp: u64,
+        session_id: Option<String>,
     },
 
     #[serde(rename = "ice_candidate")]
@@ -85,6 +87,7 @@ pub enum SignalingMessage {
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
         timestamp: u64,
+        session_id: Option<String>,
     },
 
     #[serde(rename = "error")]

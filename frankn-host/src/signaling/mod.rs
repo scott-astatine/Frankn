@@ -38,6 +38,7 @@ pub enum SignalingMessage {
         to: String,
         sdp: String,
         timestamp: u64,
+        session_id: Option<String>,
     },
 
     #[serde(rename = "answer")]
@@ -46,6 +47,7 @@ pub enum SignalingMessage {
         to: String,
         sdp: String,
         timestamp: u64,
+        session_id: Option<String>,
     },
 
     #[serde(rename = "ice_candidate")]
@@ -56,6 +58,7 @@ pub enum SignalingMessage {
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
         timestamp: u64,
+        session_id: Option<String>,
     },
 
     #[serde(rename = "error")]
@@ -190,6 +193,7 @@ impl SignalingClient {
         &self,
         to: &str,
         sdp: String,
+        session_id: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.send_message(SignalingMessage::Answer {
             from: self.peer_id.clone(),
@@ -199,6 +203,7 @@ impl SignalingClient {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
+            session_id,
         })
         .await
     }
@@ -210,6 +215,7 @@ impl SignalingClient {
         candidate: String,
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
+        session_id: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.send_message(SignalingMessage::IceCandidate {
             from: self.peer_id.clone(),
@@ -221,6 +227,7 @@ impl SignalingClient {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
+            session_id,
         })
         .await
     }

@@ -63,17 +63,17 @@ async fn handle_signaling_message(
             let (registration_id, registration_type) = {
                 let mut peers_map = peers.write().await;
                 
-                // Prevent identity hijacking: if ID is already registered and active, reject.
-                if peers_map.contains_key(&peer_id) {
-                    return send_signaling_msg(
-                        tx,
-                        SignalingMessage::RegisterFailure {
-                            error: format!("Peer ID '{}' is already in use.", peer_id),
-                            timestamp,
+                // If ID is already registered, kick/replace the old connection
+                // to handle network transitions (WiFi <-> Cellular) gracefully.
+                if let Some(old_conn) = peers_map.remove(&peer_id) {
+                    log!("Registering peer: Kick/replace existing active connection for peer ID '{}'", peer_id);
+                    let _ = send_signaling_msg(
+                        &old_conn.sender,
+                        SignalingMessage::Error {
+                            message: "Connection replaced by newer session.".to_string(),
+                            timestamp: get_timestamp(),
                         },
-                    )
-                    .await
-                    .map_err(|e| e.to_string());
+                    ).await;
                 }
 
                 log!(

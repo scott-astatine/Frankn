@@ -19,12 +19,21 @@ use crate::log;
 
 pub type PeerMap = Arc<Mutex<HashMap<String, Arc<Mutex<RTCConn>>>>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteDescriptionState {
+    Waiting,
+    Set,
+}
+
 pub struct RTCConn {
     pub peer_connection: Arc<RTCPeerConnection>,
     pub data_channels: Arc<Mutex<HashMap<String, Arc<RTCDataChannel>>>>,
     pub authenticated: Arc<Mutex<bool>>,
     pub current_challenge: Arc<Mutex<Option<String>>>,
     pub ssh_bridge_stop: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub pending_candidates: Arc<Mutex<Vec<RTCIceCandidateInit>>>,
+    pub remote_desc_state: Arc<Mutex<RemoteDescriptionState>>,
+    pub session_id: Arc<Mutex<Option<String>>>,
 }
 
 impl std::fmt::Display for RTCConn {
@@ -93,6 +102,9 @@ impl RTCConn {
             authenticated: Arc::new(Mutex::new(false)),
             current_challenge: Arc::new(Mutex::new(None)),
             ssh_bridge_stop: Arc::new(Mutex::new(None)),
+            pending_candidates: Arc::new(Mutex::new(Vec::new())),
+            remote_desc_state: Arc::new(Mutex::new(RemoteDescriptionState::Waiting)),
+            session_id: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -147,7 +159,30 @@ impl RTCConn {
             sdp_mline_index,
             ..Default::default()
         };
-        self.peer_connection.add_ice_candidate(candidate_init).await
+
+        let state = self.remote_desc_state.lock().await;
+        match *state {
+            RemoteDescriptionState::Waiting => {
+                log!("add_remote_candidate: Remote description not set yet. Buffering candidate.");
+                let mut pending = self.pending_candidates.lock().await;
+                pending.push(candidate_init);
+                Ok(())
+            }
+            RemoteDescriptionState::Set => {
+                self.peer_connection.add_ice_candidate(candidate_init).await
+            }
+        }
+    }
+
+    pub async fn flush_candidates(&self) -> Result<(), webrtc::Error> {
+        let mut pending = self.pending_candidates.lock().await;
+        log!("flush_candidates: Applying {} buffered candidates.", pending.len());
+        for candidate in pending.drain(..) {
+            if let Err(e) = self.peer_connection.add_ice_candidate(candidate).await {
+                log!("flush_candidates ERROR: Failed to apply remote ICE candidate: {}", e);
+            }
+        }
+        Ok(())
     }
 
     // pub async fn create_offer(&self) -> Result<RTCSessionDescription, Box<dyn std::error::Error>> {
@@ -171,6 +206,11 @@ impl RTCConn {
         sdp: RTCSessionDescription,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.peer_connection.set_remote_description(sdp).await?;
+        {
+            let mut state = self.remote_desc_state.lock().await;
+            *state = RemoteDescriptionState::Set;
+        }
+        self.flush_candidates().await?;
         Ok(())
     }
 

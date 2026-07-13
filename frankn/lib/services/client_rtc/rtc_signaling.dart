@@ -9,6 +9,8 @@
 part of 'rtc.dart';
 
 mixin RtcSignaling on RtcClientBase {
+  int _reconnectDelaySeconds = 2;
+
   /// Minimum interval between host list requests to avoid spamming the signaling server.
   DateTime? _lastHostListRequest;
   static const Duration _hostListCooldown = Duration(seconds: 2);
@@ -86,6 +88,7 @@ mixin RtcSignaling on RtcClientBase {
 
       // Optimistically set to connected after registration is sent
       _updateSigState(SignalConnectionState.connected);
+      _reconnectDelaySeconds = 2; // Reset reconnect delay on successful connection
     } catch (e) {
       log("Fatal Connection Error: $e");
       _handleDisconnection();
@@ -111,9 +114,14 @@ mixin RtcSignaling on RtcClientBase {
     // listeners that care about it, but set the actual state to disconnected.
     client._connectionStateController.add(SignalConnectionState.failed);
     client.sigState = SignalConnectionState.disconnected;
-    client.reconnectTimer = Timer(const Duration(seconds: 2), () {
+    
+    log("Signaling reconnect scheduled in $_reconnectDelaySeconds seconds.");
+    client.reconnectTimer = Timer(Duration(seconds: _reconnectDelaySeconds), () {
       connectToSignaling();
     });
+
+    // Exponential backoff up to 60 seconds
+    _reconnectDelaySeconds = (_reconnectDelaySeconds * 2).clamp(2, 60);
   }
 
   /// Initializes and starts the Android foreground service.
@@ -250,48 +258,63 @@ mixin RtcSignaling on RtcClientBase {
         break;
 
       case SignalingMessage.Answer:
+        final client = this as RtcClient;
+        final activeAttempt = client.activeAttempt;
+        if (activeAttempt == null) {
+          log("WARN: Received SDP answer but no active connection attempt. Ignoring.");
+          break;
+        }
+
+        final msgSessionId = data['session_id'];
+        if (msgSessionId != activeAttempt.sessionUuid) {
+          log("WARN: Received SDP answer with mismatched Session ID ($msgSessionId vs ${activeAttempt.sessionUuid}). Discarding stale handshake.");
+          break;
+        }
+
         // Set the remote SDP answer to complete WebRTC handshake
-        if (peerConnection == null) {
-          log(
-            "WARN: Received SDP answer but no active peer connection. Ignoring.",
+        try {
+          await peerConnection!.setRemoteDescription(
+            RTCSessionDescription(data['sdp'], 'answer'),
           );
-        } else {
-          try {
-            await peerConnection!.setRemoteDescription(
-              RTCSessionDescription(data['sdp'], 'answer'),
-            );
-          } catch (e) {
-            log("CORE ERROR: Failed to set remote description: $e");
-          }
+        } catch (e) {
+          log("CORE ERROR: Failed to set remote description: $e");
         }
         break;
 
       case SignalingMessage.IceCandidate:
+        final client = this as RtcClient;
+        final activeAttempt = client.activeAttempt;
+        if (activeAttempt == null) {
+          log("WARN: Received ICE candidate but no active connection attempt. Ignoring.");
+          break;
+        }
+
+        final msgSessionId = data['session_id'];
+        if (msgSessionId != activeAttempt.sessionUuid) {
+          log("WARN: Received ICE candidate with mismatched Session ID ($msgSessionId vs ${activeAttempt.sessionUuid}). Discarding stale handshake.");
+          break;
+        }
+
         // Add ICE candidate for NAT traversal
-        if (peerConnection == null) {
-          log(
-            "WARN: Received ICE candidate but no active peer connection. Ignoring.",
+        try {
+          final candStr = data['candidate'] as String;
+          log("ICE_GATHER: Received remote ICE candidate: $candStr");
+          var candidate = RTCIceCandidate(
+            candStr,
+            data['sdp_mid'],
+            data['sdp_m_line_index'],
           );
-        } else {
-          try {
-            final candStr = data['candidate'] as String;
-            log("ICE_GATHER: Received remote ICE candidate: $candStr");
-            var candidate = RTCIceCandidate(
-              candStr,
-              data['sdp_mid'],
-              data['sdp_m_line_index'],
-            );
-            await peerConnection!.addCandidate(candidate);
-          } catch (e) {
-            log("CORE ERROR: Failed to add ICE candidate: $e");
-          }
+          await peerConnection!.addCandidate(candidate);
+        } catch (e) {
+          log("CORE ERROR: Failed to add ICE candidate: $e");
         }
         break;
       case SignalingMessage.Error:
-        log("DEBUG: Signaling error: $data['message']");
-        currentHostName = null;
-        currentHostId = null;
-        currentPassword = null;
+        log("DEBUG: Signaling error: ${data['message']}");
+        final client = this as RtcClient;
+        if (client.currentHostState != HostConnectionState.disconnected) {
+          _transitionTo(HostConnectionState.failed, "Signaling error: ${data['message']}");
+        }
         break;
     }
   }

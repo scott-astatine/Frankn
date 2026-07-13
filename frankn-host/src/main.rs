@@ -189,7 +189,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
                     crate::elog!("NODE: Handshake rejected: {}", error);
                     break; // Break the while loop to close the channel and trigger a reconnect
                 }
-                SignalingMessage::Offer { from, sdp, .. } => {
+                SignalingMessage::Offer { from, sdp, session_id, .. } => {
                     let sig = Arc::clone(&signaling_client);
                     let auth = Arc::clone(&auth_manager);
                     let pm = Arc::clone(&peer_map);
@@ -198,7 +198,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
                     let cfg = Arc::clone(&config);
                     tokio::spawn(async move {
                         if let Err(e) =
-                            handle_new_connection(from, sdp, sig, auth, pm, llm, im, cfg).await
+                            handle_new_connection(from, sdp, session_id, sig, auth, pm, llm, im, cfg).await
                         {
                             crate::elog!("CORE: Handshake error: {e}");
                         }
@@ -209,6 +209,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
                     candidate,
                     sdp_mid,
                     sdp_m_line_index,
+                    session_id,
                     ..
                 } => {
                     crate::log!("ICE_GATHER: Received remote ICE candidate: {}", candidate);
@@ -217,6 +218,11 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
                         let map = pm.lock().await;
                         if let Some(rtc_conn) = map.get(&from) {
                             let conn = rtc_conn.lock().await;
+                            let active_sid = conn.session_id.lock().await;
+                            if active_sid.is_some() && active_sid.as_ref() != session_id.as_ref() {
+                                crate::log!("ICE_GATHER: Discarding stale remote candidate due to mismatched session ID ({:?} vs {:?})", session_id, active_sid);
+                                return;
+                            }
                             if let Err(e) = conn
                                 .add_remote_candidate(candidate, sdp_mid, sdp_m_line_index)
                                 .await
@@ -236,6 +242,7 @@ async fn run_service(config: config::HostConfig) -> Result<(), Box<dyn std::erro
 async fn handle_new_connection(
     client_id: String,
     sdp_offer: String,
+    session_id: Option<String>,
     signaling_client: Arc<SignalingClient>,
     auth_manager: Arc<AuthManager>,
     peer_map: PeerMap,
@@ -244,6 +251,13 @@ async fn handle_new_connection(
     config: Arc<config::HostConfig>,
 ) -> Result<(), String> {
     let rtc_conn = Arc::new(Mutex::new(RTCConn::new().await.map_err(|e| e.to_string())?));
+
+    // Store the handshake session ID on the connection object
+    {
+        let conn = rtc_conn.lock().await;
+        let mut active_sid = conn.session_id.lock().await;
+        *active_sid = session_id.clone();
+    }
 
     // Manage sessions
     {
@@ -262,10 +276,12 @@ async fn handle_new_connection(
         let r_conn = rtc_conn.lock().await;
         let sig = Arc::clone(&signaling_client);
         let cid = client_id.clone();
+        let sid = session_id.clone();
         r_conn.on_ice_candidate(move |candidate| {
             if let Some(c) = candidate {
                 let sig_cl = Arc::clone(&sig);
                 let cid_cl = cid.clone();
+                let sid_cl = sid.clone();
                 tokio::spawn(async move {
                     if let Ok(init) = c.to_json() {
                         crate::log!(
@@ -278,8 +294,9 @@ async fn handle_new_connection(
                                 init.candidate,
                                 init.sdp_mid,
                                 init.sdp_mline_index,
+                                sid_cl,
                             )
-                            .await;
+                                .await;
                     }
                 });
             }
@@ -355,7 +372,7 @@ async fn handle_new_connection(
         };
 
         signaling_client
-            .send_answer(&client_id, answer.sdp)
+            .send_answer(&client_id, answer.sdp, session_id.clone())
             .await
             .map_err(|e| e.to_string())?;
         Ok::<(), String>(())

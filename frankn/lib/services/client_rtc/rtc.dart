@@ -89,6 +89,8 @@ abstract class RtcClientBase {
 
   void disconnectFromHost();
 
+  void _transitionTo(HostConnectionState nextState, String reason);
+
   /// Returns current Unix timestamp (seconds since epoch).
   /// Used for message ordering and security validation.
   int getTimestamp();
@@ -295,6 +297,15 @@ class RtcClient extends RtcClientBase
 
   @override
   RTCPeerConnection? peerConnection;
+
+  // ========== CONNECTION ATTEMPT TRACKING ==========
+  RtcConnectionAttempt? activeAttempt;
+  int _connectionGeneration = 0;
+  int get connectionGeneration => _connectionGeneration;
+
+  void incrementGeneration() {
+    _connectionGeneration++;
+  }
 
   // ========== WEBRTC DATA CHANNELS ==========
 
@@ -522,5 +533,48 @@ class RtcClient extends RtcClientBase
     } catch (e) {
       log("Send Error: $e");
     }
+  }
+}
+
+/// Centralized connection phase timeouts
+class ConnectionTimeouts {
+  static const Duration signaling = Duration(seconds: 10);
+  static const Duration ice = Duration(seconds: 15);
+  static const Duration authentication = Duration(seconds: 5);
+}
+
+/// Idempotent, thread-safe resource manager class for a single physical connection handshake attempt
+class RtcConnectionAttempt {
+  final int generationId;
+  final String sessionUuid;
+  
+  final WebSocketChannel signalingSocket;
+  final RTCPeerConnection peerConnection;
+  Timer? timeoutTimer;
+  
+  bool _isDisposed = false;
+  bool get isDisposed => _isDisposed;
+  
+  RtcConnectionAttempt({
+    required this.generationId,
+    required this.sessionUuid,
+    required this.signalingSocket,
+    required this.peerConnection,
+  });
+
+  void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    
+    timeoutTimer?.cancel();
+    
+    // Detach all listeners before disposing peer connection to prevent callback leakage
+    peerConnection.onConnectionState = null;
+    peerConnection.onIceCandidate = null;
+    peerConnection.onIceConnectionState = null;
+    peerConnection.onSignalingState = null;
+    
+    try { signalingSocket.sink.close(); } catch (_) {}
+    try { peerConnection.dispose(); } catch (_) {}
   }
 }

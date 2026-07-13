@@ -36,17 +36,143 @@ mixin RtcConnection on RtcClientBase {
     return drained;
   }
 
+  /// Transition reduction state machine with validation and structured logging
+  @override
+  void _transitionTo(HostConnectionState nextState, String reason) {
+    final client = this as RtcClient;
+    final current = client.currentHostState;
+    if (nextState == current) return;
+
+    // Transition validation checks
+    if (current == HostConnectionState.disconnecting && nextState != HostConnectionState.disconnected) {
+      log("[FSM] Ignored invalid state transition: $current -> $nextState ($reason)");
+      return;
+    }
+
+    final gen = client.activeAttempt?.generationId ?? client.connectionGeneration;
+    final session = client.activeAttempt?.sessionUuid.substring(0, 8) ?? "none";
+    
+    // Structured Logging
+    log("[LINK] [Gen: $gen] [Session: $session] [State: $current -> $nextState] ($reason)");
+
+    client.currentHostState = nextState;
+    hostStateController.add(nextState);
+
+    _handleStateEffects(current, nextState);
+  }
+
+  /// Manages state-specific escape timeouts to prevent hangs
+  void _startTimeoutTimer(Duration duration, String stateName) {
+    final client = this as RtcClient;
+    final gen = client.connectionGeneration;
+    client.activeAttempt?.timeoutTimer?.cancel();
+    client.activeAttempt?.timeoutTimer = Timer(duration, () {
+      if (client.connectionGeneration == gen &&
+          client.currentHostState != HostConnectionState.authenticated &&
+          client.currentHostState != HostConnectionState.disconnected) {
+        _transitionTo(HostConnectionState.failed, "Timeout during connection stage: $stateName");
+      }
+    });
+  }
+
+  /// Centralized state change side-effects handler
+  void _handleStateEffects(HostConnectionState oldState, HostConnectionState newState) {
+    final client = this as RtcClient;
+
+    // Timeout orchestration
+    if (newState == HostConnectionState.connecting) {
+      _startTimeoutTimer(ConnectionTimeouts.signaling, "connecting");
+    } else if (newState == HostConnectionState.signaling) {
+      _startTimeoutTimer(ConnectionTimeouts.signaling, "signaling");
+    } else if (newState == HostConnectionState.iceConnecting) {
+      _startTimeoutTimer(ConnectionTimeouts.ice, "iceConnecting");
+    } else if (newState == HostConnectionState.authenticating) {
+      _startTimeoutTimer(ConnectionTimeouts.authentication, "authenticating");
+    } else if (newState == HostConnectionState.authenticated ||
+               newState == HostConnectionState.disconnected ||
+               newState == HostConnectionState.failed) {
+      client.activeAttempt?.timeoutTimer?.cancel();
+    }
+
+    // Background Service management
+    if (newState == HostConnectionState.authenticated) {
+      final hostName = client.currentHostName ?? "Remote PC";
+      startBackgroundService(
+        title: "☁️ $hostName",
+        text: '⚡ Connected to Host',
+      );
+    } else if (newState == HostConnectionState.connecting ||
+               newState == HostConnectionState.signaling ||
+               newState == HostConnectionState.iceConnecting ||
+               newState == HostConnectionState.authenticating ||
+               newState == HostConnectionState.reconnectWaiting) {
+      if (!isIntentionalDisconnect && client.firstDisconnectTime != null) {
+        final hostName = client.currentHostName ?? "Remote PC";
+        updateBackgroundService(
+          title: "☁️ [RECONNECTING] // $hostName",
+          text: '⚡ Connection unstable. Retrying...',
+        );
+      }
+    } else if (newState == HostConnectionState.disconnected ||
+               newState == HostConnectionState.failed) {
+      if (isIntentionalDisconnect || isAuthFailed) {
+        stopBackgroundService();
+      } else {
+        final hostName = client.currentHostName ?? "Remote PC";
+        updateBackgroundService(
+          title: "☁️ [RECONNECTING] // $hostName",
+          text: '⚡ Connection unstable. Retrying...',
+        );
+      }
+    }
+
+    // Automatic reconnection logic
+    if (newState == HostConnectionState.disconnected || newState == HostConnectionState.failed) {
+      _clearHostConnections();
+
+      if (!isIntentionalDisconnect && !isAuthFailed && currentHostId != null) {
+        firstDisconnectTime ??= DateTime.now();
+        requestHostList();
+
+        final elapsed = DateTime.now().difference(firstDisconnectTime!).inSeconds;
+        if (elapsed < _reconnectWindowSeconds) {
+          _transitionTo(HostConnectionState.reconnectWaiting, "Scheduling reconnect retry");
+          
+          _reconnectTimer?.cancel();
+          _reconnectTimer = Timer(const Duration(seconds: 3), () async {
+            _reconnectTimer = null;
+            if (currentHostId != null && !isIntentionalDisconnect) {
+              if (client.sigState != SignalConnectionState.connected) {
+                log("[RECONNECT] Signaling server offline. Postponing neural P2P link retry.");
+                _reconnectTimer = Timer(const Duration(seconds: 2), () async {
+                  if (currentHostId != null && !isIntentionalDisconnect) {
+                    _transitionTo(HostConnectionState.connecting, "Retrying connection after signaling check");
+                    connectToHost(currentHostId!);
+                  }
+                });
+              } else {
+                _transitionTo(HostConnectionState.connecting, "Retrying connection");
+                connectToHost(currentHostId!);
+              }
+            }
+          });
+        } else {
+          log("[RECONNECT] Reconnection window exceeded. Stopping retry loop.");
+          firstDisconnectTime = null;
+          currentHostId = null;
+          _transitionTo(HostConnectionState.disconnected, "Timeout window exceeded");
+        }
+      } else {
+        firstDisconnectTime = null;
+        if (isIntentionalDisconnect) {
+          currentHostId = null;
+          currentHostName = null;
+        }
+      }
+    }
+  }
+
   /// Initiates a WebRTC P2P connection to the specified host.
-  ///
-  /// This method handles the complete connection establishment process:
-  /// 1. Parameter validation and state initialization
-  /// 2. Cleanup of previous connections
-  /// 3. WebRTC peer connection creation with STUN servers
-  /// 4. Data channel creation in strict order (prevents m-line conflicts)
-  /// 5. Event handler setup for messages and state changes
-  /// 6. SDP offer creation and signaling via WebSocket
-  ///
-  /// The connection process is asynchronous and updates state throughout.
   @override
   Future<void> connectToHost(
     String hostId, {
@@ -62,7 +188,7 @@ mixin RtcConnection on RtcClientBase {
     currentHostId = hostId;
     if (hostName != null) currentHostName = hostName;
 
-    // Aggressively reset lifecycle flags for the new connection attempt
+    // Reset lifecycle flags for the connection attempt
     isAuthFailed = false;
     isIntentionalDisconnect = false;
     firstDisconnectTime = null;
@@ -71,33 +197,33 @@ mixin RtcConnection on RtcClientBase {
 
     log("Initiating P2P to ${currentHostName ?? hostId}");
 
+    // Generate unique session identifier and increment local connection generation
+    final sessionUuid = const Uuid().v4();
+    final client = this as RtcClient;
+    client.incrementGeneration();
+    final attemptGen = client.connectionGeneration;
+
     try {
       // Ensure any previous connection is completely cleaned up
       await _clearHostConnections();
+      _transitionTo(HostConnectionState.connecting, "Initiating WebRTC setup");
 
       // WebRTC configuration with redundant STUN servers for NAT traversal
-      // Consistent with frankn-host/src/sys/rtc.rs for optimal compatibility
       final config = {
         'iceServers': [
-          // Google STUN servers (primary - most reliable)
           {'urls': 'stun:stun.l.google.com:19302'},
           {'urls': 'stun:stun1.l.google.com:19302'},
           {'urls': 'stun:stun2.l.google.com:19302'},
           {'urls': 'stun:stun3.l.google.com:19302'},
           {'urls': 'stun:stun4.l.google.com:19302'},
-
-          // Mozilla STUN (independent provider for redundancy)
           {'urls': 'stun:stun.services.mozilla.com'},
-
-          // Twilio STUN (enterprise-grade reliability)
           {'urls': 'stun:global.stun.twilio.com:3478'},
         ],
         'sdpSemantics': 'unified-plan',
-        'iceCandidatePoolSize':
-            10, // Pre-gather candidates for faster connection
-        'iceTransportPolicy': 'all', // Allow both relay and direct connections
-        'rtcpMuxPolicy': 'require', // Multiplex RTP/RTCP for efficiency
-        'bundlePolicy': 'max-bundle', // Bundle media streams when possible
+        'iceCandidatePoolSize': 10,
+        'iceTransportPolicy': 'all',
+        'rtcpMuxPolicy': 'require',
+        'bundlePolicy': 'max-bundle',
       };
 
       peerConnection = await createPeerConnection(config);
@@ -113,8 +239,8 @@ mixin RtcConnection on RtcClientBase {
         'frankn_ssh',
         RTCDataChannelInit()..id = 2,
       );
-      // Special handler for SSH (buffered until UI takes over)
       sshDC!.onMessage = (msg) {
+        if (attemptGen != client.connectionGeneration) return;
         final data = msg.isBinary ? msg.binary : utf8.encode(msg.text);
         final bytes = Uint8List.fromList(data);
         if (!_sshHandlerActive) {
@@ -149,16 +275,16 @@ mixin RtcConnection on RtcClientBase {
 
       // Monitor main command channel state for connection progress
       genDC!.onDataChannelState = (dcState) {
+        if (attemptGen != client.connectionGeneration) return;
         log("DC State [frankn_cmd]: $dcState");
         switch (dcState) {
           case RTCDataChannelState.RTCDataChannelConnecting:
-            updateHostState(HostConnectionState.connecting);
+            _transitionTo(HostConnectionState.connecting, "Data channel connecting");
             break;
           case RTCDataChannelState.RTCDataChannelOpen:
             log("P2P Uplink Established.");
             firstDisconnectTime = null; // Reset reconnection timer
-            updateHostState(HostConnectionState.connected);
-            // Auto-authenticate if password was provided
+            _transitionTo(HostConnectionState.authenticating, "Data channel open, authenticating");
             if (currentPassword != null) {
               authenticate(currentPassword!);
             }
@@ -166,20 +292,24 @@ mixin RtcConnection on RtcClientBase {
           case RTCDataChannelState.RTCDataChannelClosed:
           case RTCDataChannelState.RTCDataChannelClosing:
             log("DC [frankn_cmd] Severed. Triggering UI Reset.");
-            updateHostState(HostConnectionState.disconnected);
+            _transitionTo(HostConnectionState.disconnected, "Data channel closed");
             break;
         }
       };
 
       // Monitor overall peer connection state
       peerConnection!.onConnectionState = (ps) {
+        if (attemptGen != client.connectionGeneration) return;
         log("PC State: $ps");
         switch (ps) {
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
+            _transitionTo(HostConnectionState.iceConnecting, "ICE gathering and connection active");
+            break;
           case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
           case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
           case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
-            log("Neural Link Severed (PC State). Resetting UI.");
-            updateHostState(HostConnectionState.disconnected);
+            log("Neural Link Severed (PC State: $ps). Resetting UI.");
+            _transitionTo(HostConnectionState.disconnected, "Peer connection lost");
             break;
           default:
             break;
@@ -188,9 +318,11 @@ mixin RtcConnection on RtcClientBase {
 
       // Forward ICE candidates to signaling server for NAT traversal
       peerConnection!.onIceCandidate = (candidate) {
+        if (attemptGen != client.connectionGeneration) return;
         log("ICE_GATHER: Generated local ICE candidate: ${candidate.candidate}");
         _sendToSignaling(SignalingMessage.IceCandidate, {
           'to': hostId,
+          'session_id': sessionUuid,
           'candidate': candidate.candidate,
           'sdp_mid': candidate.sdpMid,
           'sdp_m_line_index': candidate.sdpMLineIndex,
@@ -220,153 +352,53 @@ mixin RtcConnection on RtcClientBase {
         throw Exception("Signaling Server offline. Handshake aborted.");
       }
 
+      // Instantiate the active attempt object cleanly (RAII pattern)
+      client.activeAttempt = RtcConnectionAttempt(
+        generationId: attemptGen,
+        sessionUuid: sessionUuid,
+        signalingSocket: signalingChannel!,
+        peerConnection: peerConnection!,
+      );
+
+      _transitionTo(HostConnectionState.signaling, "Sending SDP Offer");
       _sendToSignaling(SignalingMessage.Offer, {
         'to': hostId,
+        'session_id': sessionUuid,
         'sdp': offer.sdp,
       });
     } catch (e) {
       log("CORE ERROR: Failed to initialize WebRTC stack: $e");
-      isAuthFailed = false; // Reset so UI can retry
-      updateHostState(HostConnectionState.failed);
+      isAuthFailed = false;
+      _transitionTo(HostConnectionState.failed, "Initialization error: $e");
     } finally {
       _isConnectingInternal = false;
     }
   }
 
   void _setupChannelHandlers(RTCDataChannel channel) {
+    final client = this as RtcClient;
+    final attemptGen = client.connectionGeneration;
     channel.onMessage = (msg) {
+      if (attemptGen != client.connectionGeneration) return;
       handleHostMessage(msg.isBinary ? msg.binary : msg.text);
     };
   }
 
-  /// Updates the host connection state with automatic reconnection logic.
-  ///
-  /// This method handles state transitions and implements the reconnection policy:
-  /// - Connected: Resets timers and flags
-  /// - Disconnected/Failed: Attempts auto-reconnection within 30-second window
-  /// - After timeout: Requires manual reconnection
-  ///
-  /// Prevents redundant state updates and manages cleanup on disconnection.
-  @override
-  void updateHostState(HostConnectionState newState) {
-    final client = this as RtcClient;
-
-    // Avoid redundant state transitions
-    if (newState == currentHostState) return;
-
-    switch (newState) {
-      case HostConnectionState.connected:
-        firstDisconnectTime = null;
-        isIntentionalDisconnect = false;
-        break;
-
-      case HostConnectionState.disconnected:
-      case HostConnectionState.failed:
-        if (!isIntentionalDisconnect &&
-            !isAuthFailed &&
-            currentHostId != null) {
-          firstDisconnectTime ??= DateTime.now();
-          requestHostList();
-
-          final elapsed = DateTime.now()
-              .difference(firstDisconnectTime!)
-              .inSeconds;
-
-          if (elapsed < _reconnectWindowSeconds) {
-            log(
-              "Neural link unstable. Retrying... (${_reconnectWindowSeconds - elapsed}s remaining)",
-            );
-            newState = HostConnectionState.connecting;
-            _clearHostConnections();
-
-            // Cancel any pending reconnect timer before scheduling a new one
-            _reconnectTimer?.cancel();
-            _reconnectTimer = Timer(const Duration(seconds: 3), () async {
-              _reconnectTimer = null;
-              if (currentHostId != null && !isIntentionalDisconnect) {
-                final client = this as RtcClient;
-                if (client.sigState != SignalConnectionState.connected) {
-                  log("UPLINK: Signaling server offline. Postponing neural P2P link retry.");
-                  _reconnectTimer = Timer(const Duration(seconds: 2), () async {
-                    if (currentHostId != null && !isIntentionalDisconnect) {
-                      await _clearHostConnections();
-                      connectToHost(currentHostId!);
-                    }
-                  });
-                } else {
-                  await _clearHostConnections();
-                  connectToHost(currentHostId!);
-                }
-              }
-            });
-          } else {
-            log("Uplink timeout. Threshold exceeded.");
-            firstDisconnectTime = null;
-            currentHostId = null;
-          }
-        } // If disconnection is intentional
-        else {
-          firstDisconnectTime = null;
-          if (isIntentionalDisconnect) {
-            currentHostId = null;
-            currentHostName = null;
-          }
-        }
-        break;
-      default:
-        break;
-    }
-
-    client.currentHostState = newState;
-    hostStateController.add(newState);
-
-    // Manage persistent notification based on Host Connection State
-    if (newState == HostConnectionState.authenticated) {
-      final hostName = client.currentHostName ?? "Remote PC";
-      startBackgroundService(
-        title: "☁️ $hostName",
-        text: '⚡ Connected to Host',
-      );
-    } else if (newState == HostConnectionState.connecting) {
-      if (!isIntentionalDisconnect && client.firstDisconnectTime != null) {
-        final hostName = client.currentHostName ?? "Remote PC";
-        updateBackgroundService(
-          title: "☁️ [RECONNECTING] // $hostName",
-          text: '⚡ Neural link unstable. Retrying connection...',
-        );
-      }
-    } else if (newState == HostConnectionState.disconnected ||
-        newState == HostConnectionState.failed) {
-      stopBackgroundService();
-    }
-
-    if (newState == HostConnectionState.disconnected ||
-        newState == HostConnectionState.failed) {
-      _clearHostConnections();
-      log("Neural Link Severed.");
-    }
-  }
-
   /// Gracefully disconnects from the host and prevents automatic reconnection.
-  ///
-  /// Sets the intentional disconnect flag to prevent auto-reconnection logic
-  /// and updates state to trigger cleanup.
   @override
   void disconnectFromHost() {
     isIntentionalDisconnect = true;
-    updateHostState(HostConnectionState.disconnected);
+    _transitionTo(HostConnectionState.disconnected, "Intentional disconnect requested");
   }
 
   /// Completely cleans up all WebRTC connections and resources.
-  ///
-  /// Closes all data channels and disposes of the peer connection.
-  /// Nullifies all connection objects to prevent reuse.
-  /// Used both during reconnection and final disconnection.
   Future<void> _clearHostConnections() async {
-    // 1. Invalidate session token to prevent stale transmission
+    final client = this as RtcClient;
+    
+    // Invalidate session token to prevent stale transmission
     AuthService().clearToken();
 
-    // 2. Ensure active file transfer streams and maps are closed and purged
+    // Ensure active file transfer streams and maps are closed and purged
     if (this is RtcMessageHandler) {
       (this as RtcMessageHandler).clearActiveTransfers();
     }
@@ -375,41 +407,8 @@ mixin RtcConnection on RtcClientBase {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
 
-    try {
-      await genDC?.close();
-    } catch (e) {
-      log("WARN: Error closing genDC: $e");
-    }
-    try {
-      await fsDC?.close();
-    } catch (e) {
-      log("WARN: Error closing fsDC: $e");
-    }
-    try {
-      await mediaDC?.close();
-    } catch (e) {
-      log("WARN: Error closing mediaDC: $e");
-    }
-    try {
-      await sshDC?.close();
-    } catch (e) {
-      log("WARN: Error closing sshDC: $e");
-    }
-    try {
-      await aiDC?.close();
-    } catch (e) {
-      log("WARN: Error closing aiDC: $e");
-    }
-    try {
-      await inputDC?.close();
-    } catch (e) {
-      log("WARN: Error closing inputDC: $e");
-    }
-    try {
-      await peerConnection?.dispose();
-    } catch (e) {
-      log("WARN: Error disposing peerConnection: $e");
-    }
+    client.activeAttempt?.dispose();
+    client.activeAttempt = null;
 
     genDC = null;
     fsDC = null;
@@ -421,6 +420,11 @@ mixin RtcConnection on RtcClientBase {
     // Reset SSH buffering state
     _sshEarlyBuffer.clear();
     _sshHandlerActive = false;
+  }
+
+  @override
+  void updateHostState(HostConnectionState newState) {
+    _transitionTo(newState, "External state trigger");
   }
 
   @override

@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_highlighter/flutter_highlighter.dart';
@@ -17,14 +19,6 @@ import 'package:frankn/widgets/dohee_chat/neo_latex_inline_syntax.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 
-class ViewerColors {
-  static const primary = Color(0xFF6366F1); // Indigo
-  static const primaryLight = Color(0xFF818CF8); // Indigo Light
-  static const accent = Color(0xFFEC4899); // Pink/Fuchsia Accent
-  static const textWhite = Color(0xFFE0E0E0);
-  static const textGrey = Color(0xFFAAAAAA);
-}
-
 class MarkdownViewerScreen extends StatefulWidget {
   final RtcThinClient client;
   final String remotePath;
@@ -41,16 +35,63 @@ class MarkdownViewerScreen extends StatefulWidget {
   State<MarkdownViewerScreen> createState() => _MarkdownViewerScreenState();
 }
 
+class ViewerColors {
+  static const primary = Color(0xFF6366F1); // Indigo
+  static const primaryLight = Color(0xFF818CF8); // Indigo Light
+  static const accent = Color(0xFFEC4899); // Pink/Fuchsia Accent
+  static const textWhite = Color(0xFFE0E0E0);
+  static const textGrey = Color(0xFFAAAAAA);
+}
+
 class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
     with FileTransferMixin {
-  @override
-  RtcThinClient get client => widget.client;
-
   String? _activeDownloadId;
+
   StreamSubscription? _transferSub;
   String _markdownContent = "";
   bool _isInitialized = false;
   bool _hasError = false;
+  @override
+  RtcThinClient get client => widget.client;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.voidBlack,
+      body: NestedScrollView(
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return <Widget>[
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              titleSpacing: 0,
+              toolbarHeight: 64,
+              title: _buildHeader(innerBoxIsScrolled),
+            ),
+          ];
+        },
+        body: Builder(builder: (context) => _buildBody(context)),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _transferSub?.cancel();
+    if (!_isInitialized && _activeDownloadId != null) {
+      client.sendIntent(IsolateAction.cancelTransfer, {
+        'id': _activeDownloadId,
+      });
+      client.log("MARKDOWN VIEWER: Cancelled background download due to exit");
+    }
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -84,151 +125,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
   @override
   void refreshDirectory() {}
 
-  void _loadFile() async {
-    if (mounted) {
-      setState(() {
-        isLoading = true;
-        _hasError = false;
-      });
-    }
-    _activeDownloadId = await downloadFile(
-      widget.remotePath,
-      showNotification: false,
-      isTemporary: true,
-    );
-  }
-
-  Future<void> _readLocalFile(String path) async {
-    try {
-      final file = File(path);
-      final content = await file.readAsString();
-      if (mounted) {
-        setState(() {
-          _markdownContent = content;
-          _isInitialized = true;
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      client.log("MARKDOWN VIEWER ERROR: Failed to read file: $e");
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          isLoading = false;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _transferSub?.cancel();
-    if (!_isInitialized && _activeDownloadId != null) {
-      client.sendIntent(
-        IsolateAction.cancelTransfer,
-        {'id': _activeDownloadId},
-      );
-      client.log("MARKDOWN VIEWER: Cancelled background download due to exit");
-    }
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    super.dispose();
-  }
-
-  void _switchToEditor() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CodeEditorScreen(
-          client: widget.client,
-          remotePath: widget.remotePath,
-          fileName: widget.fileName,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        height: 56,
-        decoration: BoxDecoration(
-          color: AppColors.deepSpace.withValues(alpha: 0.9),
-          border: const Border(
-            bottom: BorderSide(color: ViewerColors.primary, width: 0.5),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(
-                Icons.chevron_left,
-                color: ViewerColors.primaryLight,
-                size: 24,
-              ),
-              onPressed: () => Navigator.pop(context),
-            ),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.fileName.toUpperCase(),
-                    style: GoogleFonts.jetBrainsMono(
-                      color: AppColors.textWhite,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    widget.remotePath,
-                    style: GoogleFonts.jetBrainsMono(
-                      color: AppColors.textGrey,
-                      fontSize: 8,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              icon: const Icon(
-                Icons.edit_note,
-                color: ViewerColors.primaryLight,
-                size: 18,
-              ),
-              label: Text(
-                "EDIT",
-                style: GoogleFonts.jetBrainsMono(
-                  color: ViewerColors.primaryLight,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                backgroundColor: AppColors.voidBlack,
-                shape: RoundedRectangleBorder(
-                  side: const BorderSide(color: ViewerColors.primary, width: 0.5),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              onPressed: _switchToEditor,
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
+  Widget _buildBody(BuildContext context) {
     if (isLoading) {
       return Center(
         child: Column(
@@ -254,7 +151,11 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: AppColors.errorRed, size: 48),
+            const Icon(
+              Icons.error_outline,
+              color: AppColors.errorRed,
+              size: 48,
+            ),
             const SizedBox(height: 16),
             Text(
               "FAILED TO LOAD DOCUMENT",
@@ -273,7 +174,9 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
               ),
               child: Text(
                 "RETRY CONNECTION",
-                style: GoogleFonts.jetBrainsMono(color: ViewerColors.primaryLight),
+                style: GoogleFonts.jetBrainsMono(
+                  color: ViewerColors.primaryLight,
+                ),
               ),
             ),
           ],
@@ -294,6 +197,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
     }
 
     return Markdown(
+      controller: PrimaryScrollController.of(context),
       data: _markdownContent,
       selectable: true,
       builders: {
@@ -301,10 +205,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
         'latex': NeoLatexElementBuilder(),
       },
       extensionSet: md.ExtensionSet(
-        [
-          LatexBlockSyntax(),
-          ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
-        ],
+        [LatexBlockSyntax(), ...md.ExtensionSet.gitHubFlavored.blockSyntaxes],
         [
           LatexInlineSyntax(),
           NeoLatexInlineSyntax(),
@@ -345,9 +246,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
             ),
           ),
         ),
-        codeblockDecoration: const BoxDecoration(
-          color: Colors.transparent,
-        ),
+        codeblockDecoration: const BoxDecoration(color: Colors.transparent),
         codeblockPadding: EdgeInsets.zero,
         tableHead: GoogleFonts.inter(
           color: ViewerColors.primaryLight,
@@ -358,14 +257,35 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
           color: Colors.white.withValues(alpha: 0.85),
           fontSize: 13,
         ),
-        tableCellsPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        tableCellsPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 10,
+        ),
         tableBorder: TableBorder(
-          horizontalInside: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.15), width: 0.5),
-          verticalInside: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.15), width: 0.5),
-          top: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
-          bottom: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
-          left: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
-          right: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
+          horizontalInside: BorderSide(
+            color: ViewerColors.primary.withValues(alpha: 0.15),
+            width: 0.5,
+          ),
+          verticalInside: BorderSide(
+            color: ViewerColors.primary.withValues(alpha: 0.15),
+            width: 0.5,
+          ),
+          top: BorderSide(
+            color: ViewerColors.primary.withValues(alpha: 0.3),
+            width: 1.0,
+          ),
+          bottom: BorderSide(
+            color: ViewerColors.primary.withValues(alpha: 0.3),
+            width: 1.0,
+          ),
+          left: BorderSide(
+            color: ViewerColors.primary.withValues(alpha: 0.3),
+            width: 1.0,
+          ),
+          right: BorderSide(
+            color: ViewerColors.primary.withValues(alpha: 0.3),
+            width: 1.0,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         tableColumnWidth: const IntrinsicColumnWidth(),
@@ -373,17 +293,119 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.voidBlack,
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: _buildBody(),
+  Widget _buildHeader(bool innerBoxIsScrolled) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+        child: Container(
+          height: 64,
+          decoration: BoxDecoration(
+            color: innerBoxIsScrolled
+                ? AppColors.deepSpace.withValues(alpha: 0.6)
+                : AppColors.deepSpace.withValues(alpha: 0.9),
+            border: Border(
+              bottom: BorderSide(
+                color: innerBoxIsScrolled
+                    ? Colors.transparent
+                    : ViewerColors.primary.withValues(alpha: 0.3),
+                width: 0.5,
+              ),
+            ),
           ),
-        ],
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.chevron_left,
+                    color: ViewerColors.primaryLight,
+                    size: 24,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: Text(
+                    widget.fileName,
+                    style: GoogleFonts.jetBrainsMono(
+                      color: AppColors.textWhite,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(
+                    Icons.edit,
+                    color: ViewerColors.primaryLight,
+                    size: 18,
+                  ),
+                  onPressed: _switchToEditor,
+                  style: IconButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(36, 36),
+                    backgroundColor: AppColors.voidBlack.withValues(alpha: 0.5),
+                    shape: const CircleBorder(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _loadFile() async {
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+        _hasError = false;
+      });
+    }
+    _activeDownloadId = await downloadFile(
+      widget.remotePath,
+      showNotification: false,
+      isTemporary: true,
+    );
+  }
+
+  Future<void> _readLocalFile(String path) async {
+    try {
+      final file = File(path);
+      final content = await file.readAsString();
+      if (mounted) {
+        setState(() {
+          _markdownContent = content;
+          _isInitialized = true;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      client.log("MARKDOWN VIEWER ERROR: Failed to read file: $e");
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _switchToEditor() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CodeEditorScreen(
+          client: widget.client,
+          remotePath: widget.remotePath,
+          fileName: widget.fileName,
+        ),
       ),
     );
   }
@@ -414,7 +436,10 @@ class _ViewerCodeElementBuilder extends MarkdownElementBuilder {
       decoration: BoxDecoration(
         color: Colors.transparent, // Fade in with the background
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: ViewerColors.primary.withValues(alpha: 0.3), width: 1.0),
+        border: Border.all(
+          color: ViewerColors.primary.withValues(alpha: 0.3),
+          width: 1.0,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,7 +448,10 @@ class _ViewerCodeElementBuilder extends MarkdownElementBuilder {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(color: ViewerColors.primary.withValues(alpha: 0.15), width: 0.5),
+                bottom: BorderSide(
+                  color: ViewerColors.primary.withValues(alpha: 0.15),
+                  width: 0.5,
+                ),
               ),
             ),
             child: Row(
