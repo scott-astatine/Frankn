@@ -3,6 +3,7 @@ import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
+import 'package:frankn/widgets/glassy_header.dart';
 
 class LogTerminalScreen extends StatefulWidget {
   final RtcThinClient client;
@@ -37,50 +38,72 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.voidBlack,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(l10n),
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: ListView.builder(
-                  itemCount: _logs.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                           Text(
-                            "> ",
-                            style: TextStyle(
-                              color: AppColors.neonCyan,
-                              fontFamily: 'JetBrainsMonoNerdFont',
-                              fontSize: SettingsService().terminalFontSize,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              _logs.reversed.toList()[index],
-                              style: TextStyle(
-                                fontFamily: 'JetBrainsMonoNerdFont',
-                                color: AppColors.matrixGreen,
-                                fontSize: SettingsService().terminalFontSize,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+      body: NestedScrollView(
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return <Widget>[
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              titleSpacing: 0,
+              toolbarHeight: 64,
+              title: GlassyHeader(
+                innerBoxIsScrolled: innerBoxIsScrolled,
+                child: _buildHeader(l10n),
               ),
             ),
-          ],
+          ];
+        },
+        body: Builder(
+          builder: (context) {
+            return Column(
+              children: [
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: ListView.builder(
+                      itemCount: _logs.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                               Text(
+                                "> ",
+                                style: TextStyle(
+                                  color: AppColors.neonCyan,
+                                  fontFamily: 'JetBrainsMonoNerdFont',
+                                  fontSize: SettingsService().terminalFontSize,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  _logs.reversed.toList()[index],
+                                  style: TextStyle(
+                                    fontFamily: 'JetBrainsMonoNerdFont',
+                                    color: AppColors.matrixGreen,
+                                    fontSize: SettingsService().terminalFontSize,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

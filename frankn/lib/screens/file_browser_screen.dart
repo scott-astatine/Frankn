@@ -11,6 +11,7 @@ import 'package:frankn/utils/file_browser/file_browser_utils.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/widgets/file_browser_item.dart';
+import 'package:frankn/widgets/glassy_header.dart';
 
 class FileBrowserScreen extends StatefulWidget {
   final RtcThinClient client;
@@ -32,49 +33,73 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.voidBlack,
-      appBar: FileBrowserAppBar.buildDefault(
-        context: context,
-        currentPath: _browserState.currentPath,
-        isGridView: _isGridView,
-        selectedCount: _browserState.selectedPaths.length,
-        onToggleView: () => setState(() => _isGridView = !_isGridView),
-        onSearch: () => _browserState.setIsSearching(true),
-        onNavigateUp: () => _browserState.navigateUp(),
-        onClearSelection: () => _browserState.clearSelection(),
-        onDeleteSelected: _handleBulkDelete,
-        onDownloadSelected: _handleBulkDownload,
-        isSearching: _browserState.isSearching,
-        searchController: _browserState.searchController,
-        onSearchChanged: (val) => _browserState.setSearchQuery(val),
-        onExitSearch: () => _browserState.exitSearch(),
-        showHidden: _browserState.showHidden,
-        onToggleShowHidden: () {
-          _browserState.setShowHidden(!_browserState.showHidden);
-        },
-        onUpload: () => uploadFile(_browserState.currentPath),
-        onSort: (val) {
-          if (val == "name") _browserState.setSortBy(SortOption.name);
-          if (val == "size") _browserState.setSortBy(SortOption.size);
-          if (val == "modified") _browserState.setSortBy(SortOption.modified);
-        },
-      ),
-      body: Column(
-        children: [
-          FileBrowserAppBar.buildBreadcrumbs(
-            path: _browserState.currentPath,
-            onBreadcrumbTap: (path) {
-              _browserState.setCurrentPath(path);
-              _browserState.refreshDirectory();
-            },
-          ),
-          if (_browserState.isLoading)
-            const LinearProgressIndicator(
-              minHeight: 2,
-              color: AppColors.neonCyan,
+      body: NestedScrollView(
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return <Widget>[
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
               backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              titleSpacing: 0,
+              toolbarHeight: 64,
+              title: GlassyHeader(
+                innerBoxIsScrolled: innerBoxIsScrolled,
+                child: FileBrowserAppBar.buildDefaultContent(
+                  context: context,
+                  currentPath: _browserState.currentPath,
+                  isGridView: _isGridView,
+                  selectedCount: _browserState.selectedPaths.length,
+                  onToggleView: () => setState(() => _isGridView = !_isGridView),
+                  onSearch: () => _browserState.setIsSearching(true),
+                  onNavigateUp: () => _browserState.navigateUp(),
+                  onClearSelection: () => _browserState.clearSelection(),
+                  onDeleteSelected: _handleBulkDelete,
+                  onDownloadSelected: _handleBulkDownload,
+                  isSearching: _browserState.isSearching,
+                  searchController: _browserState.searchController,
+                  onSearchChanged: (val) => _browserState.setSearchQuery(val),
+                  onExitSearch: () => _browserState.exitSearch(),
+                  showHidden: _browserState.showHidden,
+                  onToggleShowHidden: () {
+                    _browserState.setShowHidden(!_browserState.showHidden);
+                  },
+                  onUpload: () => uploadFile(_browserState.currentPath),
+                  onSort: (val) {
+                    if (val == "name") _browserState.setSortBy(SortOption.name);
+                    if (val == "size") _browserState.setSortBy(SortOption.size);
+                    if (val == "modified") _browserState.setSortBy(SortOption.modified);
+                  },
+                ),
+              ),
             ),
-          Expanded(child: _buildMainContent(l10n)),
-        ],
+          ];
+        },
+        body: Builder(
+          builder: (context) {
+            return Column(
+              children: [
+                FileBrowserAppBar.buildBreadcrumbs(
+                  path: _browserState.currentPath,
+                  onBreadcrumbTap: (path) {
+                    _browserState.setCurrentPath(path);
+                    _browserState.refreshDirectory();
+                  },
+                ),
+                if (_browserState.isLoading)
+                  const LinearProgressIndicator(
+                    minHeight: 2,
+                    color: AppColors.neonCyan,
+                    backgroundColor: Colors.transparent,
+                  ),
+                Expanded(child: _buildMainContent(l10n)),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

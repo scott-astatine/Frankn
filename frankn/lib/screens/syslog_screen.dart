@@ -7,6 +7,7 @@ import 'package:frankn/utils/utils.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
+import 'package:frankn/widgets/glassy_header.dart';
 
 class SyslogScreen extends StatefulWidget {
   final RtcThinClient client;
@@ -98,25 +99,31 @@ class _SyslogScreenState extends State<SyslogScreen> {
           lower.contains('fail') ||
           lower.contains('crit') ||
           lower.contains('emerg') ||
-          lower.contains('exception') ||
-          lower.contains('fatal') ||
-          lower.contains('stderr')) {
+          lower.contains('alert') ||
+          lower.contains('fatal')) {
         color = AppColors.errorRed;
-      } else if (lower.contains('warn') || lower.contains('attention')) {
+      } else if (lower.contains('warn')) {
         color = AppColors.cyberYellow;
-      } else if (lower.contains('debug') || lower.contains('dbg') || lower.contains('trace')) {
+      } else if (lower.contains('info') || lower.contains('success')) {
+        color = AppColors.textWhite;
+      } else if (lower.contains('debug')) {
         color = AppColors.textGrey;
-      } else if (lower.contains('info') || lower.contains('stdout') || lower.contains('success')) {
-        color = AppColors.neonCyan;
       }
 
-      spans.add(TextSpan(
-        text: "$line\n",
-        style: TextStyle(color: color),
-      ));
+      spans.add(
+        TextSpan(
+          text: "$line\n",
+          style: TextStyle(color: color),
+        ),
+      );
     }
 
-    return TextSpan(children: spans);
+    return TextSpan(
+      children: spans,
+      style: const TextStyle(
+        fontFamily: 'JetBrainsMonoNerdFont',
+      ),
+    );
   }
 
   void _copyLogsToClipboard() {
@@ -148,33 +155,56 @@ class _SyslogScreenState extends State<SyslogScreen> {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.voidBlack,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(l10n),
-            _buildPriorityChips(),
-            _buildServiceChips(),
-            _buildControlsDock(),
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: SingleChildScrollView(
-                  child: SelectableText.rich(
-                    _parseLogContent(_logContent),
-                    style: TextStyle(
-                      fontFamily: 'JetBrainsMonoNerdFont',
-                      fontWeight: FontWeight.w600,
-                      fontSize: SettingsService().terminalFontSize,
+      body: NestedScrollView(
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return <Widget>[
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              titleSpacing: 0,
+              toolbarHeight: 64,
+              title: GlassyHeader(
+                innerBoxIsScrolled: innerBoxIsScrolled,
+                child: _buildHeader(l10n),
+              ),
+            ),
+          ];
+        },
+        body: Builder(
+          builder: (context) {
+            return Column(
+              children: [
+                const SizedBox(height: 8),
+                _buildPriorityChips(),
+                _buildServiceChips(),
+                _buildControlsDock(),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: SingleChildScrollView(
+                      child: SelectableText.rich(
+                        _parseLogContent(_logContent),
+                        style: TextStyle(
+                          fontFamily: 'JetBrainsMonoNerdFont',
+                          fontWeight: FontWeight.w600,
+                          fontSize: SettingsService().terminalFontSize,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

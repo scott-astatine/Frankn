@@ -8,6 +8,7 @@ import 'package:frankn/widgets/cyber_alert_dialog.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
+import 'package:frankn/widgets/glassy_header.dart';
 
 class ProcessManagerScreen extends StatefulWidget {
   final RtcThinClient client;
@@ -137,27 +138,50 @@ class _ProcessManagerScreenState extends State<ProcessManagerScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.voidBlack,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(l10n),
-            _buildSystemStats(l10n),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _isLoading && _processes.isEmpty
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.neonCyan,
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _processes.length,
-                      itemBuilder: (context, index) =>
-                          _buildProcessRow(_processes[index], l10n),
-                    ),
+      body: NestedScrollView(
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return <Widget>[
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              titleSpacing: 0,
+              toolbarHeight: 64,
+              title: GlassyHeader(
+                innerBoxIsScrolled: innerBoxIsScrolled,
+                child: _buildHeader(l10n),
+              ),
             ),
-          ],
+          ];
+        },
+        body: Builder(
+          builder: (context) {
+            return Column(
+              children: [
+                const SizedBox(height: 8),
+                _buildSystemStats(l10n),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _isLoading && _processes.isEmpty
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.neonCyan,
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _processes.length,
+                          itemBuilder: (context, index) =>
+                              _buildProcessRow(_processes[index], l10n),
+                        ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

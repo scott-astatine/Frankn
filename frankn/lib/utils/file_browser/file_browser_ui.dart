@@ -3,7 +3,7 @@ import 'package:frankn/utils/utils.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
 
 class FileBrowserAppBar {
-  static AppBar buildDefault({
+  static Widget buildDefaultContent({
     required BuildContext context,
     required String currentPath,
     required bool isGridView,
@@ -26,17 +26,22 @@ class FileBrowserAppBar {
     final l10n = AppLocalizations.of(context)!;
 
     if (selectedCount > 0) {
-      return AppBar(
-        title: Text(
-          "$selectedCount ${l10n.selected.toUpperCase()}",
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-        ),
-        backgroundColor: AppColors.voidBlack,
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: onClearSelection,
-        ),
-        actions: [
+      return Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.close, color: AppColors.neonCyan),
+            onPressed: onClearSelection,
+          ),
+          Expanded(
+            child: Text(
+              "$selectedCount ${l10n.selected.toUpperCase()}",
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+                color: AppColors.textWhite,
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.download, color: AppColors.neonCyan),
             onPressed: onDownloadSelected,
@@ -50,26 +55,27 @@ class FileBrowserAppBar {
     }
 
     if (isSearching) {
-      return AppBar(
-        backgroundColor: AppColors.voidBlack,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: onExitSearch,
-        ),
-        title: TextField(
-          controller: searchController,
-          autofocus: true,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
-          decoration: InputDecoration(
-            hintText: l10n.search.toUpperCase(),
-            hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
-            border: InputBorder.none,
-          ),
-          onChanged: onSearchChanged,
-        ),
-        actions: [
+      return Row(
+        children: [
           IconButton(
-            icon: const Icon(Icons.close, size: 20),
+            icon: const Icon(Icons.arrow_back, color: AppColors.neonCyan),
+            onPressed: onExitSearch,
+          ),
+          Expanded(
+            child: TextField(
+              controller: searchController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: l10n.search.toUpperCase(),
+                hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+                border: InputBorder.none,
+              ),
+              onChanged: onSearchChanged,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20, color: AppColors.neonCyan),
             onPressed: () {
               searchController?.clear();
               onSearchChanged?.call("");
@@ -79,13 +85,22 @@ class FileBrowserAppBar {
       );
     }
 
-    return AppBar(
-      title: Text(
-        l10n.fileBrowser.toUpperCase().replaceAll(" ", "_"),
-        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-      ),
-      backgroundColor: AppColors.voidBlack,
-      actions: [
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.neonCyan),
+          onPressed: () => Navigator.pop(context),
+        ),
+        Expanded(
+          child: Text(
+            l10n.fileBrowser.toUpperCase().replaceAll(" ", "_"),
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 14,
+              color: AppColors.neonCyan,
+            ),
+          ),
+        ),
         IconButton(
           icon: Icon(
             isGridView ? Icons.view_list : Icons.grid_view,
