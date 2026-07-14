@@ -49,6 +49,8 @@ class RtcThinClient {
   // Temporary in-memory storage for SSH credentials
   String? lastSshUsername;
   String? lastSshPassword;
+  String? lastNavigatedPath;
+  String? homeDir;
 
   Set<String> onlineHostIds = {};
   List<dynamic> currentHosts = [];
@@ -143,9 +145,12 @@ class RtcThinClient {
             currentHostState == HostConnectionState.failed) {
           lastSshUsername = null;
           lastSshPassword = null;
+          lastNavigatedPath = null;
+          homeDir = null;
         }
         currentHostId = msg.payload['id'];
         currentHostName = msg.payload['name'];
+        homeDir = msg.payload['home_dir'];
         _hostStateController.add(currentHostState);
       case (IsolateType.state, IsolateAction.sigState):
         final stateIndex = msg.payload['state'] as int;

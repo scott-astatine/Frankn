@@ -153,6 +153,10 @@ abstract class RtcClientBase {
   String? get currentHostName;
   set currentHostName(String? value);
 
+  /// Home directory of the user on the remote host.
+  String? get homeDir;
+  set homeDir(String? value);
+
   /// Flag indicating if the last authentication attempt failed.
   bool get isAuthFailed;
   set isAuthFailed(bool value);
@@ -340,6 +344,9 @@ class RtcClient extends RtcClientBase
 
   @override
   String? currentHostName;
+
+  @override
+  String? homeDir;
 
   // ========== RECONNECTION LOGIC ==========
 

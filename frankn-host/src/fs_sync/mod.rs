@@ -1,9 +1,12 @@
 use crate::{HostMessage, utils::Status};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 pub mod transfer;
 pub mod sync;
+
+pub static SANDBOX_HOME: OnceLock<bool> = OnceLock::new();
 
 /// Restricts path access to a specific base directory (sandbox root)
 pub fn check_sandbox(base_dir: &Path, user_path: &str, allow_parent: bool) -> Result<PathBuf, String> {
@@ -47,8 +50,28 @@ pub fn check_sandbox(base_dir: &Path, user_path: &str, allow_parent: bool) -> Re
 
 /// Helper that restricts paths to the user's home directory by default
 pub fn check_sandbox_default(user_path: &str, allow_parent: bool) -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or_else(|| "Home directory not found".to_string())?;
-    check_sandbox(&home, user_path, allow_parent)
+    let is_sandboxed = *SANDBOX_HOME.get().unwrap_or(&false);
+    if is_sandboxed {
+        let home = dirs::home_dir().ok_or_else(|| "Home directory not found".to_string())?;
+        check_sandbox(&home, user_path, allow_parent)
+    } else {
+        let path = if user_path.starts_with('~') {
+            let home = dirs::home_dir().ok_or_else(|| "Home directory not found".to_string())?;
+            if user_path.len() > 1 && (user_path.chars().nth(1) == Some('/') || user_path.chars().nth(1) == Some(std::path::MAIN_SEPARATOR)) {
+                home.join(&user_path[2..])
+            } else if user_path.len() > 1 {
+                home.join(&user_path[1..])
+            } else {
+                home
+            }
+        } else {
+            PathBuf::from(user_path)
+        };
+        match path.canonicalize() {
+            Ok(p) => Ok(p),
+            Err(_) => Ok(path),
+        }
+    }
 }
 
 pub fn ls(id: &str, path: &str, sort_by: Option<String>, show_hidden: Option<bool>) -> HostMessage {

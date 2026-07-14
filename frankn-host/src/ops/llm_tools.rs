@@ -67,17 +67,22 @@ fn check_sandbox(path: &Path) -> Result<PathBuf, String> {
         absolute_path
     };
 
-    let sandbox_root = get_sandbox_root()?
-        .canonicalize()
-        .map_err(|e| format!("Sandbox root resolution failed: {}", e))?;
-    if resolved.starts_with(&sandbox_root) {
-        Ok(resolved)
+    let is_sandboxed = *crate::fs_sync::SANDBOX_HOME.get().unwrap_or(&false);
+    if is_sandboxed {
+        let sandbox_root = get_sandbox_root()?
+            .canonicalize()
+            .map_err(|e| format!("Sandbox root resolution failed: {}", e))?;
+        if resolved.starts_with(&sandbox_root) {
+            Ok(resolved)
+        } else {
+            Err(format!(
+                "Access Denied: Path {} is outside the allowed sandbox ({})",
+                path.display(),
+                sandbox_root.display()
+            ))
+        }
     } else {
-        Err(format!(
-            "Access Denied: Path {} is outside the allowed sandbox ({})",
-            path.display(),
-            sandbox_root.display()
-        ))
+        Ok(resolved)
     }
 }
 

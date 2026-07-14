@@ -80,21 +80,30 @@ class HostMsgChallenge extends HostMessage {
 
 class HostMsgAuthSuccess extends HostMessage {
   final String token;
+  final String homeDir;
   final int timestamp;
 
-  HostMsgAuthSuccess({required this.token, required this.timestamp})
-    : super('auth_success');
+  HostMsgAuthSuccess({
+    required this.token,
+    required this.homeDir,
+    required this.timestamp,
+  }) : super('auth_success');
 
   factory HostMsgAuthSuccess.fromJson(Map<String, dynamic> json) {
     return HostMsgAuthSuccess(
       token: (json['token'] ?? '').toString(),
+      homeDir: (json['home_dir'] ?? '/home/').toString(),
       timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
     );
   }
 
   @override
-  Map<String, dynamic> toJson() =>
-      super.toJson()..addAll({'token': token, 'timestamp': timestamp});
+  Map<String, dynamic> toJson() => super.toJson()
+    ..addAll({
+      'token': token,
+      'home_dir': homeDir,
+      'timestamp': timestamp,
+    });
 }
 
 class HostMsgAuthFailed extends HostMessage {

@@ -96,6 +96,7 @@ class FranknTaskHandler extends TaskHandler {
         RtcThinClient().currentHostState = state;
         RtcThinClient().currentHostId = RtcClient().currentHostId;
         RtcThinClient().currentHostName = RtcClient().currentHostName;
+        RtcThinClient().homeDir = RtcClient().homeDir;
 
         final msg = IsolateMsg(
           type: IsolateType.state,
@@ -104,6 +105,7 @@ class FranknTaskHandler extends TaskHandler {
             'state': state.index,
             'id': RtcClient().currentHostId,
             'name': RtcClient().currentHostName,
+            'home_dir': RtcClient().homeDir,
           },
         );
 

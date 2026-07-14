@@ -21,6 +21,8 @@ pub struct HostConfig {
     pub llm_model_dir: Option<String>,
     #[serde(default)]
     pub sync_pairs: Vec<SyncPair>,
+    #[serde(default)]
+    pub sandbox_home: bool,
     #[serde(skip)]
     pub custom_config_path: Option<PathBuf>,
 }
@@ -133,12 +135,18 @@ impl HostConfig {
                 .interact_text()
                 .expect("Failed to get signaling URL");
 
-            let llm_model_dir: String = Input::new()
+             let llm_model_dir: String = Input::new()
                 .with_prompt("Neural Model Directory (e.g., /home/user/Models) [Optional]")
                 .default(String::new())
                 .interact_text()
                 .expect("Failed to get model dir");
             let llm_model_dir = if llm_model_dir.trim().is_empty() { None } else { Some(llm_model_dir.trim().to_string()) };
+
+            let sandbox_home = Confirm::new()
+                .with_prompt("Restrict file operations to Home directory (sandbox)?")
+                .default(false)
+                .interact()
+                .expect("Failed to get sandboxing preference");
 
             // Generate 12-digit alphanumeric ID
             let host_id: String = rand::rng()
@@ -162,6 +170,7 @@ impl HostConfig {
                 restricted_cmds: Vec::new(),
                 llm_model_dir,
                 sync_pairs: Vec::new(),
+                sandbox_home,
                 custom_config_path: custom_path_clone,
             }
         })

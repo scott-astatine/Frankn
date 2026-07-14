@@ -9,9 +9,12 @@ import 'package:frankn/services/frankn_task_handler.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
+import 'package:frankn/services/sharing_service.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:path_provider/path_provider.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +54,9 @@ void main() async {
   // Start background service
   print("UI Isolate: Booting background engine...");
   await initForegroundService();
+
+  // Initialize share listener service
+  SharingService(client: RtcThinClient(), navigatorKey: navigatorKey);
 
   runApp(const FranknApp());
 }
@@ -98,8 +104,40 @@ void startCallback() {
   FlutterForegroundTask.setTaskHandler(FranknTaskHandler());
 }
 
-class FranknApp extends StatelessWidget {
+class FranknApp extends StatefulWidget {
   const FranknApp({super.key});
+
+  @override
+  State<FranknApp> createState() => _FranknAppState();
+}
+
+class _FranknAppState extends State<FranknApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    // Forcefully restore sticky immersive fullscreen when overlay offsets change
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +145,7 @@ class FranknApp extends StatelessWidget {
       valueListenable: appLocale,
       builder: (context, locale, _) {
         return MaterialApp(
+          navigatorKey: navigatorKey,
           onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
           theme: CyberTheme.themeData,
           locale: locale,

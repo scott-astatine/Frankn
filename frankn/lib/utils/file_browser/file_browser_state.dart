@@ -22,6 +22,11 @@ class FileBrowserState with ChangeNotifier {
   StreamSubscription? _responseSub;
 
   FileBrowserState(this.client) {
+    if (client.lastNavigatedPath != null) {
+      _currentPath = client.lastNavigatedPath!;
+    } else if (client.homeDir != null) {
+      _currentPath = client.homeDir!;
+    }
     _listenForResponses();
   }
 
@@ -66,6 +71,7 @@ class FileBrowserState with ChangeNotifier {
 
   void setCurrentPath(String path) {
     _currentPath = path;
+    client.lastNavigatedPath = path;
     notifyListeners();
   }
 

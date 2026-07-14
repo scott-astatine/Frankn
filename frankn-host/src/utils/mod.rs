@@ -79,7 +79,11 @@ pub enum HostMessage {
     },
 
     #[serde(rename = "auth_success")]
-    AuthSuccess { token: String, timestamp: u64 },
+    AuthSuccess {
+        token: String,
+        home_dir: String,
+        timestamp: u64,
+    },
 
     #[serde(rename = "auth_failed")]
     AuthFailed { error: String, timestamp: u64 },

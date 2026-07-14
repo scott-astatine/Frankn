@@ -53,6 +53,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load config or initialize on first run
     let config = config::HostConfig::load_or_init(custom_path).await;
 
+    // Initialize the global sandboxing flag
+    let _ = crate::fs_sync::SANDBOX_HOME.set(config.sandbox_home);
+
     match cli.command {
         Some(Commands::Config) => {
             config::tui::run_tui(config).await?;
@@ -506,8 +509,12 @@ async fn parse_dc_msg(
                             let mut auth_lock = conn.authenticated.lock().await;
                             *auth_lock = true;
                         }
+                        let home_dir = dirs::home_dir()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "/home/".to_string());
                         let res = HostMessage::AuthSuccess {
                             token,
+                            home_dir,
                             timestamp: get_timestamp(),
                         };
                         if let Ok(json) = serde_json::to_string(&res) {

@@ -40,8 +40,9 @@ mixin RtcMessageHandler on RtcClientBase {
     isAuthFailed = false;
     AuthService().setToken(msg.token);
     _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
+    (this as RtcClient).homeDir = msg.homeDir;
     updateHostState(HostConnectionState.authenticated);
-    log("AUTH SUCCESS. Session Token acquired.");
+    log("AUTH SUCCESS. Session Token acquired. Home directory: ${msg.homeDir}");
     _startBgPingTimer();
   }
 
