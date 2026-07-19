@@ -11,17 +11,32 @@ import java.io.File
 import java.io.FileOutputStream
 
 class MainActivity : AudioServiceActivity() {
-    private val CHANNEL = "frankn/sharing"
+    private val SHARING_CHANNEL = "frankn/sharing"
+    private val VIEWER_CHANNEL = "frankn/file_viewer"
+
     private var sharedData: List<Map<String, String>>? = null
-    private var methodChannel: MethodChannel? = null
+    private var pendingViewFile: Map<String, String>? = null
+
+    private var sharingMethodChannel: MethodChannel? = null
+    private var viewerMethodChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-        methodChannel?.setMethodCallHandler { call, result ->
+        sharingMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARING_CHANNEL)
+        sharingMethodChannel?.setMethodCallHandler { call, result ->
             if (call.method == "getSharedData") {
                 result.success(sharedData)
                 sharedData = null // Reset after consumption
+            } else {
+                result.notImplemented()
+            }
+        }
+
+        viewerMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, VIEWER_CHANNEL)
+        viewerMethodChannel?.setMethodCallHandler { call, result ->
+            if (call.method == "getPendingFile") {
+                result.success(pendingViewFile)
+                pendingViewFile = null // Reset after consumption
             } else {
                 result.notImplemented()
             }
@@ -42,6 +57,20 @@ class MainActivity : AudioServiceActivity() {
         if (intent == null) return
         val action = intent.action
         val type = intent.type
+
+        if (Intent.ACTION_VIEW == action) {
+            val uri = intent.data
+            if (uri != null) {
+                val fileName = getFileName(uri)
+                val path = cacheUriToFile(uri)
+                if (path != null) {
+                    val fileMap = mapOf("path" to path, "name" to fileName)
+                    pendingViewFile = fileMap
+                    viewerMethodChannel?.invokeMethod("onOpenFile", fileMap)
+                }
+            }
+            return
+        }
 
         val dataList = mutableListOf<Map<String, String>>()
 
@@ -74,7 +103,7 @@ class MainActivity : AudioServiceActivity() {
         if (dataList.isNotEmpty()) {
             sharedData = dataList
             // If the Flutter channel is active, immediately push the update to Dart
-            methodChannel?.invokeMethod("onSharedDataReceived", sharedData)
+            sharingMethodChannel?.invokeMethod("onSharedDataReceived", sharedData)
         }
     }
 
@@ -95,7 +124,7 @@ class MainActivity : AudioServiceActivity() {
             e.printStackTrace()
         }
         if (name.isEmpty()) {
-            name = uri.lastPathSegment?.substringAfterLast('/') ?: "shared_file_${System.currentTimeMillis()}"
+            name = uri.lastPathSegment?.substringAfterLast('/') ?: "file_${System.currentTimeMillis()}"
         }
         return name
     }

@@ -128,7 +128,6 @@ When running the mobile client (phone) and host (laptop) on the **same mobile ho
 ### Root Cause
 1. **AP Isolation & Gateway Firewall**: The phone's operating system (Android/iOS) implements a strict firewall on the virtual hotspot interface. It allows outbound WAN cellular routing, but blocks incoming UDP/TCP connection attempts from local hotspot client devices (the laptop) to local ports open on the gateway device (the phone).
 2. **Symmetric CGNAT & NAT Loopback**: Cellular carriers employ Carrier-Grade NAT (CGNAT) with Symmetric NAT rules. Under this layout, STUN candidate hole-punching fails because public ports are randomized per destination, and carriers block NAT loopback/hairpinning (routing packets from and back to the same public IP).
-3. **No TURN Server Relay**: The current connection layouts in [rtc_connection.dart](file:///home/scott/Projects/Frankn/frankn/lib/services/client_rtc/rtc_connection.dart#L80) and [rtc.rs](file:///home/scott/Projects/Frankn/frankn-host/src/ops/rtc.rs#L53) only configure STUN servers, offering no fallback media relay.
 
 ### Developer Workarounds (No Code Changes Required)
 * **Workaround A (Recommended)**: Enable the Wi-Fi hotspot on your **laptop** instead, and connect your **phone** to it. The client (phone) can easily connect outward to the gateway ports on the laptop, bypassing gateway-to-client firewall drops.

@@ -20,22 +20,22 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 
 class MarkdownViewerScreen extends StatefulWidget {
-  final RtcThinClient client;
-  final String remotePath;
+  final RtcThinClient? client;
+  final String? remotePath;
   final String fileName;
+  final String? localFilePath;
 
   const MarkdownViewerScreen({
     super.key,
-    required this.client,
-    required this.remotePath,
+    this.client,
+    this.remotePath,
     required this.fileName,
+    this.localFilePath,
   });
 
   @override
   State<MarkdownViewerScreen> createState() => _MarkdownViewerScreenState();
 }
-
-
 
 class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
     with FileTransferMixin {
@@ -46,7 +46,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
   bool _isInitialized = false;
   bool _hasError = false;
   @override
-  RtcThinClient get client => widget.client;
+  RtcThinClient get client => widget.client ?? RtcThinClient();
 
   @override
   Widget build(BuildContext context) {
@@ -89,29 +89,33 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
   @override
   void initState() {
     super.initState();
-    setupTransferListener();
+    if (widget.localFilePath != null) {
+      _readLocalFile(widget.localFilePath!);
+    } else {
+      setupTransferListener();
 
-    _transferSub = client.transferProgressStream.listen((msg) {
-      if (msg is TransferProgressComplete) {
-        if (msg.id == _activeDownloadId || msg.fileName == widget.fileName) {
-          final String? path = msg.finalPath;
-          if (path != null) {
-            _readLocalFile(path);
+      _transferSub = client.transferProgressStream.listen((msg) {
+        if (msg is TransferProgressComplete) {
+          if (msg.id == _activeDownloadId || msg.fileName == widget.fileName) {
+            final String? path = msg.finalPath;
+            if (path != null) {
+              _readLocalFile(path);
+            }
+          }
+        } else if (msg is TransferProgressFailed) {
+          if (msg.id == _activeDownloadId) {
+            if (mounted) {
+              setState(() {
+                isLoading = false;
+                _hasError = true;
+              });
+            }
           }
         }
-      } else if (msg is TransferProgressFailed) {
-        if (msg.id == _activeDownloadId) {
-          if (mounted) {
-            setState(() {
-              isLoading = false;
-              _hasError = true;
-            });
-          }
-        }
-      }
-    });
+      });
 
-    _loadFile();
+      _loadFile();
+    }
   }
 
   @override
@@ -354,6 +358,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
   }
 
   void _loadFile() async {
+    if (widget.remotePath == null) return;
     if (mounted) {
       setState(() {
         isLoading = true;
@@ -361,7 +366,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
       });
     }
     _activeDownloadId = await downloadFile(
-      widget.remotePath,
+      widget.remotePath!,
       showNotification: false,
       isTemporary: true,
     );
@@ -397,6 +402,7 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
           client: widget.client,
           remotePath: widget.remotePath,
           fileName: widget.fileName,
+          localFilePath: widget.localFilePath,
         ),
       ),
     );

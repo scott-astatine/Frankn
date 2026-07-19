@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:frankn/screens/markdown_viewer_screen.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
@@ -7,31 +9,34 @@ import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:re_editor/re_editor.dart';
-import 'package:re_highlight/languages/dart.dart';
-import 'package:re_highlight/languages/rust.dart';
-import 'package:re_highlight/languages/python.dart';
-import 'package:re_highlight/languages/javascript.dart';
 import 'package:re_highlight/languages/bash.dart';
-import 'package:re_highlight/languages/json.dart';
-import 'package:re_highlight/languages/yaml.dart';
-import 'package:re_highlight/languages/markdown.dart';
 import 'package:re_highlight/languages/cpp.dart';
+import 'package:re_highlight/languages/dart.dart';
 import 'package:re_highlight/languages/java.dart';
+import 'package:re_highlight/languages/javascript.dart';
+import 'package:re_highlight/languages/json.dart';
+import 'package:re_highlight/languages/markdown.dart';
+import 'package:re_highlight/languages/python.dart';
+import 'package:re_highlight/languages/rust.dart';
 import 'package:re_highlight/languages/xml.dart';
+import 'package:re_highlight/languages/yaml.dart';
 import 'package:re_highlight/styles/monokai-sublime.dart';
 import 'package:share_plus/share_plus.dart';
 
 class CodeEditorScreen extends StatefulWidget {
-  final RtcThinClient client;
-  final String remotePath;
+  final RtcThinClient? client;
+  final String? remotePath;
   final String fileName;
+  final String? localFilePath;
 
   const CodeEditorScreen({
     super.key,
-    required this.client,
-    required this.remotePath,
+    this.client,
+    this.remotePath,
     required this.fileName,
+    this.localFilePath,
   });
 
   @override
@@ -40,112 +45,50 @@ class CodeEditorScreen extends StatefulWidget {
 
 class _CodeEditorScreenState extends State<CodeEditorScreen>
     with FileTransferMixin {
-  @override
-  RtcThinClient get client => widget.client;
-
   late CodeLineEditingController _controller;
+
   File? _localFile;
   bool _isInitialized = false;
   bool _isSaving = false;
   String? _activeDownloadId;
-
   StreamSubscription? _transferSub;
 
   @override
-  void initState() {
-    super.initState();
-    _controller = CodeLineEditingController();
-    setupTransferListener();
-    
-    // Listen for the specific completion of this file in the background
-    _transferSub = client.transferProgressStream.listen((msg) {
-      if (msg is TransferProgressComplete) {
-        if (msg.id == _activeDownloadId || msg.fileName == widget.fileName) {
-          final String? path = msg.finalPath;
-          if (path != null) {
-            _readLocalFile(path);
-          }
-        }
-      } else if (msg is TransferProgressFailed) {
-        if (msg.id == _activeDownloadId) {
-          if (mounted) {
-            setState(() {
-              isLoading = false;
-            });
-          }
-        }
-      }
-    });
-
-    _loadFile();
-  }
-
-  Future<void> _readLocalFile(String path) async {
-    try {
-      final file = File(path);
-      final content = await file.readAsString();
-      if (mounted) {
-        setState(() {
-          _localFile = file;
-          _controller.text = content;
-          _isInitialized = true;
-        });
-      }
-    } catch (e) {
-      client.log("EDITOR ERROR: Failed to read file: $e");
-    }
-  }
+  RtcThinClient get client => widget.client ?? RtcThinClient();
 
   @override
-  void refreshDirectory() {}
-
-  void _loadFile() async {
-    _activeDownloadId = await downloadFile(
-      widget.remotePath,
-      showNotification: false,
-      isTemporary: true,
-    );
-  }
-
-  Future<void> _handleSave() async {
-    if (_isSaving) return;
-    setState(() => _isSaving = true);
-
-    try {
-      await saveEditorContent(widget.remotePath, _controller.text);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "FILE SAVED TO HOST",
-              style: TextStyle(fontWeight: FontWeight.bold),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: NestedScrollView(
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return <Widget>[
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              primary: false,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              titleSpacing: 0,
+              toolbarHeight: 64,
+              title: _buildHeader(innerBoxIsScrolled),
             ),
-            backgroundColor: AppColors.accentSuccess,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("SAVE FAILED: $e"),
-            backgroundColor: AppColors.accentError,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
+          ];
+        },
+        body: Builder(builder: (context) => _buildBody(context)),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _transferSub?.cancel();
     if (!_isInitialized && _activeDownloadId != null) {
-      client.sendIntent(
-        IsolateAction.cancelTransfer,
-        {'id': _activeDownloadId},
-      );
+      client.sendIntent(IsolateAction.cancelTransfer, {
+        'id': _activeDownloadId,
+      });
       client.log("CODE EDITOR: Cancelled background download due to exit");
     }
     _controller.dispose();
@@ -153,120 +96,41 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
-    final bool isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+  void initState() {
+    super.initState();
+    _controller = CodeLineEditingController();
+    if (widget.localFilePath != null) {
+      _readLocalFile(widget.localFilePath!);
+    } else {
+      setupTransferListener();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: SafeArea(bottom: false, top: false, child: _buildBody()),
-          ),
+      _transferSub = client.transferProgressStream.listen((msg) {
+        if (msg is TransferProgressComplete) {
+          if (msg.id == _activeDownloadId || msg.fileName == widget.fileName) {
+            final String? path = msg.finalPath;
+            if (path != null) {
+              _readLocalFile(path);
+            }
+          }
+        } else if (msg is TransferProgressFailed) {
+          if (msg.id == _activeDownloadId) {
+            if (mounted) {
+              setState(() {
+                isLoading = false;
+              });
+            }
+          }
+        }
+      });
 
-          if (!isKeyboardVisible && _isInitialized)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: _buildTinyStatusBar(),
-            ),
-        ],
-      ),
-    );
+      _loadFile();
+    }
   }
 
-  Widget _buildTinyStatusBar() {
-    return Container(
-      height: 32,
-      decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.8),
-        border: const Border(
-          top: BorderSide(color: AppColors.accentPrimary, width: 0.5),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(
-              Icons.chevron_left,
-              color: AppColors.accentPrimary,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              "${widget.fileName}  —  ${widget.remotePath}",
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 10,
-                fontFamily: 'Courier',
-                fontWeight: FontWeight.bold,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          IconButton(
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            icon: const Icon(Icons.share, color: AppColors.accentPrimary, size: 16),
-            onPressed: () {
-              if (_localFile != null) {
-                SharePlus.instance.share(
-                  ShareParams(
-                    files: [XFile(_localFile!.path)],
-                    text: widget.fileName,
-                  ),
-                );
-              }
-            },
-          ),
-          const SizedBox(width: 8),
-          if (widget.fileName.endsWith('.md') || widget.fileName.endsWith('.markdown')) ...[
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              icon: const Icon(Icons.visibility, color: AppColors.accentPrimary, size: 16),
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MarkdownViewerScreen(
-                      client: widget.client,
-                      remotePath: widget.remotePath,
-                      fileName: widget.fileName,
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 8),
-          ],
-          if (_isSaving)
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.accentPrimary,
-              ),
-            )
-          else
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              icon: const Icon(Icons.save, color: AppColors.accentPrimary, size: 16),
-              onPressed: _handleSave,
-            ),
-        ],
-      ),
-    );
-  }
+  @override
+  void refreshDirectory() {}
 
-  Widget _buildBody() {
+  Widget _buildBody(BuildContext context) {
     if (!_isInitialized) {
       return Center(
         child: Column(
@@ -291,6 +155,9 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
 
     return CodeEditor(
       controller: _controller,
+      scrollController: CodeScrollController(
+        verticalScroller: PrimaryScrollController.of(context),
+      ),
       style: CodeEditorStyle(
         fontSize: 13,
         fontFamily: 'JetBrainsMonoNerdFont',
@@ -315,6 +182,144 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
               ],
             );
           },
+    );
+  }
+
+  Widget _buildHeader(bool innerBoxIsScrolled) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+        child: Container(
+          height: 64,
+          decoration: BoxDecoration(
+            color: innerBoxIsScrolled
+                ? AppColors.surface.withValues(alpha: 0.6)
+                : AppColors.surface.withValues(alpha: 0.9),
+            border: Border(
+              bottom: BorderSide(
+                color: innerBoxIsScrolled
+                    ? Colors.transparent
+                    : AppColors.markdownPrimary.withValues(alpha: 0.3),
+                width: 0.5,
+              ),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.chevron_left,
+                    color: AppColors.markdownPrimaryLight,
+                    size: 24,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: Text(
+                    widget.fileName,
+                    style: GoogleFonts.jetBrainsMono(
+                      color: AppColors.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(
+                    Icons.share,
+                    color: AppColors.markdownPrimaryLight,
+                    size: 18,
+                  ),
+                  onPressed: () {
+                    if (_localFile != null) {
+                      SharePlus.instance.share(
+                        ShareParams(
+                          files: [XFile(_localFile!.path)],
+                          text: widget.fileName,
+                        ),
+                      );
+                    }
+                  },
+                  style: IconButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(36, 36),
+                    backgroundColor: AppColors.background.withValues(
+                      alpha: 0.5,
+                    ),
+                    shape: const CircleBorder(),
+                  ),
+                ),
+                if (widget.fileName.endsWith('.md') ||
+                    widget.fileName.endsWith('.markdown')) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.visibility,
+                      color: AppColors.markdownPrimaryLight,
+                      size: 18,
+                    ),
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MarkdownViewerScreen(
+                            client: widget.client,
+                            remotePath: widget.remotePath,
+                            fileName: widget.fileName,
+                            localFilePath: widget.localFilePath,
+                          ),
+                        ),
+                      );
+                    },
+                    style: IconButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(36, 36),
+                      backgroundColor: AppColors.background.withValues(
+                        alpha: 0.5,
+                      ),
+                      shape: const CircleBorder(),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                if (_isSaving)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.markdownPrimaryLight,
+                    ),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(
+                      Icons.save,
+                      color: AppColors.markdownPrimaryLight,
+                      size: 18,
+                    ),
+                    onPressed: _handleSave,
+                    style: IconButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(36, 36),
+                      backgroundColor: AppColors.background.withValues(
+                        alpha: 0.5,
+                      ),
+                      shape: const CircleBorder(),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -379,6 +384,78 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
         return langXml;
       default:
         return langBash;
+    }
+  }
+
+  Future<void> _handleSave() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
+    try {
+      if (widget.localFilePath != null) {
+        final file = File(widget.localFilePath!);
+        await file.writeAsString(_controller.text);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "FILE SAVED LOCALLY",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: AppColors.accentSuccess,
+            ),
+          );
+        }
+      } else if (widget.remotePath != null) {
+        await saveEditorContent(widget.remotePath!, _controller.text);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "FILE SAVED TO HOST",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: AppColors.accentSuccess,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("SAVE FAILED: $e"),
+            backgroundColor: AppColors.accentError,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _loadFile() async {
+    if (widget.remotePath == null) return;
+    _activeDownloadId = await downloadFile(
+      widget.remotePath!,
+      showNotification: false,
+      isTemporary: true,
+    );
+  }
+
+  Future<void> _readLocalFile(String path) async {
+    try {
+      final file = File(path);
+      final content = await file.readAsString();
+      if (mounted) {
+        setState(() {
+          _localFile = file;
+          _controller.text = content;
+          _isInitialized = true;
+        });
+      }
+    } catch (e) {
+      client.log("EDITOR ERROR: Failed to read file: $e");
     }
   }
 }
