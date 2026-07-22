@@ -138,7 +138,6 @@ stateDiagram-v2
 * **Native Vector Diagram Engine (`neo_mermaid_widget.dart`)**: Pure Dart Mermaid flowchart parser and vector renderer with full-screen interactive zoom/pan modal (**zero Webview dependency**, 100% Linux Desktop compatible).
 * **System File Intent Handler (`ACTION_VIEW`)**: Native file opener on Android routing `.md`, `.txt`, `.json`, `.py`, `.rs`, `.dart` files directly to viewer/editor screens.
 * **Persistent SSH Session Restoration**: Back navigation keeps the active SSH WebRTC tunnel and terminal buffer alive in memory for instant re-attachment; explicit exit button tears down the shell.
-* **Glassmorphic Document Interface**: Auto-hiding `SliverAppBar` glassy headers and cyberpunk dark alert box styling for `[!WARNING]`, `[!NOTE]`, etc.
 * **Precision HUD Trackpad**: Touch gestures including 1-finger drags, 3-finger middle clicks, and sticky/locked modifier key states (`CTRL`, `ALT`, `SHIFT`).
 
 ---

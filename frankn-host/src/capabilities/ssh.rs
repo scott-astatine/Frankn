@@ -6,19 +6,21 @@ use tokio_tungstenite::tungstenite::Bytes;
 use webrtc::data_channel::RTCDataChannel;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 
-use crate::ops::rtc::RTCConn;
-use crate::{HostMessage, Status, elog, log};
+use crate::transport::webrtc::connection::RTCConn;
+use crate::{Status, elog, log};
 
-pub async fn start_ssh_tunnel(id: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> HostMessage {
-    let _ = stop_ssh_tunnel(id, Arc::clone(&rtc_conn)).await;
+use crate::transport::context::CommandContext;
 
-    log!("[SSH] Starting bridge for request: {}", id);
+pub async fn start_ssh_tunnel(ctx: &CommandContext) {
+    let _ = stop_ssh_tunnel_internal(&ctx.rtc_conn).await;
+
+    log!("[SSH] Starting bridge for request: {}", ctx.id);
 
     // Retry loop to wait for the data channel to be registered in the map
     let mut dc = None;
     for _ in 0..20 {
         // Wait up to 2 seconds
-        let conn = rtc_conn.lock().await;
+        let conn = ctx.rtc_conn.lock().await;
         let map = conn.data_channels.lock().await;
         if let Some(found_dc) = map.get("frankn_ssh").cloned() {
             dc = Some(found_dc);
@@ -34,7 +36,7 @@ pub async fn start_ssh_tunnel(id: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> HostMe
             Ok(_) => {
                 let (stop_tx, stop_rx) = tokio::sync::oneshot::channel();
                 {
-                    let conn = rtc_conn.lock().await;
+                    let conn = ctx.rtc_conn.lock().await;
                     let mut bridge_stop = conn.ssh_bridge_stop.lock().await;
                     *bridge_stop = Some(stop_tx);
                 }
@@ -42,35 +44,37 @@ pub async fn start_ssh_tunnel(id: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> HostMe
                 tokio::spawn(async move {
                     handle_ssh_channel(dc, stop_rx).await;
                 });
-                HostMessage::Response {
-                    id: id.to_string(),
-                    status: Status::Success,
-                    data: Some(serde_json::json!({ "message": "SSH reachable. Bridge active." })),
-                    timestamp: crate::utils::get_timestamp(),
-                }
+                let _ = ctx.reply(
+                    Status::Success,
+                    Some(serde_json::json!({ "message": "SSH reachable. Bridge active." })),
+                ).await;
             }
             Err(e) => {
                 elog!("[SSH] Local connection failed: {}", e);
-                HostMessage::Response {
-                    id: id.to_string(),
-                    status: Status::Error(format!("Local SSH unreachable: {}", e)),
-                    data: None,
-                    timestamp: crate::utils::get_timestamp(),
-                }
+                let _ = ctx.reply(
+                    Status::Error(format!("Local SSH unreachable: {}", e)),
+                    None,
+                ).await;
             }
         }
     } else {
         elog!("[SSH] Data channel 'frankn_ssh' never appeared.");
-        HostMessage::Response {
-            id: id.to_string(),
-            status: Status::Error("Uplink 'frankn_ssh' missing. Re-open terminal.".to_string()),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        }
+        let _ = ctx.reply(
+            Status::Error("Uplink 'frankn_ssh' missing. Re-open terminal.".to_string()),
+            None,
+        ).await;
     }
 }
 
-pub async fn stop_ssh_tunnel(id: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn stop_ssh_tunnel(ctx: &CommandContext) {
+    stop_ssh_tunnel_internal(&ctx.rtc_conn).await;
+    let _ = ctx.reply(
+        Status::Success,
+        Some(serde_json::json!({ "message": "Bridge terminated." })),
+    ).await;
+}
+
+async fn stop_ssh_tunnel_internal(rtc_conn: &Arc<Mutex<RTCConn>>) {
     let bridge_stop = {
         let conn = rtc_conn.lock().await;
         let mut stop_lock = conn.ssh_bridge_stop.lock().await;
@@ -80,13 +84,6 @@ pub async fn stop_ssh_tunnel(id: &str, rtc_conn: Arc<Mutex<RTCConn>>) -> HostMes
     if let Some(tx) = bridge_stop {
         let _ = tx.send(());
         log!("[SSH] Bridge stop signal sent.");
-    }
-
-    HostMessage::Response {
-        id: id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({ "message": "Bridge terminated." })),
-        timestamp: crate::utils::get_timestamp(),
     }
 }
 

@@ -185,14 +185,6 @@ impl RTCConn {
         Ok(())
     }
 
-    // pub async fn create_offer(&self) -> Result<RTCSessionDescription, Box<dyn std::error::Error>> {
-    //     let offer = self.peer_connection.create_offer(None).await?;
-    //     self.peer_connection
-    //         .set_local_description(offer.clone())
-    //         .await?;
-    //     Ok(offer)
-    // }
-
     pub async fn create_answer(&self) -> Result<RTCSessionDescription, Box<dyn std::error::Error>> {
         let answer = self.peer_connection.create_answer(None).await?;
         self.peer_connection

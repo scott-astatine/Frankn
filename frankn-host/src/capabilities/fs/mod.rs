@@ -1,4 +1,4 @@
-use crate::{HostMessage, utils::Status};
+use crate::utils::Status;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -74,15 +74,15 @@ pub fn check_sandbox_default(user_path: &str, allow_parent: bool) -> Result<Path
     }
 }
 
-pub fn ls(id: &str, path: &str, sort_by: Option<String>, show_hidden: Option<bool>) -> HostMessage {
+use crate::transport::context::CommandContext;
+
+pub async fn ls(ctx: &CommandContext, path: &str, sort_by: Option<String>, show_hidden: Option<bool>) {
     let sandbox_path = match check_sandbox_default(path, true) {
         Ok(p) => p,
-        Err(e) => return HostMessage::Response {
-            id: id.to_string(),
-            status: Status::Error(e),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
+        Err(e) => {
+            let _ = ctx.reply(Status::Error(e), None).await;
+            return;
+        }
     };
 
     let entries = fs::read_dir(sandbox_path);
@@ -148,74 +148,101 @@ pub fn ls(id: &str, path: &str, sort_by: Option<String>, show_hidden: Option<boo
                 }
             });
 
-            HostMessage::Response {
-                id: id.to_string(),
-                status: Status::Success,
-                data: Some(serde_json::json!({ "entries": list })),
-                timestamp: crate::utils::get_timestamp(),
-            }
+            let _ = ctx.reply(Status::Success, Some(serde_json::json!({ "entries": list }))).await;
         }
-        Err(e) => HostMessage::Response {
-            id: id.to_string(),
-            status: Status::Error(e.to_string()),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
+        Err(e) => {
+            let _ = ctx.reply(Status::Error(e.to_string()), None).await;
+        }
     }
 }
 
-pub fn delete_file(id: &str, path: &str) -> HostMessage {
+pub async fn delete_file(ctx: &CommandContext, path: &str) {
     let sandbox_path = match check_sandbox_default(path, false) {
         Ok(p) => p,
-        Err(e) => return HostMessage::Response {
-            id: id.to_string(),
-            status: Status::Error(e),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
+        Err(e) => {
+            let _ = ctx.reply(Status::Error(e), None).await;
+            return;
+        }
     };
 
     match fs::remove_file(sandbox_path) {
-        Ok(_) => HostMessage::Response {
-            id: id.into(),
-            status: Status::Success,
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
-        Err(e) => HostMessage::Response {
-            id: id.into(),
-            status: Status::Error(e.to_string()),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
+        Ok(_) => {
+            let _ = ctx.reply(Status::Success, None).await;
+        }
+        Err(e) => {
+            let _ = ctx.reply(Status::Error(e.to_string()), None).await;
+        }
     }
 }
 
-pub fn mkdir(id: &str, path: &str) -> HostMessage {
+pub async fn mkdir(ctx: &CommandContext, path: &str) {
     let sandbox_path = match check_sandbox_default(path, false) {
         Ok(p) => p,
-        Err(e) => return HostMessage::Response {
-            id: id.to_string(),
-            status: Status::Error(e),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
+        Err(e) => {
+            let _ = ctx.reply(Status::Error(e), None).await;
+            return;
+        }
     };
 
     match fs::create_dir_all(sandbox_path) {
-        Ok(_) => HostMessage::Response {
-            id: id.into(),
-            status: Status::Success,
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
-        Err(e) => HostMessage::Response {
-            id: id.into(),
-            status: Status::Error(e.to_string()),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        },
+        Ok(_) => {
+            let _ = ctx.reply(Status::Success, None).await;
+        }
+        Err(e) => {
+            let _ = ctx.reply(Status::Error(e.to_string()), None).await;
+        }
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::check_sandbox;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn test_root(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("frankn-host-{name}-{}", uuid::Uuid::new_v4()))
+    }
+
+    #[test]
+    fn sandbox_allows_a_missing_path_below_the_root() {
+        let root = test_root("sandbox-allows");
+        let sandbox = root.join("sandbox");
+        fs::create_dir_all(&sandbox).unwrap();
+
+        let resolved = check_sandbox(&sandbox, "new/nested/file.txt", false).unwrap();
+
+        assert_eq!(resolved, sandbox.canonicalize().unwrap().join("new/nested/file.txt"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sandbox_rejects_parent_traversal() {
+        let root = test_root("sandbox-traversal");
+        let sandbox = root.join("sandbox");
+        let outside = root.join("outside");
+        fs::create_dir_all(&sandbox).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+
+        assert!(check_sandbox(&sandbox, "../outside", false).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sandbox_rejects_a_symlink_that_escapes_the_root() {
+        use std::os::unix::fs::symlink;
+
+        let root = test_root("sandbox-symlink");
+        let sandbox = root.join("sandbox");
+        let outside = root.join("outside");
+        fs::create_dir_all(&sandbox).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("secret.txt"), "secret").unwrap();
+        symlink(&outside, sandbox.join("escape")).unwrap();
+
+        assert!(check_sandbox(&sandbox, "escape/secret.txt", false).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+}
 

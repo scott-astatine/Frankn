@@ -1,6 +1,6 @@
 use crate::HostMessage;
-use crate::ops::llm::LlmManager;
-use crate::ops::rtc::RTCConn;
+use super::LlmManager;
+use crate::transport::webrtc::connection::RTCConn;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -67,7 +67,7 @@ fn check_sandbox(path: &Path) -> Result<PathBuf, String> {
         absolute_path
     };
 
-    let is_sandboxed = *crate::fs_sync::SANDBOX_HOME.get().unwrap_or(&false);
+    let is_sandboxed = *crate::capabilities::fs::SANDBOX_HOME.get().unwrap_or(&false);
     if is_sandboxed {
         let sandbox_root = get_sandbox_root()?
             .canonicalize()

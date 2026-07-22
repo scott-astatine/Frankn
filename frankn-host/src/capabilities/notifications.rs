@@ -1,4 +1,4 @@
-use crate::{HostMessage, elog, log, ops::rtc::PeerMap};
+use crate::{HostMessage, elog, log, transport::webrtc::connection::PeerMap};
 use futures_util::stream::StreamExt;
 use std::sync::Arc;
 use tokio_tungstenite::tungstenite::Bytes;

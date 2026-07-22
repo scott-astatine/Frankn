@@ -1,16 +1,16 @@
-# Graph Report - Frankn  (2026-07-21)
+# Graph Report - Frankn  (2026-07-22)
 
 ## Corpus Check
-- 144 files · ~327,980 words
+- 164 files · ~305,540 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2909 nodes · 4055 edges · 173 communities (118 shown, 55 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 43 edges (avg confidence: 0.8)
+- 3024 nodes · 4133 edges · 185 communities (130 shown, 55 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 41 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0d76aa78`
+- Built from commit: `d85da5ca`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -97,18 +97,18 @@
 - frankn
 - chat_message.dart
 - List
-- log_terminal.dart
+- model_selector_dialog.dart
 - manifest.json
-- InputManager
+- volume_mixer_dialog.dart
 - graphify.md
 - SignalingMessage
 - MessageHandler
 - Bytes
 - ssh.rs
-- package:flutter/material.dart
-- package:google_fonts/google_fonts.dart
+- dart:async
+- animated_op_btn.dart
 - dart:io
-- list_processes
+- List
 - ClientMessage
 - AppLocalizations
 - RtcClient
@@ -142,6 +142,7 @@
 - Process Manager UI
 - Folder Synchronization UI
 - Trackpad and Keyboard UI
+- mod.rs
 - authenticate
 - sendDcMsg
 - sendInputMsg
@@ -175,25 +176,31 @@
 - FRANKN // Remote Operations Center
 - ssh_theme.dart
 - notifications.rs
-- cyber_card.dart
+- .parse_msg
 - CustomPainter
-- cyber_alert_dialog.dart
-- StatelessWidget
-- VoidCallback
 - _FranknAppState
-- ssh_theme.dart
+- parse_dc_msg
+- log_terminal.dart
+- chat_stream_detached
+- .run
+- .reply
+- terminal_context_menu.dart
+- main.rs
+- .set_remote_data_channel_handler
+- VoidCallback
+- context.rs
 - FileBrowserState
 
 ## God Nodes (most connected - your core abstractions)
-1. `RTCConn` - 66 edges
-2. `LlmManager` - 35 edges
-3. `RtcThinClient` - 29 edges
-4. `HostConfig` - 23 edges
+1. `CommandContext` - 60 edges
+2. `RTCConn` - 36 edges
+3. `HostConfig` - 30 edges
+4. `RtcThinClient` - 29 edges
 5. `Win32Window` - 22 edges
-6. `Error` - 19 edges
-7. `AuthManager` - 18 edges
-8. `App` - 18 edges
-9. `get_timestamp()` - 16 edges
+6. `AuthManager` - 20 edges
+7. `Error` - 20 edges
+8. `LlmManager` - 19 edges
+9. `App` - 18 edges
 10. `run_app()` - 14 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -203,10 +210,10 @@
   frankn/android/app/src/main/res/drawable/ic_notification.png → README.md
 - `Frankn Flutter Client Pubspec` --implements--> `Flutter Client`  [INFERRED]
   frankn/pubspec.yaml → README.md
+- `stream_download()` --references--> `Error`  [EXTRACTED]
+  frankn-host/src/capabilities/fs/transfer/download.rs → frankn/lib/utils/utils.dart
 - `run_tui()` --references--> `Error`  [EXTRACTED]
   frankn-host/src/config/tui.rs → frankn/lib/utils/utils.dart
-- `stream_download()` --references--> `Error`  [EXTRACTED]
-  frankn-host/src/fs_sync/transfer.rs → frankn/lib/utils/utils.dart
 
 ## Import Cycles
 - None detected.
@@ -220,7 +227,7 @@
 - **Linux Build System** — frankn_linux_cmakelists, linux_flutter_cmakelists, linux_runner_cmakelists [EXTRACTED 1.00]
 - **Windows Build System** — frankn_windows_cmakelists, windows_flutter_cmakelists, windows_runner_cmakelists [EXTRACTED 1.00]
 
-## Communities (173 total, 55 thin omitted)
+## Communities (185 total, 55 thin omitted)
 
 ### Community 0 - "app_localizations.dart"
 Cohesion: 0.01
@@ -268,11 +275,11 @@ Nodes (44): _aiSub, _availableChats, _availableModels, build, _buildConnectionSt
 
 ### Community 11 - "quick_functions.dart"
 Cohesion: 0.10
-Nodes (21): _buildItem, _buildLiveLog, _buildAppBar, build, _processFileData, _buildContent, _buildLiveLog, build (+13 more)
+Nodes (20): _buildItem, _buildLiveLog, build, _processFileData, _buildContent, _buildLiveLog, build, _buildOperationsGrid (+12 more)
 
 ### Community 12 - "LlmManager"
-Cohesion: 0.22
-Nodes (11): DoheeEngine, LlmManager, Arc, HostMessage, Mutex, Option, Result, Self (+3 more)
+Cohesion: 0.16
+Nodes (15): Client, DoheeEngine, ChatMessage, ChatSession, LlmManager, Arc, HashMap, Mutex (+7 more)
 
 ### Community 13 - "code_editor_screen.dart"
 Cohesion: 0.05
@@ -287,8 +294,8 @@ Cohesion: 0.06
 Nodes (36): FocusNode, _alt, _batchTimer, build, _buildKey, _buildModKey, client, createState (+28 more)
 
 ### Community 16 - "RTCConn"
-Cohesion: 0.08
-Nodes (27): Bytes, Clone, Display, Fn, Formatter, PeerMap, _send_notification_to_client(), start_notification_listener() (+19 more)
+Cohesion: 0.15
+Nodes (16): Display, Formatter, Box, F, HashMap, Option, Result, RTCPeerConnection (+8 more)
 
 ### Community 17 - "markdown_viewer_screen.dart"
 Cohesion: 0.09
@@ -311,8 +318,8 @@ Cohesion: 0.12
 Nodes (16): canViewAsText, defaultPath, FileBrowserConstants, FileTypeHelper, getFilename, getIcon, getParent, isImage (+8 more)
 
 ### Community 22 - "media.rs"
-Cohesion: 0.20
-Nodes (29): Connection, call_mpris(), fetch_mpris_data_with_conn(), find_active_player(), get_all_audio_devices(), get_media_status(), get_numeric_metadata(), list_players() (+21 more)
+Cohesion: 0.07
+Nodes (47): Connection, Arc, Box, InputManager, LlmManager, Mutex, Option, PeerMap (+39 more)
 
 ### Community 23 - "sync_service.dart"
 Cohesion: 0.07
@@ -324,7 +331,7 @@ Nodes (28): _activeTransfers, bytesTransferred, cancel, _cancelledTransfers, cli
 
 ### Community 25 - "antigravity_field.dart"
 Cohesion: 0.08
-Nodes (25): AntigravityField, _AntigravityFieldState, build, color, _controller, createState, didChangeDependencies, dispose (+17 more)
+Nodes (23): build, color, _controller, createState, didChangeDependencies, dispose, initState, paint (+15 more)
 
 ### Community 26 - "process_manager_screen.dart"
 Cohesion: 0.08
@@ -332,23 +339,23 @@ Nodes (24): build, _buildBadge, _buildDetailItem, _buildHeader, _buildProcessRow
 
 ### Community 27 - "sync_manager_screen.dart"
 Cohesion: 0.07
-Nodes (27): build, _buildClientSourceToggle, _buildDialogField, _buildEmptyState, _buildIntervalDropdown, _buildPairCard, _buildPathRow, _buildStatusBadge (+19 more)
+Nodes (29): build, _buildClientSourceToggle, _buildDialogField, _buildEmptyState, _buildIntervalDropdown, _buildPairCard, _buildPathRow, _buildStatusBadge (+21 more)
 
 ### Community 28 - "HostConfig"
-Cohesion: 0.07
-Nodes (33): B, Frame, AuthManager, Arc, HashMap, Option, RwLock, Self (+25 more)
+Cohesion: 0.14
+Nodes (16): B, Frame, App, centered_rect(), InputMode, Box, Option, Rect (+8 more)
 
 ### Community 29 - "cyber_alert_dialog.dart"
-Cohesion: 0.12
-Nodes (17): HomeScreen, DesktopLayout, MessageBubble, FileBrowserItem, MobileLayout, QuickFunction, build, icon (+9 more)
+Cohesion: 0.09
+Nodes (22): build, _buildAppBar, _showSystemTray, buildBreadcrumbs, buildDefaultContent, FileBrowserAppBar, SignalConnectionState, paint (+14 more)
 
 ### Community 30 - "my_application.cc"
 Cohesion: 0.10
 Nodes (20): FlPluginRegistry, fl_register_plugins(), main(), my_application_activate(), my_application_class_init(), my_application_dispose(), my_application_init(), my_application_local_command_line() (+12 more)
 
 ### Community 31 - "transfer.rs"
-Cohesion: 0.20
-Nodes (22): AtomicBool, cleanup_partial(), finalize_upload(), handle_download_init(), handle_transfer_cancel(), handle_transfer_chunk_raw(), handle_transfer_init(), part_path() (+14 more)
+Cohesion: 0.08
+Nodes (37): AtomicBool, handle_download_init(), Arc, File, HostMessage, Mutex, Result, RTCDataChannel (+29 more)
 
 ### Community 32 - "local_dir_selector.dart"
 Cohesion: 0.09
@@ -371,8 +378,8 @@ Cohesion: 0.10
 Nodes (20): @pragma, dart:isolate, startCallback, dismiss, initialize, _instance, NotificationService, onActionReceivedMethod (+12 more)
 
 ### Community 37 - ".parse_msg"
-Cohesion: 0.27
-Nodes (13): PeerType, Arc, Box, Option, Result, RwLock, Self, String (+5 more)
+Cohesion: 0.15
+Nodes (23): connect_bluetooth(), connect_wifi(), get_network_status(), list_bluetooth_devices(), list_wifi_networks(), Option, String, toggle_radio() (+15 more)
 
 ### Community 38 - "frankn_dashboard.dart"
 Cohesion: 0.11
@@ -391,20 +398,20 @@ Cohesion: 0.11
 Nodes (18): _aliasController, build, _buildDivider, _buildInputField, _buildScannerSection, createState, dispose, HostPairingDialog (+10 more)
 
 ### Community 42 - "system_tray_modal.dart"
-Cohesion: 0.11
-Nodes (18): _btEnabled, build, _buildCompactActionButton, _buildGridButton, _buildSectionLabel, client, _confirmDestructiveAction, createState (+10 more)
+Cohesion: 0.10
+Nodes (20): _btEnabled, build, _buildCompactActionButton, _buildGridButton, _buildSectionLabel, client, _confirmDestructiveAction, createState (+12 more)
 
 ### Community 43 - "settings_screen.dart"
-Cohesion: 0.11
-Nodes (17): _buildDangerGroup, _buildSectionHeader, _buildSelectorTile, _buildSettingsGroup, _buildSettingsItem, _client, createState, _editDefaultModel (+9 more)
+Cohesion: 0.28
+Nodes (14): check_sandbox(), check_sandbox_default(), delete_file(), ls(), mkdir(), Option, Path, PathBuf (+6 more)
 
 ### Community 44 - "package:frankn/services/rtc_thin_client.dart"
-Cohesion: 0.25
-Nodes (7): build, _buildMenuItem, child, _showMenu, terminal, TerminalContextMenu, Widget
+Cohesion: 0.27
+Nodes (14): check_sandbox(), execute_tool(), get_sandbox_root(), parse_tool_call(), Arc, LlmManager, Mutex, Option (+6 more)
 
 ### Community 45 - "image_viewer_screen.dart"
 Cohesion: 0.11
-Nodes (18): _activeDownloadId, build, _buildBody, _buildTinyStatusBar, client, createState, dispose, fileName (+10 more)
+Nodes (17): _activeDownloadId, build, _buildBody, _buildTinyStatusBar, client, createState, dispose, fileName (+9 more)
 
 ### Community 46 - "host_list_panel.dart"
 Cohesion: 0.12
@@ -415,12 +422,12 @@ Cohesion: 0.18
 Nodes (14): Size, wchar_t, Scale(), Create, Destroy, UpdateTheme, Win32Window::Win32Window(), WindowClassRegistrar (+6 more)
 
 ### Community 48 - "neo_code_element_builder.dart"
-Cohesion: 0.16
-Nodes (12): _ViewerCodeElementBuilder, NeoCodeElementBuilder, visitElementAfter, NeoLatexElementBuilder, visitElementAfter, MarkdownElementBuilder, package:flutter_highlighter/flutter_highlighter.dart, package:flutter_highlighter/themes/monokai-sublime.dart (+4 more)
+Cohesion: 0.24
+Nodes (8): visitElementAfter, visitElementAfter, package:flutter_highlighter/flutter_highlighter.dart, package:flutter_highlighter/themes/monokai-sublime.dart, package:flutter_markdown/flutter_markdown.dart, package:flutter_math_fork/flutter_math.dart, package:google_fonts/google_fonts.dart, package:markdown/markdown.dart
 
 ### Community 49 - "SignalingClient"
-Cohesion: 0.30
-Nodes (17): Child, disconnect(), handle_res(), handle_spawn_res(), lock_screen(), ping(), reboot(), restart_host() (+9 more)
+Cohesion: 0.28
+Nodes (12): PeerType, Arc, Box, Option, Result, RwLock, Self, String (+4 more)
 
 ### Community 50 - "file_browser_screen.dart"
 Cohesion: 0.08
@@ -439,40 +446,40 @@ Cohesion: 0.14
 Nodes (13): ModState, altState, build, _buildKeyBtn, _buildModifierBtn, ctrlState, onLockAlt, onLockCtrl (+5 more)
 
 ### Community 54 - "dart:ui"
-Cohesion: 0.28
-Nodes (15): Cli, Commands, handle_new_connection(), main(), parse_binary_msg(), parse_dc_msg(), Arc, Box (+7 more)
+Cohesion: 0.08
+Nodes (37): FranknApp, _FranknAppState, CodeEditorScreen, _CodeEditorScreenState, FileBrowserScreen, _FileBrowserScreenState, FranknDashboard, _FranknDashboardState (+29 more)
 
 ### Community 55 - "StatelessWidget"
-Cohesion: 0.25
-Nodes (10): ClientMessage, get_cpu_temp(), HostMessage, DcMsg, Option, Result, String, Value (+2 more)
+Cohesion: 0.17
+Nodes (12): kill_process(), list_processes(), Option, String, ClientMessage, HostMessage, DcMsg, Option (+4 more)
 
 ### Community 56 - "player_selector_dialog.dart"
-Cohesion: 0.14
-Nodes (13): _activePlayer, build, _cleanName, client, createState, dispose, initState, _isLoading (+5 more)
+Cohesion: 0.15
+Nodes (12): _activePlayer, build, _cleanName, client, createState, dispose, initState, _isLoading (+4 more)
 
 ### Community 57 - "FlutterWindow"
 Cohesion: 0.13
 Nodes (13): DartProject, HWND, LPARAM, LRESULT, UINT, WPARAM, FlutterWindow, flutter_controller_ (+5 more)
 
 ### Community 58 - "file_transfer_mixin.dart"
-Cohesion: 0.13
-Nodes (14): client, downloadFile, isLoading, _onGenericMessage, refreshDirectory, saveEditorContent, setupTransferListener, transferMsg (+6 more)
+Cohesion: 0.22
+Nodes (14): get_all_audio_devices(), get_media_status(), list_players(), next_track(), previous_track(), PeerMap, String, seek() (+6 more)
 
 ### Community 59 - "bluetooth_manager_dialog.dart"
-Cohesion: 0.11
-Nodes (16): buildBreadcrumbs, buildDefaultContent, FileBrowserAppBar, build, client, _connect, createState, _devices (+8 more)
+Cohesion: 0.08
+Nodes (24): build, client, _connect, createState, _devices, dispose, _fetchDevices, initState (+16 more)
 
 ### Community 60 - "volume_mixer_dialog.dart"
-Cohesion: 0.15
-Nodes (12): build, client, createState, _debounceTimer, _devices, dispose, initState, _isLoading (+4 more)
+Cohesion: 0.25
+Nodes (8): CapabilityDescriptor, CapabilityRegistry, HashMap, Option, Self, String, Value, Vec
 
 ### Community 61 - "model_selector_dialog.dart"
-Cohesion: 0.15
-Nodes (12): build, client, _connect, createState, dispose, _fetchNetworks, initState, _isLoading (+4 more)
+Cohesion: 0.40
+Nodes (5): _PulsingDot, _PulsingDotState, AntigravityField, _AntigravityFieldState, SingleTickerProviderStateMixin
 
 ### Community 62 - "cyber_button.dart"
-Cohesion: 0.11
-Nodes (18): AnimationController, _PulsingDot, _PulsingDotState, build, _controller, createState, CyberButton, _CyberButtonState (+10 more)
+Cohesion: 0.13
+Nodes (15): AnimationController, build, _controller, createState, CyberButton, _CyberButtonState, CyberButtonVariant, dispose (+7 more)
 
 ### Community 63 - "MainActivity"
 Cohesion: 0.23
@@ -484,27 +491,27 @@ Nodes (13): ChatMessage, build, _buildAssistant, _buildAssistantContent, _buildO
 
 ### Community 65 - "VoidCallback"
 Cohesion: 0.29
-Nodes (7): Client, ChatMessage, ChatSession, HashMap, PathBuf, String, Vec
+Nodes (8): HostConfig, Option, PathBuf, Self, String, SyncPair, Vec, SyncPair
 
 ### Community 66 - "llm_tools.rs"
-Cohesion: 0.29
-Nodes (13): check_sandbox(), execute_tool(), get_sandbox_root(), parse_tool_call(), Arc, Mutex, Option, Path (+5 more)
+Cohesion: 0.31
+Nodes (10): get_system_log(), lock_screen(), reboot(), restart_host(), Child, Option, Output, Result (+2 more)
 
 ### Community 67 - "dart:async"
 Cohesion: 0.13
-Nodes (14): _channel, _checkInitialSharing, client, didChangeAppLifecycleState, dispose, _executeUpload, _isDialogShowing, navigatorKey (+6 more)
+Nodes (14): client, downloadFile, isLoading, _onGenericMessage, refreshDirectory, saveEditorContent, setupTransferListener, transferMsg (+6 more)
 
 ### Community 68 - "package:frankn/utils/dc_msg_util.dart"
 Cohesion: 0.14
 Nodes (13): RemoteEntry, build, _buildGrid, _buildList, entry, fullPath, isDirIcon, isGrid (+5 more)
 
 ### Community 69 - "_PulsingDotState"
-Cohesion: 0.10
-Nodes (23): build, _showSystemTray, RtcThinClient, HostConnectionState, SignalConnectionState, build, _client, paint (+15 more)
+Cohesion: 0.15
+Nodes (12): build, client, _connect, createState, dispose, _fetchNetworks, initState, _isLoading (+4 more)
 
 ### Community 70 - "remote_dir_selector.dart"
-Cohesion: 0.24
-Nodes (6): Device, InputManager, InputMsg, Result, Self, String
+Cohesion: 0.26
+Nodes (8): get_chats_path(), LlmManager, HashMap, Option, PathBuf, String, Value, save_chats()
 
 ### Community 71 - "handle_signaling_message"
 Cohesion: 0.25
@@ -519,20 +526,20 @@ Cohesion: 0.15
 Nodes (12): dart:convert, dart:typed_data, AuthService, clearToken, computeArgon2Hash, computeResponse, _instance, _sessionToken (+4 more)
 
 ### Community 74 - "terminal_context_menu.dart"
-Cohesion: 0.31
-Nodes (7): DcMsg, Arc, HostMessage, Mutex, Option, PeerMap, String
+Cohesion: 0.39
+Nodes (7): HostRuntime, Arc, InputManager, LlmManager, Mutex, Option, PeerMap
 
 ### Community 75 - "Flutter Client"
 Cohesion: 0.18
 Nodes (12): dohee_x Neural Chat Channel, Frankn Notification Icon, Frankn Neon Frankenstein Circuit Icon, frankn_cmd Data Channel, Flutter Client, frankn_fs Data Channel, frankn_input Data Channel, frankn_media Data Channel (+4 more)
 
 ### Community 76 - "check_sandbox_default"
-Cohesion: 0.33
-Nodes (11): check_sandbox(), check_sandbox_default(), delete_file(), ls(), mkdir(), HostMessage, Option, Path (+3 more)
+Cohesion: 0.29
+Nodes (7): build, content, createState, _isExpanded, isStreaming, NeoThinkBlock, _NeoThinkBlockState
 
 ### Community 77 - "network.rs"
-Cohesion: 0.44
-Nodes (11): connect_bluetooth(), connect_wifi(), get_network_status(), list_bluetooth_devices(), list_wifi_networks(), Arc, HostMessage, Mutex (+3 more)
+Cohesion: 0.11
+Nodes (19): _buildDangerGroup, _buildSectionHeader, _buildSelectorTile, _buildSettingsGroup, _buildSettingsItem, _client, createState, _editDefaultModel (+11 more)
 
 ### Community 78 - "wWinMain"
 Cohesion: 0.24
@@ -547,20 +554,20 @@ Cohesion: 0.18
 Nodes (10): ChatRole, ChatMessage, contentNotifier, dispose, _formatTimestamp, isStreamingNotifier, role, timestamp (+2 more)
 
 ### Community 81 - "List"
-Cohesion: 0.18
-Nodes (10): _delimiterList, _escapeRegex, _generateRegexRules, inlinePatterns, NeoLatexInlineSyntax, _neoLatexPattern, onMatch, replaceAllMapped (+2 more)
+Cohesion: 0.11
+Nodes (18): FileViewerService, _channel, _checkInitialSharing, client, didChangeAppLifecycleState, dispose, _executeUpload, _isDialogShowing (+10 more)
 
-### Community 82 - "log_terminal.dart"
-Cohesion: 0.17
-Nodes (11): build, client, createState, dispose, _error, _fetchModels, initState, isSettingsMode (+3 more)
+### Community 82 - "model_selector_dialog.dart"
+Cohesion: 0.32
+Nodes (6): Bytes, PeerMap, _send_notification_to_client(), start_notification_listener(), RemoteDescriptionState, Mutex
 
 ### Community 83 - "manifest.json"
 Cohesion: 0.18
 Nodes (10): background_color, description, display, icons, name, orientation, prefer_related_applications, short_name (+2 more)
 
-### Community 84 - "InputManager"
-Cohesion: 0.17
-Nodes (11): _browserState, build, client, _createNewFolder, createState, dispose, initialPath, initState (+3 more)
+### Community 84 - "volume_mixer_dialog.dart"
+Cohesion: 0.15
+Nodes (12): build, client, createState, _debounceTimer, _devices, dispose, initState, _isLoading (+4 more)
 
 ### Community 86 - "SignalingMessage"
 Cohesion: 0.33
@@ -571,28 +578,28 @@ Cohesion: 0.36
 Nodes (10): HWND, LPARAM, LRESULT, UINT, WPARAM, EnableFullDpiSupportIfAvailable(), GetHandle, GetThisFromHandle (+2 more)
 
 ### Community 88 - "Bytes"
-Cohesion: 0.33
-Nodes (8): generate_quick_hash(), handle_sync_request(), Arc, HostMessage, Mutex, Option, Path, String
+Cohesion: 0.47
+Nodes (5): generate_quick_hash(), handle_sync_request(), Option, Path, String
 
 ### Community 89 - "ssh.rs"
-Cohesion: 0.47
-Nodes (8): handle_ssh_channel(), Arc, HostMessage, Mutex, RTCDataChannel, start_ssh_tunnel(), stop_ssh_tunnel(), Receiver
+Cohesion: 0.42
+Nodes (8): handle_ssh_channel(), Arc, Mutex, RTCDataChannel, start_ssh_tunnel(), stop_ssh_tunnel(), stop_ssh_tunnel_internal(), Receiver
 
-### Community 90 - "package:flutter/material.dart"
-Cohesion: 0.07
-Nodes (43): CodeEditorScreen, _CodeEditorScreenState, FileBrowserScreen, _FileBrowserScreenState, FranknDashboard, _FranknDashboardState, ImageViewerScreen, _ImageViewerScreenState (+35 more)
+### Community 90 - "dart:async"
+Cohesion: 0.50
+Nodes (4): _ViewerCodeElementBuilder, NeoCodeElementBuilder, NeoLatexElementBuilder, MarkdownElementBuilder
 
-### Community 91 - "package:google_fonts/google_fonts.dart"
-Cohesion: 0.25
-Nodes (8): build, content, createState, _isExpanded, isStreaming, NeoThinkBlock, _NeoThinkBlockState, package:google_fonts/google_fonts.dart
+### Community 91 - "animated_op_btn.dart"
+Cohesion: 0.09
+Nodes (22): Color, dart:ui, bgColor, borderColor, build, child, CyberCard, label (+14 more)
 
 ### Community 92 - "dart:io"
 Cohesion: 0.25
 Nodes (7): dart:io, hasFullStorageAccess, _instance, PermissionService, requestStoragePermissions, package:permission_handler/permission_handler.dart, static final PermissionService
 
-### Community 93 - "list_processes"
-Cohesion: 0.43
-Nodes (7): kill_process(), list_processes(), Arc, HostMessage, Mutex, Option, String
+### Community 93 - "List"
+Cohesion: 0.18
+Nodes (10): _delimiterList, _escapeRegex, _generateRegexRules, inlinePatterns, NeoLatexInlineSyntax, _neoLatexPattern, onMatch, replaceAllMapped (+2 more)
 
 ### Community 94 - "ClientMessage"
 Cohesion: 0.29
@@ -619,8 +626,8 @@ Cohesion: 0.50
 Nodes (4): Folder Synchronization UI, System Log UI, System Tray / Dashboard UI, Frankn App Logo
 
 ### Community 102 - "FileBrowserState"
-Cohesion: 0.25
-Nodes (7): dart:ui, accentColor, build, child, GlassyHeader, height, innerBoxIsScrolled
+Cohesion: 0.18
+Nodes (11): AnimatedOpBtn, _AnimatedOpBtnState, build, color, createState, icon, _isPressed, label (+3 more)
 
 ### Community 104 - "Linux Project CMake"
 Cohesion: 0.67
@@ -634,62 +641,90 @@ Nodes (3): Web Favicon, Web Index HTML, Web App Icon 192
 Cohesion: 0.67
 Nodes (3): Windows Project CMake, Windows Flutter CMake, Windows Runner CMake
 
+### Community 130 - "mod.rs"
+Cohesion: 0.16
+Nodes (9): Device, InputManager, InputMsg, Result, Self, String, InputManager, Result (+1 more)
+
 ### Community 163 - "ssh_theme.dart"
 Cohesion: 0.18
 Nodes (10): 1. Architectural Philosophy, 2. Core Runtime Services, 3. Communication & P2P Transport Layer (`R7`), 4. Zero-Trust Security & Sandboxing (`R5`), 5. Engineering Discipline, A. Capability Registry & Loader (`R1`), B. Memory Service & State Store (`R2`, `R3`), C. Core Event Bus (`R4`) (+2 more)
 
 ### Community 164 - "notifications.rs"
-Cohesion: 0.18
-Nodes (10): build, _buildHeaderBtn, _buildRichLogLine, isExpanded, isMinimized, logs, LogTerminal, onFullscreen (+2 more)
+Cohesion: 0.12
+Nodes (17): HomeScreen, DesktopLayout, MessageBubble, FileBrowserItem, MobileLayout, QuickFunction, build, icon (+9 more)
 
-### Community 165 - "cyber_card.dart"
-Cohesion: 0.25
-Nodes (7): Color, bgColor, borderColor, build, child, CyberCard, label
+### Community 165 - ".parse_msg"
+Cohesion: 0.31
+Nodes (8): DcMsg, Arc, HostMessage, LlmManager, Mutex, Option, PeerMap, String
 
 ### Community 166 - "CustomPainter"
 Cohesion: 0.50
 Nodes (4): CustomPainter, AntigravityPainter, ScanlinePainter, NeoMermaidGraphPainter
 
-### Community 167 - "cyber_alert_dialog.dart"
+### Community 168 - "_FranknAppState"
+Cohesion: 0.17
+Nodes (11): _browserState, build, client, _createNewFolder, createState, dispose, initialPath, initState (+3 more)
+
+### Community 170 - "parse_dc_msg"
 Cohesion: 0.25
-Nodes (7): actions, borderColor, build, content, CyberAlertDialog, title, titleColor
+Nodes (9): RtcThinClient, HostConnectionState, build, _client, build, client, package:frankn/services/rtc_thin_client.dart, package:frankn/widgets/host_list_panel.dart (+1 more)
 
-### Community 168 - "StatelessWidget"
-Cohesion: 0.20
-Nodes (9): build, color, createState, icon, _isPressed, label, onTap, IconData (+1 more)
+### Community 175 - "log_terminal.dart"
+Cohesion: 0.18
+Nodes (10): build, _buildHeaderBtn, _buildRichLogLine, isExpanded, isMinimized, logs, LogTerminal, onFullscreen (+2 more)
 
-### Community 169 - "VoidCallback"
+### Community 176 - "chat_stream_detached"
+Cohesion: 0.27
+Nodes (7): chat_stream_detached(), LlmManager, Arc, Mutex, Option, Result, String
+
+### Community 177 - ".run"
+Cohesion: 0.25
+Nodes (6): Box, Result, Self, get_cpu_temp(), get_timestamp(), Result
+
+### Community 178 - ".reply"
+Cohesion: 0.39
+Nodes (5): HostMessage, Option, Result, String, Value
+
+### Community 179 - "terminal_context_menu.dart"
+Cohesion: 0.22
+Nodes (8): build, _buildMenuItem, child, _showMenu, terminal, TerminalContextMenu, package:flutter/services.dart, package:xterm/xterm.dart
+
+### Community 180 - "main.rs"
+Cohesion: 0.29
+Nodes (7): Cli, Commands, main(), Box, Option, Result, String
+
+### Community 181 - ".set_remote_data_channel_handler"
+Cohesion: 0.29
+Nodes (6): Clone, Fn, Arc, RTCDataChannel, Send, Sync
+
+### Community 182 - "VoidCallback"
 Cohesion: 0.29
 Nodes (6): build, isConnected, isConnecting, onExit, SshStatusBar, VoidCallback
 
-### Community 170 - "_FranknAppState"
-Cohesion: 0.40
-Nodes (5): FranknApp, _FranknAppState, FileViewerService, SharingService, WidgetsBindingObserver
+### Community 183 - "context.rs"
+Cohesion: 0.50
+Nodes (3): Arc, Mutex, Self
 
-### Community 171 - "ssh_theme.dart"
-Cohesion: 0.40
-Nodes (4): SshTheme, terminalTheme, package:xterm/xterm.dart, static final
-
-### Community 172 - "FileBrowserState"
+### Community 184 - "FileBrowserState"
 Cohesion: 0.67
 Nodes (3): ChangeNotifier, FileBrowserState, SshController
 
 ## Knowledge Gaps
-- **1942 isolated node(s):** `install.sh script`, `MediaPlayer`, `localeName`, `delegate`, `localizationsDelegates` (+1937 more)
+- **1941 isolated node(s):** `MediaPlayer`, `localeName`, `delegate`, `localizationsDelegates`, `supportedLocales` (+1936 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **55 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Error` connect `.parse_msg` to `remote_dir_selector.dart`, `utils.dart`, `RTCConn`, `dart:ui`, `StatelessWidget`, `HostConfig`, `transfer.rs`?**
-  _High betweenness centrality (0.176) - this node is a cross-community bridge._
-- **Why does `RTCConn` connect `RTCConn` to `VoidCallback`, `llm_tools.rs`, `LlmManager`, `network.rs`, `SignalingClient`, `dart:ui`, `media.rs`, `Bytes`, `ssh.rs`, `list_processes`, `transfer.rs`?**
-  _High betweenness centrality (0.068) - this node is a cross-community bridge._
-- **Why does `run_service()` connect `dart:ui` to `.parse_msg`, `HostConfig`, `LlmManager`, `StatelessWidget`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
-- **What connects `install.sh script`, `MediaPlayer`, `localeName` to the rest of the system?**
-  _1942 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `Error` connect `RTCConn` to `mod.rs`, `utils.dart`, `.run`, `SignalingClient`, `main.rs`, `media.rs`, `HostConfig`, `transfer.rs`?**
+  _High betweenness centrality (0.196) - this node is a cross-community bridge._
+- **Why does `RTCConn` connect `RTCConn` to `.parse_msg`, `package:frankn/services/rtc_thin_client.dart`, `model_selector_dialog.dart`, `.set_remote_data_channel_handler`, `media.rs`, `context.rs`, `ssh.rs`, `transfer.rs`?**
+  _High betweenness centrality (0.069) - this node is a cross-community bridge._
+- **Why does `CommandContext` connect `.parse_msg` to `VoidCallback`, `settings_screen.dart`, `LlmManager`, `chat_stream_detached`, `RTCConn`, `.reply`, `StatelessWidget`, `Bytes`, `ssh.rs`, `file_transfer_mixin.dart`, `context.rs`?**
+  _High betweenness centrality (0.052) - this node is a cross-community bridge._
+- **What connects `MediaPlayer`, `localeName`, `delegate` to the rest of the system?**
+  _1941 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `app_localizations.dart` be split into smaller, more focused modules?**
   _Cohesion score 0.011299435028248588 - nodes in this community are weakly interconnected._
 - **Should `app_localizations_ko.dart` be split into smaller, more focused modules?**

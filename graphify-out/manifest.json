@@ -1,8 +1,8 @@
 {
   "frankn-host/install.sh": {
-    "mtime": 1778434191.6170282,
-    "ast_hash": "39397650f0a9edae181fcdf7b6c3f927",
-    "semantic_hash": "39397650f0a9edae181fcdf7b6c3f927"
+    "mtime": 1784694115.4388034,
+    "ast_hash": "0f64b039039faf66a44d9337536d5606",
+    "semantic_hash": ""
   },
   "frankn-host/src/auth/mod.rs": {
     "mtime": 1779660073.7066722,
@@ -19,85 +19,10 @@
     "ast_hash": "7d9cc3b4fc9f65353173bfc115034703",
     "semantic_hash": "7d9cc3b4fc9f65353173bfc115034703"
   },
-  "frankn-host/src/fs_sync/mod.rs": {
-    "mtime": 1783988252.6177857,
-    "ast_hash": "d96356e8476829ce12d15476932dfd00",
-    "semantic_hash": "d96356e8476829ce12d15476932dfd00"
-  },
-  "frankn-host/src/fs_sync/sync.rs": {
-    "mtime": 1779768826.8701766,
-    "ast_hash": "ad31a5c613bea0c7bf5fd4646501602c",
-    "semantic_hash": "ad31a5c613bea0c7bf5fd4646501602c"
-  },
-  "frankn-host/src/fs_sync/transfer.rs": {
-    "mtime": 1779739077.9755232,
-    "ast_hash": "5a226f129f82a6c61ae60d4679a8b79e",
-    "semantic_hash": "5a226f129f82a6c61ae60d4679a8b79e"
-  },
   "frankn-host/src/main.rs": {
-    "mtime": 1784029883.121052,
-    "ast_hash": "c45ed050df44abd16a353a5c5e6fc585",
-    "semantic_hash": "c45ed050df44abd16a353a5c5e6fc585"
-  },
-  "frankn-host/src/ops/dc_message_parser.rs": {
-    "mtime": 1780787347.1787384,
-    "ast_hash": "4c140a9fda31def1c5c37dcd290ec48f",
-    "semantic_hash": "4c140a9fda31def1c5c37dcd290ec48f"
-  },
-  "frankn-host/src/ops/input.rs": {
-    "mtime": 1779659896.1366987,
-    "ast_hash": "880cc854a87cfdcbd86005c60d01825e",
-    "semantic_hash": "880cc854a87cfdcbd86005c60d01825e"
-  },
-  "frankn-host/src/ops/llm.rs": {
-    "mtime": 1784616328.4003856,
-    "ast_hash": "1e1b5cb032a98d0e745c77da7de0efcb",
+    "mtime": 1784705581.7076254,
+    "ast_hash": "93097d10af97d1ee8efcad11ff64acda",
     "semantic_hash": ""
-  },
-  "frankn-host/src/ops/llm_tools.rs": {
-    "mtime": 1783988263.3969023,
-    "ast_hash": "10470b39ccc7daa8c0ca4fe71dd11be6",
-    "semantic_hash": "10470b39ccc7daa8c0ca4fe71dd11be6"
-  },
-  "frankn-host/src/ops/media.rs": {
-    "mtime": 1779847528.3021894,
-    "ast_hash": "dc683d99c8b22c1ecdfc1e88f4dd5383",
-    "semantic_hash": "dc683d99c8b22c1ecdfc1e88f4dd5383"
-  },
-  "frankn-host/src/ops/mod.rs": {
-    "mtime": 1780717860.9259865,
-    "ast_hash": "2dfec012b9568d9f37bee8148d954828",
-    "semantic_hash": "2dfec012b9568d9f37bee8148d954828"
-  },
-  "frankn-host/src/ops/network.rs": {
-    "mtime": 1778637566.83255,
-    "ast_hash": "a69b90139d9d6cdc5ad3c6e1fbabf108",
-    "semantic_hash": "a69b90139d9d6cdc5ad3c6e1fbabf108"
-  },
-  "frankn-host/src/ops/notifications.rs": {
-    "mtime": 1777069351.5086064,
-    "ast_hash": "ee0c972ce3594149f6c9b98ff62511da",
-    "semantic_hash": "ee0c972ce3594149f6c9b98ff62511da"
-  },
-  "frankn-host/src/ops/proc_manager.rs": {
-    "mtime": 1779660085.8980663,
-    "ast_hash": "e57f38f9ac915accdee0298c7bc376f4",
-    "semantic_hash": "e57f38f9ac915accdee0298c7bc376f4"
-  },
-  "frankn-host/src/ops/rtc.rs": {
-    "mtime": 1783893097.4807916,
-    "ast_hash": "9f05efb8a629793a4af950dd62618c82",
-    "semantic_hash": "9f05efb8a629793a4af950dd62618c82"
-  },
-  "frankn-host/src/ops/ssh.rs": {
-    "mtime": 1779659893.1877153,
-    "ast_hash": "74fac285e33e03773e7958b5c0c8ac5a",
-    "semantic_hash": "74fac285e33e03773e7958b5c0c8ac5a"
-  },
-  "frankn-host/src/ops/system.rs": {
-    "mtime": 1779756411.3706841,
-    "ast_hash": "f72d3d6f0a8aeeb0f2f46afb90fa4f2d",
-    "semantic_hash": "f72d3d6f0a8aeeb0f2f46afb90fa4f2d"
   },
   "frankn-host/src/signaling/mod.rs": {
     "mtime": 1783893086.4446998,
@@ -105,9 +30,9 @@
     "semantic_hash": "55ba1e857327845fef45e43c2129ee20"
   },
   "frankn-host/src/utils/mod.rs": {
-    "mtime": 1784029874.191021,
-    "ast_hash": "5d911033e999b8ece8466e6368db3e68",
-    "semantic_hash": "5d911033e999b8ece8466e6368db3e68"
+    "mtime": 1784703434.7704039,
+    "ast_hash": "6c2d7635ac94a030f5d369e62cfeb551",
+    "semantic_hash": ""
   },
   "frankn-signaling-server/src/main.rs": {
     "mtime": 1783896246.7876391,
@@ -670,13 +595,13 @@
     "semantic_hash": "5a4cf051798d7e6931ee0405a4523c8f"
   },
   "README.md": {
-    "mtime": 1784629508.2198641,
-    "ast_hash": "af292b93b58d8d7e64c4c2f6e4aba1aa",
+    "mtime": 1784629951.2680304,
+    "ast_hash": "c75ee27b1d1e099614db55d10fba3201",
     "semantic_hash": ""
   },
   "frankn-bluprint.md": {
-    "mtime": 1784629513.6269176,
-    "ast_hash": "ce66bd2336e13eb11f8bdaa2616d2b19",
+    "mtime": 1784705120.7211325,
+    "ast_hash": "8e5b4b7fdd177be837e45a6966546c22",
     "semantic_hash": ""
   },
   "frankn/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md": {
@@ -1199,19 +1124,184 @@
     "ast_hash": "5fd3de73e189802f4a72161c04c84c4e",
     "semantic_hash": ""
   },
-  "frankn/flutter_01.png": {
-    "mtime": 1784616836.4382005,
-    "ast_hash": "4d7a7239f4826b21597948b0665a5587",
-    "semantic_hash": ""
-  },
-  "frankn/flutter_02.png": {
-    "mtime": 1784616965.2447371,
-    "ast_hash": "cc5cfe4015a272d78b041ccc40a442ee",
-    "semantic_hash": ""
-  },
-  "ARCHITECTURE.md": {
+  "docs/ARCHITECTURE.md": {
     "mtime": 1784629519.9389799,
     "ast_hash": "9bdefdd3c9eb1f0cfb6617362b0eb6d2",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/app/mod.rs": {
+    "mtime": 1784703276.6297371,
+    "ast_hash": "41d9b539e82e698c2ecc95c170a232f9",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/app/runtime.rs": {
+    "mtime": 1784704676.7715847,
+    "ast_hash": "ed284e18fabe40f76377ec5058e149c2",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/app/sessions.rs": {
+    "mtime": 1784704682.1617978,
+    "ast_hash": "7a3a9ac9fded3d5ea4ea8ead66c96b2f",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/transport/mod.rs": {
+    "mtime": 1784704223.701822,
+    "ast_hash": "d201f686e7e6929c4c9f3b9f4e7baeb6",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/transport/protocol/messages.rs": {
+    "mtime": 1784706398.485422,
+    "ast_hash": "5f3ca820b6b68e5d35d859026b2af65c",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/transport/protocol/mod.rs": {
+    "mtime": 1784706403.5864093,
+    "ast_hash": "9ff4db72beda0953e5baae3da9992fcf",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/transport/protocol/router.rs": {
+    "mtime": 1784705993.245054,
+    "ast_hash": "ce7b195f0738f12d9f6bd2061cf6fc32",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/transport/context.rs": {
+    "mtime": 1784705949.0825908,
+    "ast_hash": "d4ef292df678e1bdaa19559a9e53077e",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/fs/mod.rs": {
+    "mtime": 1784705879.019851,
+    "ast_hash": "0b3d0d34f8d1e42cacaa7f502f7a9171",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/fs/sync.rs": {
+    "mtime": 1784705913.1092117,
+    "ast_hash": "063ef5ec292d96589aa1e7585b1cf923",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/input.rs": {
+    "mtime": 1784705573.972539,
+    "ast_hash": "cbdf551b82b0fc493e1987b015814acc",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/media.rs": {
+    "mtime": 1784705636.1082282,
+    "ast_hash": "15cb6bbe7b9c286db5b64c4eb2c2b206",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/mod.rs": {
+    "mtime": 1784706355.82899,
+    "ast_hash": "b5e421eb171353a2fe848a8c07d9b5d2",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/network.rs": {
+    "mtime": 1784705812.9861476,
+    "ast_hash": "6ed44e7872e978446c9ede4216a5bbe0",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/notifications.rs": {
+    "mtime": 1784704893.6000125,
+    "ast_hash": "f5ebf3d5ae565655597e9bf2448e29dc",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/proc_manager.rs": {
+    "mtime": 1784703573.417073,
+    "ast_hash": "7e8a709e17d21aa4f29276c5855912bc",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/ssh.rs": {
+    "mtime": 1784705803.3410444,
+    "ast_hash": "72136638f35aa0baae8f8aae15ab9743",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/system.rs": {
+    "mtime": 1784705669.3595936,
+    "ast_hash": "3a11c10c34b3717f792c08d37753b434",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/transport/webrtc/connection.rs": {
+    "mtime": 1784704239.5362525,
+    "ast_hash": "9c259e15d961244dae33dcb90a521ac7",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/transport/webrtc/mod.rs": {
+    "mtime": 1784704220.3437839,
+    "ast_hash": "519c97aa42d0dea2572a180a367f0f4c",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/fs/transfer/download.rs": {
+    "mtime": 1784704877.11877,
+    "ast_hash": "5502e289dbeb7f29f6c499f3283c4aaa",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/fs/transfer/framing.rs": {
+    "mtime": 1784704447.7192242,
+    "ast_hash": "5e7af7a7b48337235d233de53ea49f82",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/fs/transfer/mod.rs": {
+    "mtime": 1784704500.1323078,
+    "ast_hash": "7177664933e5fe27b6950f3da6475b66",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/fs/transfer/state.rs": {
+    "mtime": 1784704452.2323198,
+    "ast_hash": "089fcfd813a8c0d8f7b270e9316513b8",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/fs/transfer/upload.rs": {
+    "mtime": 1784704879.7170725,
+    "ast_hash": "f3d01a591488e1190dec736bd29b8060",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/platform/linux/mod.rs": {
+    "mtime": 1784705552.5402992,
+    "ast_hash": "b2319e91c6627f36d0bb203e5932ff81",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/platform/linux/mpris.rs": {
+    "mtime": 1784705671.8456209,
+    "ast_hash": "b21d3a1cee41ca33b028ba27cec3b3ef",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/platform/linux/systemctl.rs": {
+    "mtime": 1784705556.9253483,
+    "ast_hash": "8650ba7d04034b459bd999c2336c0052",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/platform/linux/uinput.rs": {
+    "mtime": 1784705568.8274815,
+    "ast_hash": "679b625fc8893f076b921495735d3662",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/platform/mod.rs": {
+    "mtime": 1784705548.3022516,
+    "ast_hash": "0413be157d0d2167a43ff69e7fb719a9",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/inference/engine.rs": {
+    "mtime": 1784706415.659382,
+    "ast_hash": "4d147c0ae034e5f6fb4a904a50afc01f",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/inference/mod.rs": {
+    "mtime": 1784706262.4738388,
+    "ast_hash": "817cf502a3d690c7c92b1d15df3cfa80",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/inference/store.rs": {
+    "mtime": 1784706255.466767,
+    "ast_hash": "f12f53cd98506a132a8ed026957a2f06",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/inference/tools.rs": {
+    "mtime": 1784706076.501922,
+    "ast_hash": "c5bfa89b9018169321bbb26b02168473",
+    "semantic_hash": ""
+  },
+  "frankn-host/src/capabilities/registry.rs": {
+    "mtime": 1784706363.2095232,
+    "ast_hash": "0769399f1e923aa0dc516bcf9201a7fd",
     "semantic_hash": ""
   }
 }

@@ -1,5 +1,8 @@
-use crate::ops::rtc::PeerMap;
-use crate::{HostMessage, ops, utils::Status};
+use crate::capabilities;
+use crate::capabilities::inference::LlmManager;
+use crate::config::HostConfig;
+use crate::transport::protocol::messages::{HostMessage, Status};
+use crate::transport::webrtc::connection::PeerMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -74,10 +77,7 @@ pub enum DcMsg {
     #[serde(rename = "llm_stop")]
     LlmStop,
     #[serde(rename = "tool_approval_response")]
-    ToolApprovalResponse {
-        approval_id: String,
-        approved: bool,
-    },
+    ToolApprovalResponse { approval_id: String, approved: bool },
 
     // --- SSH ---
     #[serde(rename = "get_audio_devices")]
@@ -140,54 +140,89 @@ impl DcMsg {
         peer_map: PeerMap,
         client_id: &str,
         label: &str,
-        llm_manager: Arc<Mutex<crate::ops::llm::LlmManager>>,
-        config: Arc<crate::config::HostConfig>,
-    ) -> HostMessage {
+        llm_manager: Arc<Mutex<LlmManager>>,
+        config: Arc<HostConfig>,
+    ) -> Option<HostMessage> {
         let rtc_conn = {
             let map = peer_map.lock().await;
             match map.get(client_id) {
                 Some(conn) => Arc::clone(conn),
                 None => {
-                    return HostMessage::Response {
+                    return Some(HostMessage::Response {
                         id: id.to_string(),
                         status: Status::Error("Client link lost.".into()),
                         data: None,
                         timestamp: crate::utils::get_timestamp(),
-                    };
+                    });
                 }
             }
         };
 
+        let ctx = crate::transport::context::CommandContext::new(
+            id.to_string(),
+            client_id.to_string(),
+            label.to_string(),
+            Arc::clone(&config),
+            Arc::clone(&rtc_conn),
+        );
+
         match command {
             // --- System & Power ---
-            DcMsg::Ping => ops::system::ping(id, rtc_conn).await,
-            DcMsg::Disconnect => ops::system::disconnect(id, rtc_conn).await,
-            DcMsg::Shutdown { args } => ops::system::shutdown(id, args, rtc_conn).await,
-            DcMsg::Reboot => ops::system::reboot(id, rtc_conn).await,
-            DcMsg::LockScreen => ops::system::lock_screen(id, rtc_conn).await,
-            DcMsg::UnlockScreen => HostMessage::Response {
+            DcMsg::Ping => {
+                capabilities::system::ping(&ctx).await;
+                None
+            }
+            DcMsg::Disconnect => {
+                capabilities::system::disconnect(&ctx).await;
+                None
+            }
+            DcMsg::Shutdown { args } => {
+                capabilities::system::shutdown(&ctx, args).await;
+                None
+            }
+            DcMsg::Reboot => {
+                capabilities::system::reboot(&ctx).await;
+                None
+            }
+            DcMsg::LockScreen => {
+                capabilities::system::lock_screen(&ctx).await;
+                None
+            }
+            DcMsg::UnlockScreen => Some(HostMessage::Response {
                 id: id.to_string(),
                 status: Status::Error("Unlock screen not implemented natively".to_string()),
                 data: None,
                 timestamp: crate::utils::get_timestamp(),
-            },
-            DcMsg::Update => HostMessage::Response {
+            }),
+            DcMsg::Update => Some(HostMessage::Response {
                 id: id.to_string(),
                 status: Status::Error("System update not implemented natively".to_string()),
                 data: None,
                 timestamp: crate::utils::get_timestamp(),
-            },
-            DcMsg::RestartHostServer => ops::system::restart_host(id, rtc_conn).await,
-            DcMsg::SystemLog { unit, lines, priority, since, grep } => {
-                ops::system::system_log(id, unit, lines, priority, since, grep, rtc_conn).await
+            }),
+            DcMsg::RestartHostServer => {
+                capabilities::system::restart_host(&ctx).await;
+                None
+            }
+            DcMsg::SystemLog {
+                unit,
+                lines,
+                priority,
+                since,
+                grep,
+            } => {
+                capabilities::system::system_log(&ctx, unit, lines, priority, since, grep).await;
+                None
             }
 
             // --- Processes ---
             DcMsg::ListProcesses { sort_by, filter } => {
-                ops::proc_manager::list_processes(id, sort_by, filter, rtc_conn).await
+                capabilities::proc_manager::list_processes(&ctx, sort_by, filter).await;
+                None
             }
             DcMsg::KillProcess { proc } => {
-                ops::proc_manager::kill_process(id, proc, rtc_conn).await
+                capabilities::proc_manager::kill_process(&ctx, proc).await;
+                None
             }
 
             // --- File System ---
@@ -195,101 +230,161 @@ impl DcMsg {
                 path,
                 sort_by,
                 show_hidden,
-            } => crate::fs_sync::ls(id, path, sort_by.clone(), *show_hidden),
-            DcMsg::Mkdir { path } => crate::fs_sync::mkdir(id, path),
-            DcMsg::DeleteFile { path } => crate::fs_sync::delete_file(id, path),
+            } => {
+                capabilities::fs::ls(&ctx, path, sort_by.clone(), *show_hidden).await;
+                None
+            }
+            DcMsg::Mkdir { path } => {
+                capabilities::fs::mkdir(&ctx, path).await;
+                None
+            }
+            DcMsg::DeleteFile { path } => {
+                capabilities::fs::delete_file(&ctx, path).await;
+                None
+            }
 
             // --- LLM ---
-            DcMsg::ListModels => ops::llm::LlmManager::handle_list_models(id, &config).await,
+            DcMsg::ListModels => {
+                LlmManager::handle_list_models(&ctx).await;
+                None
+            }
             DcMsg::LlmStart { model_path } => {
-                ops::llm::LlmManager::handle_start(
-                    id,
-                    model_path,
-                    Arc::clone(&llm_manager),
-                    &config,
-                )
-                .await
+                LlmManager::handle_start(&ctx, model_path, Arc::clone(&llm_manager)).await;
+                None
             }
             DcMsg::LlmChat {
                 message,
                 system_prompt,
                 chat_id,
             } => {
-                ops::llm::LlmManager::handle_chat(
-                    id,
+                LlmManager::handle_chat(
+                    &ctx,
                     message,
                     system_prompt,
                     chat_id,
                     Arc::clone(&llm_manager),
-                    Arc::clone(&rtc_conn),
-                    label,
                 )
-                .await
+                .await;
+                None
             }
             DcMsg::LlmLoadChat { chat_id } => {
-                ops::llm::LlmManager::handle_load_chat(id, chat_id, Arc::clone(&llm_manager)).await
+                LlmManager::handle_load_chat(&ctx, chat_id, Arc::clone(&llm_manager)).await;
+                None
             }
             DcMsg::LlmListChats => {
-                ops::llm::LlmManager::handle_list_chats(id, Arc::clone(&llm_manager)).await
+                LlmManager::handle_list_chats(&ctx, Arc::clone(&llm_manager)).await;
+                None
             }
             DcMsg::LlmDeleteChat { chat_id } => {
-                ops::llm::LlmManager::handle_delete_chat(id, chat_id, Arc::clone(&llm_manager))
-                    .await
+                LlmManager::handle_delete_chat(&ctx, chat_id, Arc::clone(&llm_manager)).await;
+                None
             }
-            DcMsg::LlmStop => ops::llm::LlmManager::handle_stop(id, Arc::clone(&llm_manager)).await,
-            DcMsg::ToolApprovalResponse { approval_id, approved } => {
+            DcMsg::LlmStop => {
+                LlmManager::handle_stop(&ctx, Arc::clone(&llm_manager)).await;
+                None
+            }
+            DcMsg::ToolApprovalResponse {
+                approval_id,
+                approved,
+            } => {
                 let mut l = llm_manager.lock().await;
                 if let Some(tx) = l.approval_registry.remove(approval_id) {
                     let _ = tx.send(*approved);
                 }
-                HostMessage::Response {
+                Some(HostMessage::Response {
                     id: id.to_string(),
                     status: Status::Success,
                     data: None,
                     timestamp: crate::utils::get_timestamp(),
-                }
+                })
             }
 
             // --- Media Control ---
-            DcMsg::GetAudioDevices => ops::media::get_all_audio_devices(id, rtc_conn).await,
+            DcMsg::GetAudioDevices => {
+                capabilities::media::get_all_audio_devices(&ctx).await;
+                None
+            }
             DcMsg::SetDeviceVolume { target_id, volume } => {
-                ops::media::set_specific_device_volume(id, target_id, volume, rtc_conn).await
+                capabilities::media::set_specific_device_volume(&ctx, target_id, volume).await;
+                None
             }
             DcMsg::SetDefaultAudioDevice { target_id } => {
-                ops::media::set_default_audio_device(id, target_id, rtc_conn).await
+                capabilities::media::set_default_audio_device(&ctx, target_id).await;
+                None
             }
-            DcMsg::TogglePlayPause => ops::media::toggle_play_pause(id, rtc_conn).await,
-            DcMsg::PlayNextTrack => ops::media::next_track(id, rtc_conn).await,
-            DcMsg::PlayPreviousTrack => ops::media::previous_track(id, rtc_conn).await,
-            DcMsg::SetVolume { level } => ops::media::set_volume(id, level, rtc_conn).await,
-            DcMsg::GetMediaStatus => ops::media::get_media_status(id, rtc_conn).await,
-            DcMsg::ListPlayers => ops::media::list_players(id, rtc_conn).await,
+            DcMsg::TogglePlayPause => {
+                capabilities::media::toggle_play_pause(&ctx).await;
+                None
+            }
+            DcMsg::PlayNextTrack => {
+                capabilities::media::next_track(&ctx).await;
+                None
+            }
+            DcMsg::PlayPreviousTrack => {
+                capabilities::media::previous_track(&ctx).await;
+                None
+            }
+            DcMsg::SetVolume { level } => {
+                capabilities::media::set_volume(&ctx, level).await;
+                None
+            }
+            DcMsg::GetMediaStatus => {
+                capabilities::media::get_media_status(&ctx).await;
+                None
+            }
+            DcMsg::ListPlayers => {
+                capabilities::media::list_players(&ctx).await;
+                None
+            }
             DcMsg::SetActivePlayer { player_name } => {
-                ops::media::set_active_player(id, player_name, rtc_conn).await
+                capabilities::media::set_active_player(&ctx, player_name).await;
+                None
             }
-            DcMsg::Seek { position } => ops::media::seek(id, position, rtc_conn).await,
+            DcMsg::Seek { position } => {
+                capabilities::media::seek(&ctx, position).await;
+                None
+            }
 
             // --- SSH ---
-            DcMsg::StartSsh => ops::ssh::start_ssh_tunnel(id, rtc_conn).await,
-            DcMsg::StopSsh => ops::ssh::stop_ssh_tunnel(id, rtc_conn).await,
+            DcMsg::StartSsh => {
+                capabilities::ssh::start_ssh_tunnel(&ctx).await;
+                None
+            }
+            DcMsg::StopSsh => {
+                capabilities::ssh::stop_ssh_tunnel(&ctx).await;
+                None
+            }
 
             // --- Network ---
-            DcMsg::GetNetworkStatus => ops::network::get_network_status(id, rtc_conn).await,
+            DcMsg::GetNetworkStatus => {
+                capabilities::network::get_network_status(&ctx).await;
+                None
+            }
             DcMsg::ToggleRadio { radio, state } => {
-                ops::network::toggle_radio(id, radio, *state, rtc_conn).await
+                capabilities::network::toggle_radio(&ctx, radio, *state).await;
+                None
             }
-            DcMsg::ListWifiNetworks => ops::network::list_wifi_networks(id, rtc_conn).await,
+            DcMsg::ListWifiNetworks => {
+                capabilities::network::list_wifi_networks(&ctx).await;
+                None
+            }
             DcMsg::ConnectWifi { ssid, password } => {
-                ops::network::connect_wifi(id, ssid, password, rtc_conn).await
+                capabilities::network::connect_wifi(&ctx, ssid, password).await;
+                None
             }
-            DcMsg::ListBluetoothDevices => ops::network::list_bluetooth_devices(id, rtc_conn).await,
+            DcMsg::ListBluetoothDevices => {
+                capabilities::network::list_bluetooth_devices(&ctx).await;
+                None
+            }
             DcMsg::ConnectBluetooth { mac } => {
-                ops::network::connect_bluetooth(id, mac, rtc_conn).await
+                capabilities::network::connect_bluetooth(&ctx, mac).await;
+                None
             }
 
             // --- Folder Sync ---
             DcMsg::SyncRequest { path } => {
-                crate::fs_sync::sync::handle_sync_request(id, path, rtc_conn, "frankn_cmd").await
+                capabilities::fs::sync::handle_sync_request(&ctx, path).await;
+                None
             }
         }
     }

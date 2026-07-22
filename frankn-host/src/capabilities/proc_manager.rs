@@ -1,15 +1,18 @@
-use crate::{utils::Status, HostMessage, ops::rtc::RTCConn};
+use crate::transport::context::CommandContext;
+use crate::utils::Status;
 use std::collections::HashMap;
 use sysinfo::{ProcessRefreshKind, RefreshKind, System, MemoryRefreshKind};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 pub async fn list_processes(
-    id: &str, 
-    sort_by: &Option<String>, 
+    ctx: &CommandContext,
+    sort_by: &Option<String>,
     filter: &Option<String>,
-    _rtc: Arc<Mutex<RTCConn>>
-) -> HostMessage {
+) {
+    if let Err(e) = ctx.require_grant("list_processes") {
+        let _ = ctx.reply(Status::Error(e), None).await;
+        return;
+    }
+
     let mut sys = System::new_with_specifics(
         RefreshKind::nothing()
             .with_processes(ProcessRefreshKind::everything())
@@ -34,8 +37,6 @@ pub async fn list_processes(
         let cmd = cmd_vec.join(" ");
 
         // --- Kernel Thread Filter ---
-        // 1. Skip if command line is empty (common for kernel tasks)
-        // 2. Skip common kernel patterns
         if cmd.is_empty() || 
            name.starts_with("kworker/") || 
            name.starts_with("migration/") || 
@@ -113,22 +114,24 @@ pub async fn list_processes(
         }
     }
 
-    HostMessage::Response {
-        id: id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({ 
-            "processes": list.into_iter().take(100).collect::<Vec<_>>(),
-            "stats": {
-                "total_mem": total_mem,
-                "used_mem": used_mem,
-                "cpu_load": global_cpu
-            }
-        })),
-        timestamp: crate::utils::get_timestamp(),
-    }
+    let data = serde_json::json!({ 
+        "processes": list.into_iter().take(100).collect::<Vec<_>>(),
+        "stats": {
+            "total_mem": total_mem,
+            "used_mem": used_mem,
+            "cpu_load": global_cpu
+        }
+    });
+
+    let _ = ctx.reply(Status::Success, Some(data)).await;
 }
 
-pub async fn kill_process(id: &str, proc: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn kill_process(ctx: &CommandContext, proc: &str) {
+    if let Err(e) = ctx.require_grant("kill_process") {
+        let _ = ctx.reply(Status::Error(e), None).await;
+        return;
+    }
+
     let mut sys = System::new_with_specifics(
         RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
     );
@@ -164,23 +167,16 @@ pub async fn kill_process(id: &str, proc: &str, _rtc: Arc<Mutex<RTCConn>>) -> Ho
     }
 
     if killed_any {
-        HostMessage::Response {
-            id: id.to_string(),
-            status: Status::Success,
-            data: Some(serde_json::json!({ "message": format!("Terminated {}", proc) })),
-            timestamp: crate::utils::get_timestamp(),
-        }
+        let _ = ctx.reply(
+            Status::Success,
+            Some(serde_json::json!({ "message": format!("Terminated {}", proc) }))
+        ).await;
     } else {
         let error_msg = if errors.is_empty() {
             format!("No process matching '{}' was found", proc)
         } else {
             errors.join("; ")
         };
-        HostMessage::Response {
-            id: id.to_string(),
-            status: Status::Error(error_msg),
-            data: None,
-            timestamp: crate::utils::get_timestamp(),
-        }
+        let _ = ctx.reply(Status::Error(error_msg), None).await;
     }
 }

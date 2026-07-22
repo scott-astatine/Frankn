@@ -1,25 +1,10 @@
-use serde::{Deserialize, Serialize};
 use uinput::event::controller::Controller::Mouse;
 use uinput::event::controller::Mouse as MouseBtn;
 use uinput::event::relative::Position;
 use uinput::event::relative::Relative;
 use uinput::event::relative::Wheel;
 use uinput::event::Event;
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
-pub enum InputMsg {
-    #[serde(rename = "mouse_move")]
-    MouseMove { dx: f64, dy: f64 },
-    #[serde(rename = "mouse_click")]
-    MouseClick { button: u16, down: bool },
-    #[serde(rename = "scroll")]
-    Scroll { dx: f64, dy: f64 },
-    #[serde(rename = "key_press")]
-    KeyPress { key_code: u16, down: bool },
-    #[serde(rename = "type_text")]
-    TypeText { text: String },
-}
+use crate::capabilities::input::InputMsg;
 
 pub struct InputManager {
     mouse: uinput::Device,
@@ -65,11 +50,10 @@ impl InputManager {
                 let _ = self.mouse.synchronize();
             }
             InputMsg::Scroll { dx, dy } => {
-                // Scale down scroll speed. Flutter deltas are large, Linux expects small clicks.
                 let sy = (dy / 10.0) as i32;
                 let sx = (dx / 10.0) as i32;
                 if sy != 0 {
-                    let _ = self.mouse.send(Wheel::Vertical, -sy); // Invert for natural scroll
+                    let _ = self.mouse.send(Wheel::Vertical, -sy);
                 }
                 if sx != 0 {
                     let _ = self.mouse.send(Wheel::Horizontal, sx);
@@ -89,8 +73,6 @@ impl InputManager {
     }
 
     fn type_char(&mut self, c: char) {
-        // Basic mapping for a standard US QWERTY layout.
-        // Format: (keycode, needs_shift)
         let mapping: Option<(i32, bool)> = match c {
             'a' | 'A' => Some((30, c.is_uppercase())),
             'b' | 'B' => Some((48, c.is_uppercase())),
@@ -146,10 +128,10 @@ impl InputManager {
         };
 
         if let Some((code, shift)) = mapping {
-            if shift { let _ = self.keyboard.write(1, 42, 1); } // L_SHIFT Down
+            if shift { let _ = self.keyboard.write(1, 42, 1); }
             let _ = self.keyboard.write(1, code, 1);
             let _ = self.keyboard.write(1, code, 0);
-            if shift { let _ = self.keyboard.write(1, 42, 0); } // L_SHIFT Up
+            if shift { let _ = self.keyboard.write(1, 42, 0); }
             let _ = self.keyboard.synchronize();
         }
     }

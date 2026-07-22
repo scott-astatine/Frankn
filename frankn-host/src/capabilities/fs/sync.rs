@@ -1,38 +1,36 @@
-use crate::{HostMessage, ops::rtc::RTCConn, utils::{Status, get_timestamp}};
+use crate::{
+    HostMessage,
+    transport::context::CommandContext,
+    utils::{Status, get_timestamp},
+};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use walkdir::WalkDir;
 use serde_json::json;
 use std::fs;
 use std::time::UNIX_EPOCH;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio_tungstenite::tungstenite::Bytes;
 
 /// Handles a request from the client to generate a folder snapshot for synchronization.
 pub async fn handle_sync_request(
-    id: &str, 
+    ctx: &CommandContext, 
     path: &str,
-    rtc_conn: Arc<Mutex<RTCConn>>,
-    channel_label: &str
-) -> HostMessage {
+) {
     // Normalize path: strip trailing slashes to avoid WalkDir/strip_prefix issues
     let normalized_path = path.trim_end_matches('/').to_string();
-    crate::log!("SYNC: Received snapshot request [{}] for path: {} (normalized: {})", id, path, normalized_path);
+    crate::log!("SYNC: Received snapshot request [{}] for path: {} (normalized: {})", ctx.id, path, normalized_path);
     
     let root = Path::new(&normalized_path);
 
     if !root.exists() || !root.is_dir() {
         crate::elog!("SYNC ERROR: Path does not exist or is not a directory: {}", normalized_path);
-        return HostMessage::Response {
-            id: id.into(),
-            status: Status::Error("Path does not exist or is not a dir".into()),
-            data: None,
-            timestamp: get_timestamp(),
-        };
+        let _ = ctx.reply(
+            Status::Error("Path does not exist or is not a dir".into()),
+            None,
+        ).await;
+        return;
     }
 
-    let id_clone = id.to_string();
+    let id_clone = ctx.id.clone();
     let path_clone = normalized_path.clone();
     let path_for_task = normalized_path.clone();
 
@@ -112,10 +110,7 @@ pub async fn handle_sync_request(
                     is_final: true,
                     timestamp: get_timestamp(),
                 };
-                if let Ok(json) = serde_json::to_string(&snapshot) {
-                    let conn = rtc_conn.lock().await;
-                    let _ = conn.send_message(channel_label, &Bytes::from(json)).await;
-                }
+                let _ = ctx.stream(snapshot).await;
             } else {
                 for (i, chunk) in files.chunks(CHUNK_SIZE).enumerate() {
                     let is_final = i == total_chunks - 1;
@@ -127,30 +122,21 @@ pub async fn handle_sync_request(
                         timestamp: get_timestamp(),
                     };
 
-                    if let Ok(json) = serde_json::to_string(&snapshot) {
-                        let conn = rtc_conn.lock().await;
-                        if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
-                            crate::elog!("SYNC ERROR: Failed to send chunk: {}", e);
-                        }
-                    }
+                    let _ = ctx.stream(snapshot).await;
                 }
             }
 
-            HostMessage::Response {
-                id: id_clone,
-                status: Status::Success,
-                data: Some(json!({"message": format!("Snapshot sent in {} parts", total_chunks)})),
-                timestamp: get_timestamp(),
-            }
+            let _ = ctx.reply(
+                Status::Success,
+                Some(json!({"message": format!("Snapshot sent in {} parts", total_chunks)})),
+            ).await;
         }
         Err(e) => {
             crate::elog!("SYNC ERROR: Snapshot task failed for {}: {}", path_clone, e);
-            HostMessage::Response {
-                id: id.into(),
-                status: Status::Error(format!("Snapshot task failed: {}", e)),
-                data: None,
-                timestamp: get_timestamp(),
-            }
+            let _ = ctx.reply(
+                Status::Error(format!("Snapshot task failed: {}", e)),
+                None,
+            ).await;
         }
     }
 }

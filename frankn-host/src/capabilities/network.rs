@@ -1,11 +1,8 @@
-use crate::ops::rtc::RTCConn;
-use crate::utils::HostMessage;
+use crate::transport::context::CommandContext;
 use crate::utils::Status;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::process::Command;
 
-pub async fn get_network_status(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn get_network_status(ctx: &CommandContext) {
     let wifi_on = Command::new("nmcli").args(&["radio", "wifi"]).output().await
         .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "enabled")
         .unwrap_or(false);
@@ -14,18 +11,16 @@ pub async fn get_network_status(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> Host
         .map(|o| !String::from_utf8_lossy(&o.stdout).contains("Soft blocked: yes"))
         .unwrap_or(false);
 
-    HostMessage::Response {
-        id: req_id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({
+    let _ = ctx.reply(
+        Status::Success,
+        Some(serde_json::json!({
             "wifi_enabled": wifi_on,
             "bluetooth_enabled": bt_on
         })),
-        timestamp: crate::utils::get_timestamp(),
-    }
+    ).await;
 }
 
-pub async fn toggle_radio(req_id: &str, radio: &str, state: bool, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn toggle_radio(ctx: &CommandContext, radio: &str, state: bool) {
     if radio == "wifi" {
         let arg = if state { "on" } else { "off" };
         let _ = Command::new("nmcli").args(&["radio", "wifi", arg]).output().await;
@@ -33,15 +28,13 @@ pub async fn toggle_radio(req_id: &str, radio: &str, state: bool, _rtc: Arc<Mute
         let arg = if state { "unblock" } else { "block" };
         let _ = Command::new("rfkill").args(&[arg, "bluetooth"]).output().await;
     }
-    HostMessage::Response {
-        id: req_id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({ "message": format!("{} turned {}", radio, state) })),
-        timestamp: crate::utils::get_timestamp(),
-    }
+    let _ = ctx.reply(
+        Status::Success,
+        Some(serde_json::json!({ "message": format!("{} turned {}", radio, state) })),
+    ).await;
 }
 
-pub async fn list_wifi_networks(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn list_wifi_networks(ctx: &CommandContext) {
     // Rescan in the background so we don't block the WebRTC response
     tokio::spawn(async {
         let _ = Command::new("nmcli").args(&["dev", "wifi", "rescan"]).output().await;
@@ -64,15 +57,13 @@ pub async fn list_wifi_networks(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> Host
         }
     }
     
-    HostMessage::Response {
-        id: req_id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({ "networks": networks })),
-        timestamp: crate::utils::get_timestamp(),
-    }
+    let _ = ctx.reply(
+        Status::Success,
+        Some(serde_json::json!({ "networks": networks })),
+    ).await;
 }
 
-pub async fn connect_wifi(req_id: &str, ssid: &str, password: &Option<String>, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn connect_wifi(ctx: &CommandContext, ssid: &str, password: &Option<String>) {
     let mut cmd = Command::new("nmcli");
     cmd.args(&["dev", "wifi", "connect", ssid]);
     if let Some(pw) = password {
@@ -82,15 +73,13 @@ pub async fn connect_wifi(req_id: &str, ssid: &str, password: &Option<String>, _
     let output = cmd.output().await;
     let success = output.map(|o| o.status.success()).unwrap_or(false);
     
-    HostMessage::Response {
-        id: req_id.to_string(),
-        status: if success { Status::Success } else { Status::Error("Failed".to_string()) },
-        data: Some(serde_json::json!({ "success": success })),
-        timestamp: crate::utils::get_timestamp(),
-    }
+    let _ = ctx.reply(
+        if success { Status::Success } else { Status::Error("Failed".to_string()) },
+        Some(serde_json::json!({ "success": success })),
+    ).await;
 }
 
-pub async fn list_bluetooth_devices(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn list_bluetooth_devices(ctx: &CommandContext) {
     // Scan for new devices in the background
     tokio::spawn(async {
         let _ = Command::new("bluetoothctl").args(&["--timeout", "10", "scan", "on"]).output().await;
@@ -123,24 +112,20 @@ pub async fn list_bluetooth_devices(req_id: &str, _rtc: Arc<Mutex<RTCConn>>) -> 
         }
     }
     
-    HostMessage::Response {
-        id: req_id.to_string(),
-        status: Status::Success,
-        data: Some(serde_json::json!({ "devices": devices })),
-        timestamp: crate::utils::get_timestamp(),
-    }
+    let _ = ctx.reply(
+        Status::Success,
+        Some(serde_json::json!({ "devices": devices })),
+    ).await;
 }
 
-pub async fn connect_bluetooth(req_id: &str, mac: &str, _rtc: Arc<Mutex<RTCConn>>) -> HostMessage {
+pub async fn connect_bluetooth(ctx: &CommandContext, mac: &str) {
     // Attempt pair then connect
     let _ = Command::new("bluetoothctl").args(&["pair", mac]).output().await;
     let output = Command::new("bluetoothctl").args(&["connect", mac]).output().await;
     let success = output.map(|o| o.status.success()).unwrap_or(false);
     
-    HostMessage::Response {
-        id: req_id.to_string(),
-        status: if success { Status::Success } else { Status::Error("Failed".to_string()) },
-        data: Some(serde_json::json!({ "success": success })),
-        timestamp: crate::utils::get_timestamp(),
-    }
+    let _ = ctx.reply(
+        if success { Status::Success } else { Status::Error("Failed".to_string()) },
+        Some(serde_json::json!({ "success": success })),
+    ).await;
 }
