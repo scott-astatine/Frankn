@@ -314,6 +314,31 @@ class _CodeEditorScreenState extends State<CodeEditorScreen>
                       shape: const CircleBorder(),
                     ),
                   ),
+                if (widget.localFilePath != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.cloud_upload_outlined,
+                      color: AppColors.accentPrimary,
+                      size: 18,
+                    ),
+                    tooltip: "Upload to Remote Host",
+                    onPressed: () async {
+                      if (_localFile != null) {
+                        await _localFile!.writeAsString(_controller.text);
+                      }
+                      uploadSpecificLocalFile(widget.localFilePath!);
+                    },
+                    style: IconButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(36, 36),
+                      backgroundColor: AppColors.background.withValues(
+                        alpha: 0.5,
+                      ),
+                      shape: const CircleBorder(),
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 8),
               ],
             ),

@@ -51,6 +51,7 @@ class RtcThinClient {
   String? lastSshPassword;
   String? lastNavigatedPath;
   String? homeDir;
+  dynamic activeSshController;
 
   Set<String> onlineHostIds = {};
   List<dynamic> currentHosts = [];
@@ -143,6 +144,11 @@ class RtcThinClient {
         currentHostState = HostConnectionState.values[stateIndex];
         if (currentHostState == HostConnectionState.disconnected ||
             currentHostState == HostConnectionState.failed) {
+          try {
+            activeSshController?.stopSession();
+            activeSshController?.dispose();
+          } catch (_) {}
+          activeSshController = null;
           lastSshUsername = null;
           lastSshPassword = null;
           lastNavigatedPath = null;

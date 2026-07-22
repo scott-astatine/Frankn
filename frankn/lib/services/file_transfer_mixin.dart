@@ -6,6 +6,7 @@ import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/widgets/settings/local_dir_selector.dart';
+import 'package:frankn/widgets/settings/remote_dir_selector.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/file_browser/file_browser_utils.dart';
@@ -233,5 +234,70 @@ mixin FileTransferMixin<T extends StatefulWidget> on State<T> {
       'remote_path': targetPath,
       'hash': hashStr,
     });
+  }
+
+  Future<void> uploadSpecificLocalFile(
+    String localFilePath, {
+    String? targetRemoteDir,
+  }) async {
+    final localFile = File(localFilePath);
+    if (!await localFile.exists()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("LOCAL FILE NOT FOUND"),
+            backgroundColor: AppColors.accentError,
+          ),
+        );
+      }
+      return;
+    }
+
+    String remoteDir = targetRemoteDir ??
+        client.lastNavigatedPath ??
+        client.homeDir ??
+        '/home/';
+
+    if (!mounted) return;
+    final selectedDir = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => RemoteDirSelector(
+        client: client,
+        initialPath: remoteDir,
+      ),
+    );
+
+    if (selectedDir == null || selectedDir.isEmpty) return;
+    remoteDir = selectedDir;
+
+    final int size = await localFile.length();
+    final fileName = localFilePath.split(Platform.pathSeparator).last;
+    final targetPath = PathHelper.join(remoteDir, fileName);
+    final transferId = FileUtils.generateStableTransferId(targetPath, size);
+
+    final hash = await sha256.bind(localFile.openRead()).first;
+    final hashStr = HEX.encode(hash.bytes).toLowerCase();
+
+    client.sendIntent(IsolateAction.uploadInit, {
+      'id': transferId,
+      'file_name': fileName,
+      'local_path': localFile.path,
+      'remote_path': targetPath,
+      'hash': hashStr,
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "UPLOADING $fileName TO ${remoteDir.toUpperCase()}",
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: AppColors.accentPrimary,
+        ),
+      );
+    }
   }
 }

@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:frankn/services/client_rtc/rtc.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/notification_service.dart';
@@ -14,8 +14,8 @@ import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/services/sync_service.dart';
 import 'package:frankn/services/transfer_engine.dart';
-import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
+import 'package:frankn/utils/utils.dart';
 import 'package:path_provider/path_provider.dart';
 
 class FranknTaskHandler extends TaskHandler {
@@ -296,172 +296,6 @@ class FranknTaskHandler extends TaskHandler {
     FlutterForegroundTask.sendDataToMain(msg.toJson());
   }
 
-  void _handleUploadInit(IsolateMsg msg) {
-    final engine = TransferEngine(RtcClient());
-    final id = msg.payload['id'];
-    _activeEngines[id] = engine;
-    final fileName = msg.payload['file_name'];
-    final localPath = msg.payload['local_path'];
-    final bool showNotif = msg.payload['show_notification'] ?? true;
-
-    _uploadStartTimes[id] = DateTime.now().millisecondsSinceEpoch;
-
-    // Show initial notification if requested
-    if (showNotif) {
-       final file = File(localPath);
-       if (file.existsSync()) {
-          final size = file.lengthSync();
-          NotificationService().showProgressNotification(
-            id.hashCode.abs() % 100000,
-            "⇧ [UPLD_RUN] // 0.0% Completed [□□□□□□□□□□]",
-            "⇄ 0 B/s  |  ⧗ Calculating...  |  ⛃ 0 B / ${FileUtils.formatSize(size)}",
-            0.0,
-            transferId: id,
-          );
-       }
-    }
-
-    // Check for existing partial file to enable resume
-    int resumeOffset = 0;
-    // Note: We don't have a reliable way to track local partials for uploads yet, 
-    // but the engine supports it if passed. 
-    // For now, resumeOffset is 0.
-
-    engine
-        .upload(
-          id: id,
-          remotePath: msg.payload['remote_path'],
-          file: File(localPath),
-          hash: msg.payload['hash'],
-          resumeOffset: resumeOffset,
-          onProgress:
-              ({
-                required progress,
-                required bytesTransferred,
-                required totalBytes,
-              }) {
-                final progMsg = IsolateMsg(
-                  type: IsolateType.event,
-                  action: IsolateAction.transferProgress,
-                  payload: TransferProgressUpdate(
-                    id: id,
-                    progress: progress,
-                    bytesSent: bytesTransferred,
-                    totalBytes: totalBytes,
-                  ).toJson(),
-                );
-                _broadcastToMain(progMsg);
-                RtcThinClient().handleMsg(progMsg);
-
-                if (showNotif) {
-                  final now = DateTime.now().millisecondsSinceEpoch;
-                  final lastUpdate = _lastUploadNotificationTimes[id] ?? 0;
-                  final isComplete = bytesTransferred == totalBytes;
-
-                  if (isComplete || now - lastUpdate > 500) {
-                    _lastUploadNotificationTimes[id] = now;
-
-                    final startTime = _uploadStartTimes[id] ?? now;
-                    final timeDiffSec = (now - startTime) / 1000.0;
-                    
-                    final double speed = timeDiffSec > 0.1 ? bytesTransferred / timeDiffSec : 0.0;
-                    final double etaSec = speed > 1024 ? (totalBytes - bytesTransferred) / speed : 0.0;
-
-                    String etaStr = "Calculating...";
-                    if (etaSec > 0) {
-                      if (etaSec < 60) {
-                        etaStr = "⧗ ${etaSec.toStringAsFixed(0)}s remaining";
-                      } else {
-                        final minutes = etaSec ~/ 60;
-                        final seconds = (etaSec % 60).toInt();
-                        etaStr = "⧗ ${minutes}m ${seconds}s remaining";
-                      }
-                    } else if (isComplete) {
-                      etaStr = "⧗ Complete";
-                    }
-
-                    final String speedStr = "${FileUtils.formatSize(speed.toInt())}/s";
-                    final String sizeInfo = "${FileUtils.formatSize(bytesTransferred)} / ${FileUtils.formatSize(totalBytes)}";
-
-                    NotificationService().showProgressNotification(
-                      id.hashCode.abs() % 100000,
-                      "⇧ [UPLD_RUN] // ${(progress * 100).toStringAsFixed(1)}%",
-                      "⇄ $speedStr  |  ⧗ $etaStr  |  ⛃ $sizeInfo",
-                      progress * 100,
-                      transferId: id,
-                    );
-                  }
-                }
-              },
-        )
-        .then((_) {
-          engine.dispose();
-          _activeEngines.remove(id);
-          _uploadStartTimes.remove(id);
-          _lastUploadNotificationTimes.remove(id);
-          
-          final okMsg = IsolateMsg(
-            type: IsolateType.event,
-            action: IsolateAction.transferComplete,
-            payload: TransferProgressComplete(
-              id: id,
-              finalPath: msg.payload['remote_path'],
-            ).toJson(),
-          );
-          _broadcastToMain(okMsg);
-          RtcThinClient().handleMsg(okMsg);
-
-          if (showNotif) {
-            NotificationService().dismiss(id.hashCode.abs() % 100000);
-            AwesomeNotifications().createNotification(
-              content: NotificationContent(
-                id: id.hashCode.abs() % 100000,
-                channelKey: 'frankn_host_alerts',
-                title: "◈ [UPLD_DONE] // $fileName",
-                body: "'$fileName' uploaded successfully.",
-                notificationLayout: NotificationLayout.Default,
-                category: NotificationCategory.Status,
-                color: AppColors.accentSuccess,
-                backgroundColor: AppColors.surfaceSecondary,
-              ),
-            );
-          }
-        })
-        .catchError((e) {
-          engine.dispose();
-          _activeEngines.remove(id);
-          _uploadStartTimes.remove(id);
-          _lastUploadNotificationTimes.remove(id);
-          
-          final failMsg = IsolateMsg(
-            type: IsolateType.event,
-            action: IsolateAction.transferFailed,
-            payload: TransferProgressFailed(
-                id: id, 
-                error: e.toString()
-            ).toJson(),
-          );
-          _broadcastToMain(failMsg);
-          RtcThinClient().handleMsg(failMsg);
-
-          if (showNotif) {
-            NotificationService().dismiss(id.hashCode.abs() % 100000);
-            AwesomeNotifications().createNotification(
-              content: NotificationContent(
-                id: id.hashCode.abs() % 100000,
-                channelKey: 'frankn_host_alerts',
-                title: "⚠ [UPLD_ERR] // $fileName",
-                body: "'$fileName' failed to upload.",
-                notificationLayout: NotificationLayout.Default,
-                category: NotificationCategory.Status,
-                color: AppColors.accentError,
-                backgroundColor: AppColors.surfaceSecondary,
-              ),
-            );
-          }
-        });
-  }
-
   void _handleIntent(IsolateMsg msg) {
     switch (msg.action) {
       case IsolateAction.connectSignaling:
@@ -549,5 +383,177 @@ class FranknTaskHandler extends TaskHandler {
         }
         break;
     }
+  }
+
+  void _handleUploadInit(IsolateMsg msg) {
+    final engine = TransferEngine(RtcClient());
+    final id = msg.payload['id'];
+    _activeEngines[id] = engine;
+    final fileName = msg.payload['file_name'];
+    final localPath = msg.payload['local_path'];
+    final bool showNotif = msg.payload['show_notification'] ?? true;
+
+    _uploadStartTimes[id] = DateTime.now().millisecondsSinceEpoch;
+
+    // Show initial notification if requested
+    if (showNotif) {
+      final file = File(localPath);
+      if (file.existsSync()) {
+        final size = file.lengthSync();
+        NotificationService().showProgressNotification(
+          id.hashCode.abs() % 100000,
+          "⇧ [UPLD_RUN] // 0.0% Completed [□□□□□□□□□□]",
+          "⇄ 0 B/s  |  ⧗ Calculating...  |  ⛃ 0 B / ${FileUtils.formatSize(size)}",
+          0.0,
+          transferId: id,
+        );
+      }
+    }
+
+    // Check for existing partial file to enable resume
+    int resumeOffset = 0;
+    // Note: We don't have a reliable way to track local partials for uploads yet,
+    // but the engine supports it if passed.
+    // For now, resumeOffset is 0.
+
+    engine
+        .upload(
+          id: id,
+          remotePath: msg.payload['remote_path'],
+          file: File(localPath),
+          hash: msg.payload['hash'],
+          resumeOffset: resumeOffset,
+          onProgress:
+              ({
+                required progress,
+                required bytesTransferred,
+                required totalBytes,
+              }) {
+                final progMsg = IsolateMsg(
+                  type: IsolateType.event,
+                  action: IsolateAction.transferProgress,
+                  payload: TransferProgressUpdate(
+                    id: id,
+                    progress: progress,
+                    bytesSent: bytesTransferred,
+                    totalBytes: totalBytes,
+                  ).toJson(),
+                );
+                _broadcastToMain(progMsg);
+                RtcThinClient().handleMsg(progMsg);
+
+                if (showNotif) {
+                  final now = DateTime.now().millisecondsSinceEpoch;
+                  final lastUpdate = _lastUploadNotificationTimes[id] ?? 0;
+                  final isComplete = bytesTransferred == totalBytes;
+
+                  if (isComplete || now - lastUpdate > 500) {
+                    _lastUploadNotificationTimes[id] = now;
+
+                    final startTime = _uploadStartTimes[id] ?? now;
+                    final timeDiffSec = (now - startTime) / 1000.0;
+
+                    final double speed = timeDiffSec > 0.1
+                        ? bytesTransferred / timeDiffSec
+                        : 0.0;
+                    final double etaSec = speed > 1024
+                        ? (totalBytes - bytesTransferred) / speed
+                        : 0.0;
+
+                    String etaStr = "Calculating...";
+                    if (etaSec > 0) {
+                      if (etaSec < 60) {
+                        etaStr = "⧗ ${etaSec.toStringAsFixed(0)}s remaining";
+                      } else {
+                        final minutes = etaSec ~/ 60;
+                        final seconds = (etaSec % 60).toInt();
+                        etaStr = "⧗ ${minutes}m ${seconds}s remaining";
+                      }
+                    } else if (isComplete) {
+                      etaStr = "⧗ Complete";
+                    }
+
+                    final String speedStr =
+                        "${FileUtils.formatSize(speed.toInt())}/s";
+                    final String sizeInfo =
+                        "${FileUtils.formatSize(bytesTransferred)} / ${FileUtils.formatSize(totalBytes)}";
+
+                    NotificationService().showProgressNotification(
+                      id.hashCode.abs() % 100000,
+                      "⇧ [UPLD_RUN] // ${(progress * 100).toStringAsFixed(1)}%",
+                      "⇄ $speedStr  |  ⧗ $etaStr  |  ⛃ $sizeInfo",
+                      progress * 100,
+                      transferId: id,
+                    );
+                  }
+                }
+              },
+        )
+        .then((_) {
+          engine.dispose();
+          _activeEngines.remove(id);
+          _uploadStartTimes.remove(id);
+          _lastUploadNotificationTimes.remove(id);
+
+          final okMsg = IsolateMsg(
+            type: IsolateType.event,
+            action: IsolateAction.transferComplete,
+            payload: TransferProgressComplete(
+              id: id,
+              finalPath: msg.payload['remote_path'],
+            ).toJson(),
+          );
+          _broadcastToMain(okMsg);
+          RtcThinClient().handleMsg(okMsg);
+
+          if (showNotif) {
+            NotificationService().dismiss(id.hashCode.abs() % 100000);
+            AwesomeNotifications().createNotification(
+              content: NotificationContent(
+                id: id.hashCode.abs() % 100000,
+                channelKey: 'frankn_host_alerts',
+                title: "◈ [UPLD_DONE] // $fileName",
+                body: "'$fileName' uploaded successfully.",
+                notificationLayout: NotificationLayout.Default,
+                category: NotificationCategory.Status,
+                color: AppColors.accentSuccess,
+                backgroundColor: AppColors.surfaceSecondary,
+              ),
+            );
+          }
+        })
+        .catchError((e) {
+          engine.dispose();
+          _activeEngines.remove(id);
+          _uploadStartTimes.remove(id);
+          _lastUploadNotificationTimes.remove(id);
+
+          final failMsg = IsolateMsg(
+            type: IsolateType.event,
+            action: IsolateAction.transferFailed,
+            payload: TransferProgressFailed(
+              id: id,
+              error: e.toString(),
+            ).toJson(),
+          );
+          _broadcastToMain(failMsg);
+          RtcThinClient().handleMsg(failMsg);
+
+          if (showNotif) {
+            NotificationService().dismiss(id.hashCode.abs() % 100000);
+            AwesomeNotifications().createNotification(
+              content: NotificationContent(
+                id: id.hashCode.abs() % 100000,
+                channelKey: 'frankn_host_alerts',
+                title: "⚠ [UPLD_ERR] // $fileName",
+                body: "'$fileName' failed to upload.",
+                notificationLayout: NotificationLayout.Default,
+                category: NotificationCategory.Status,
+                color: AppColors.accentError,
+                backgroundColor: AppColors.surfaceSecondary,
+              ),
+            );
+          }
+        });
   }
 }

@@ -16,6 +16,7 @@ import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/dohee_chat/neo_latex_element_builder.dart';
 import 'package:frankn/widgets/dohee_chat/neo_latex_inline_syntax.dart';
+import 'package:frankn/widgets/markdown/neo_mermaid_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 
@@ -122,15 +123,17 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
   void refreshDirectory() {}
 
   Widget _buildBody(BuildContext context) {
-    if (isLoading) {
+    if (isLoading && _markdownContent.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(color: AppColors.markdownPrimaryLight),
+            const CircularProgressIndicator(
+              color: AppColors.markdownPrimaryLight,
+            ),
             const SizedBox(height: 16),
             Text(
-              transferMsg.isEmpty ? "FETCHING DOCUMENT..." : transferMsg,
+              "FETCHING DOCUMENT...",
               style: GoogleFonts.jetBrainsMono(
                 color: AppColors.markdownPrimaryLight,
                 fontSize: 11,
@@ -285,6 +288,25 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
           borderRadius: BorderRadius.circular(8),
         ),
         tableColumnWidth: const IntrinsicColumnWidth(),
+        blockquote: GoogleFonts.inter(
+          color: Colors.white.withValues(alpha: 0.9),
+          fontSize: 14,
+          height: 1.5,
+        ),
+        blockquoteDecoration: BoxDecoration(
+          color: AppColors.surfaceSecondary.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(6),
+          border: Border(
+            left: BorderSide(
+              color: AppColors.accentWarning,
+              width: 3.5,
+            ),
+          ),
+        ),
+        blockquotePadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
     );
   }
@@ -348,6 +370,26 @@ class _MarkdownViewerScreenState extends State<MarkdownViewerScreen>
                     shape: const CircleBorder(),
                   ),
                 ),
+                if (widget.localFilePath != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.cloud_upload_outlined,
+                      color: AppColors.accentPrimary,
+                      size: 18,
+                    ),
+                    tooltip: "Upload to Remote Host",
+                    onPressed: () {
+                      uploadSpecificLocalFile(widget.localFilePath!);
+                    },
+                    style: IconButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(36, 36),
+                      backgroundColor: AppColors.background.withValues(alpha: 0.5),
+                      shape: const CircleBorder(),
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 8),
               ],
             ),
@@ -422,6 +464,15 @@ class _ViewerCodeElementBuilder extends MarkdownElementBuilder {
 
     if (language.isEmpty && !element.textContent.contains('\n')) {
       return null;
+    }
+
+    final lowerLang = language.toLowerCase();
+    final contentTrim = element.textContent.trimLeft().toLowerCase();
+    if (lowerLang == 'mermaid' ||
+        lowerLang == 'graph' ||
+        contentTrim.startsWith('graph ') ||
+        contentTrim.startsWith('flowchart ')) {
+      return NeoMermaidWidget(code: element.textContent);
     }
 
     final customTheme = Map<String, TextStyle>.from(monokaiSublimeTheme);

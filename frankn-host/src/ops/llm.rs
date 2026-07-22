@@ -29,6 +29,8 @@ pub struct LlmManager {
     chats: Arc<Mutex<HashMap<String, ChatSession>>>,
     chats_loaded: bool,
     pub approval_registry: HashMap<String, tokio::sync::oneshot::Sender<bool>>,
+    pub engine: Option<Arc<dohee_engine::DoheeEngine>>,
+    pub use_in_process_engine: bool,
 }
 
 impl LlmManager {
@@ -39,6 +41,8 @@ impl LlmManager {
             chats: Arc::new(Mutex::new(HashMap::new())),
             chats_loaded: false,
             approval_registry: HashMap::new(),
+            engine: None,
+            use_in_process_engine: true,
         }
     }
 
@@ -111,11 +115,51 @@ impl LlmManager {
         model_name_or_path: &str,
         config: &crate::config::HostConfig,
     ) -> Result<(), String> {
-        // 1. Verify Ollama is running
+        if self.use_in_process_engine
+            && (model_name_or_path.ends_with(".gguf") || model_name_or_path.ends_with(".ggff"))
+        {
+            let path = std::path::Path::new(model_name_or_path);
+            let final_path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                let model_dir = config.llm_model_dir.clone().unwrap_or_else(|| {
+                    dirs::home_dir()
+                        .map(|mut p| {
+                            p.push(".config/frankn/models");
+                            p.to_path_buf()
+                        })
+                        .unwrap_or_else(|| std::path::PathBuf::from("/home/user/Models"))
+                        .to_string_lossy()
+                        .into_owned()
+                });
+                std::path::Path::new(&model_dir).join(model_name_or_path)
+            };
+
+            if !final_path.exists() {
+                return Err(format!(
+                    "Local model file does not exist: {}",
+                    final_path.display()
+                ));
+            }
+
+            crate::log!("Initializing in-process Dohee Engine with model: {}", final_path.display());
+            match dohee_engine::DoheeEngine::load(&final_path, dohee_engine::EngineConfig::default()) {
+                Ok(engine) => {
+                    self.engine = Some(Arc::new(engine));
+                    self.active_model = Some(final_path.to_string_lossy().to_string());
+                    return Ok(());
+                }
+                Err(e) => {
+                    crate::elog!("Failed to load in-process Dohee Engine: {}. Falling back to Ollama.", e);
+                }
+            }
+        }
+
+        // 1. Verify Ollama is running (Fallback)
         let health_res = self.client.get("http://localhost:11434/").send().await;
         if health_res.is_err() {
             return Err(
-                "Ollama service is not running on http://localhost:11434. Please start Ollama."
+                "Ollama service is not running on http://localhost:11434. Please start Ollama or supply a GGUF model path for in-process execution."
                     .to_string(),
             );
         }
@@ -274,6 +318,102 @@ impl LlmManager {
         Self::send_msg(response, &rtc_conn, &label).await;
 
         let cid = chat_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        let engine_opt = {
+            let l = llm_manager.lock().await;
+            l.engine.clone()
+        };
+
+        if let Some(engine) = engine_opt {
+            crate::log!("Running turn via in-process Dohee Engine");
+            if let Ok(handle) = engine.create_session(dohee_engine::SessionConfig::default()) {
+                let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
+                let _ = handle.cmd_tx.send(dohee_engine::SessionCommand::RunTurn {
+                    prompt: message.clone(),
+                    event_tx,
+                });
+
+                let mut assistant_content = String::new();
+                while let Some(evt) = event_rx.recv().await {
+                    match evt {
+                        dohee_engine::AgentEvent::Token(tok) => {
+                            assistant_content.push_str(&tok);
+                            let msg = HostMessage::LlmToken {
+                                token: tok,
+                                is_final: false,
+                                timestamp: crate::utils::get_timestamp(),
+                            };
+                            Self::send_msg(msg, &rtc_conn, &label).await;
+                        }
+                        dohee_engine::AgentEvent::ToolRequest { call_id: _, tool, args } => {
+                            crate::log!("AGENT LOOP (In-Process): Tool call requested: {}", tool);
+                            let status_msg = format!("\n\n⚙️ [Dohee Engine: Executing tool `{}`...]\n\n", tool);
+                            Self::send_msg(
+                                HostMessage::LlmToken {
+                                    token: status_msg,
+                                    is_final: false,
+                                    timestamp: crate::utils::get_timestamp(),
+                                },
+                                &rtc_conn,
+                                &label,
+                            ).await;
+
+                            let args_str = args.to_string();
+                            let tool_result = crate::ops::llm_tools::execute_tool(
+                                &tool,
+                                &args_str,
+                                &llm_manager,
+                                &rtc_conn,
+                                &label,
+                            ).await;
+
+                            let observation_content = match tool_result {
+                                Ok(out) => out,
+                                Err(err) => err,
+                            };
+
+                            let observation_msg = format!(
+                                "\n\n⚙️ [Dohee Engine: Tool `{}` result:\n```\n{}\n```]\n\n",
+                                tool, observation_content
+                            );
+                            Self::send_msg(
+                                HostMessage::LlmToken {
+                                    token: observation_msg,
+                                    is_final: false,
+                                    timestamp: crate::utils::get_timestamp(),
+                                },
+                                &rtc_conn,
+                                &label,
+                            ).await;
+                        }
+                        dohee_engine::AgentEvent::Finished { .. } => {
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+
+                {
+                    let mut c = chats.lock().await;
+                    if let Some(session) = c.get_mut(&cid) {
+                        session.messages.push(ChatMessage {
+                            role: "assistant".to_string(),
+                            content: assistant_content,
+                        });
+                        session.updated_at = crate::utils::get_timestamp();
+                        Self::save_chats(&c).await;
+                    }
+                }
+
+                let final_msg = HostMessage::LlmToken {
+                    token: String::new(),
+                    is_final: true,
+                    timestamp: crate::utils::get_timestamp(),
+                };
+                Self::send_msg(final_msg, &rtc_conn, &label).await;
+                return;
+            }
+        }
 
         // We load the existing chat history and append the user message
         let mut req_messages = {

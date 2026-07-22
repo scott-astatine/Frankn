@@ -25,6 +25,7 @@ class SshController extends ChangeNotifier {
 
   ModState ctrlState = ModState.off;
   ModState altState = ModState.off;
+  ModState shiftState = ModState.off;
 
   bool _isDisposed = false;
 
@@ -37,21 +38,51 @@ class SshController extends ChangeNotifier {
 
   SshController(this.client);
 
-  ModState _nextModState(ModState current) {
-    if (current == ModState.off) return ModState.active;
-    if (current == ModState.active) return ModState.locked;
-    return ModState.off;
-  }
-
   void toggleCtrl() {
     if (_isDisposed) return;
-    ctrlState = _nextModState(ctrlState);
+    if (ctrlState == ModState.locked) {
+      ctrlState = ModState.off;
+    } else {
+      ctrlState = (ctrlState == ModState.active) ? ModState.off : ModState.active;
+    }
+    notifyListeners();
+  }
+
+  void lockCtrl() {
+    if (_isDisposed) return;
+    ctrlState = (ctrlState == ModState.locked) ? ModState.off : ModState.locked;
     notifyListeners();
   }
 
   void toggleAlt() {
     if (_isDisposed) return;
-    altState = _nextModState(altState);
+    if (altState == ModState.locked) {
+      altState = ModState.off;
+    } else {
+      altState = (altState == ModState.active) ? ModState.off : ModState.active;
+    }
+    notifyListeners();
+  }
+
+  void lockAlt() {
+    if (_isDisposed) return;
+    altState = (altState == ModState.locked) ? ModState.off : ModState.locked;
+    notifyListeners();
+  }
+
+  void toggleShift() {
+    if (_isDisposed) return;
+    if (shiftState == ModState.locked) {
+      shiftState = ModState.off;
+    } else {
+      shiftState = (shiftState == ModState.active) ? ModState.off : ModState.active;
+    }
+    notifyListeners();
+  }
+
+  void lockShift() {
+    if (_isDisposed) return;
+    shiftState = (shiftState == ModState.locked) ? ModState.off : ModState.locked;
     notifyListeners();
   }
 
@@ -248,29 +279,40 @@ class SshController extends ChangeNotifier {
   void _handleInput(String data) {
     if (_sshSession == null || _isDisposed) return;
 
+    String processed = data;
+    if (shiftState != ModState.off) {
+      if (processed.length == 1) {
+        processed = processed.toUpperCase();
+      }
+      if (shiftState == ModState.active) {
+        shiftState = ModState.off;
+        notifyListeners();
+      }
+    }
+
     if (ctrlState != ModState.off) {
-      if (data.length == 1) {
-        final char = data.toUpperCase().codeUnitAt(0);
+      if (processed.length == 1) {
+        final char = processed.toUpperCase().codeUnitAt(0);
         if (char >= 64 && char <= 95) {
           _sshSession!.write(Uint8List.fromList([char & 0x1f]));
         } else {
-          _sshSession!.write(utf8.encode(data));
+          _sshSession!.write(utf8.encode(processed));
         }
       } else {
-        _sshSession!.write(utf8.encode(data));
+        _sshSession!.write(utf8.encode(processed));
       }
       if (ctrlState == ModState.active) {
         ctrlState = ModState.off;
         notifyListeners();
       }
     } else if (altState != ModState.off) {
-      _sshSession!.write(utf8.encode('\x1b$data'));
+      _sshSession!.write(utf8.encode('\x1b$processed'));
       if (altState == ModState.active) {
         altState = ModState.off;
         notifyListeners();
       }
     } else {
-      _sshSession!.write(utf8.encode(data));
+      _sshSession!.write(utf8.encode(processed));
     }
   }
 
@@ -299,6 +341,7 @@ class SshController extends ChangeNotifier {
     _sshDataSub = null;
     ctrlState = ModState.off;
     altState = ModState.off;
+    shiftState = ModState.off;
     notifyListeners();
   }
 

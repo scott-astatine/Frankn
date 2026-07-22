@@ -10,6 +10,40 @@ if [ "$EUID" -eq 0 ]; then
   exit 1
 fi
 
+setup_uinput() {
+  local install_user
+  local install_group
+
+  install_user="$(id -un)"
+  install_group="$(id -gn)"
+
+  echo "Configuring uinput for Frankn remote input..."
+
+  # Load the kernel module now and automatically on future boots.
+  printf 'uinput\n' | sudo tee /etc/modules-load.d/frankn-uinput.conf >/dev/null
+
+  # Frankn runs as a user service. Limit /dev/uinput access to that user's
+  # primary group instead of making the device world-writable.
+  printf 'KERNEL=="uinput", MODE="0660", GROUP="%s"\n' "$install_group" \
+    | sudo tee /etc/udev/rules.d/60-frankn-uinput.rules >/dev/null
+
+  sudo udevadm control --reload-rules
+  sudo modprobe uinput
+  sudo udevadm trigger --action=change --name-match=/dev/uinput
+  sudo udevadm settle
+
+  # A user service starts at boot only when lingering is enabled.
+  if ! sudo loginctl enable-linger "$install_user"; then
+    echo "WARNING: Could not enable user-service lingering for $install_user."
+    echo "         frankn-host will still start when the user logs in."
+  fi
+
+  if [ ! -r /dev/uinput ] || [ ! -w /dev/uinput ]; then
+    echo "WARNING: $install_user cannot access /dev/uinput yet."
+    echo "         Reboot or log out and back in, then restart frankn-host."
+  fi
+}
+
 echo "Building Frankn Host binary (Release Mode)..."
 cd "$(dirname "$0")"
 cargo build --release
@@ -17,7 +51,9 @@ cargo build --release
 echo "Stripping binary..."
 strip target/release/frankn-host
 
-systemctl --user stop frankn-host
+systemctl --user stop frankn-host 2>/dev/null || true
+
+setup_uinput
 
 echo "Installing binary globally to /usr/bin/frankn-host (requires sudo)..."
 sudo cp target/release/frankn-host /usr/bin/frankn-host

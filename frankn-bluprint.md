@@ -1,100 +1,164 @@
-# Frankn: My Personal Remote Ops Center
+# ⚡ Frankn: Master Edge Runtime Architecture & Technical Blueprint
 
-This is the evolving master plan and technical blueprint for **Frankn**, a high-performance, peer-to-peer remote operations center. I am building this because I need a secure, low-latency "remote brain" for my workstation and system servers—something that combines the power of a modern GUI with the absolute control of a terminal, without compromising on security or performance.
+> **Capabilities over applications.**  
+> **Runtime before products.**  
+> **Local before cloud.**  
 
----
-
-## 1. Vision & Core Design Principles
-
-Unlike traditional remote administration interfaces, Frankn operates strictly on a set of core principles optimized for decentralized, lightweight execution:
-
-1. **Intents, Not Pixels:** Frankn completely avoids bandwidth-heavy screen streaming (such as VNC or RDP). Instead, it streams raw, structured *intents* (binary file chunks, process metrics, system states, and terminal strings) across direct P2P data channels. This ensures that the interface remains blazingly fast even on degraded edge connections while conserving battery.
-2. **Zero-Trust Security & Timing Mitigation:** Every connection is treated as hostile until cryptographically verified. We employ Argon2id challenge-response handshakes combined with constant-time verification primitives (`subtle` crate) to safeguard the pairing from side-channel timing analysis. Subsystem actions are sandboxed within the host's home directory (`dirs::home_dir()`), walking ancestor paths recursively to block directory traversal attacks.
-3. **The Cyberpunk Aesthetic:** Built with a high-contrast monospaced command-line layout, Nerd Font iconography, neon borders, and dynamic frosted-glass modal panels, the client provides the visual feedback of an immersive, futuristic system cockpit.
+This document serves as the master technical blueprint for **Frankn**, a modular, local-first runtime for distributed devices.
 
 ---
 
-## 2. Architecture Overview
+## 📜 1. Philosophy & Engineering Discipline
 
-Direct P2P links are negotiated dynamically via WebRTC, bypassing the need for port forwarding, public network exposure, or central VPN tunnels.
+Frankn is built on the core principle of **Platform over Product**:
 
+1. **Applications Solve Problems, Runtimes Enable Platforms:** Remote administration, inference engines, smart homes, and robotics are not hardcoded monolithic applications—they are composable capabilities running on top of a unified runtime.
+2. **Engineering Discipline:** *Every new capability must justify its existence by making the runtime more reusable, not just more feature-rich.*
+3. **Intents Over Pixels:** Avoids heavy video streaming (VNC/RDP). Streams structured intents (binary chunks, system metrics, terminal strings, input events) across dedicated P2P WebRTC data channels.
+4. **Zero-Trust & Local-First:** Argon2id challenge-response authentication, constant-time timing-attack mitigations (`subtle`), home directory sandboxing (`dirs::home_dir()`), and zero reliance on public cloud relays.
+
+---
+
+## 🏗️ 2. Layered System Architecture
+
+```mermaid
+flowchart TD
+    subgraph PlatformApps ["PLATFORM APPLICATIONS"]
+        A1[Remote Operations Center]
+        A2[Smart Home Engine]
+        A3[Automation Hub]
+        A4[Robotics & Edge Nodes]
+        A5[Local Inference Suite]
+    end
+
+    subgraph Capabilities ["CAPABILITY SYSTEM"]
+        C1[Filesystem Transceiver]
+        C2[Terminal SSH]
+        C3[Media & Audio Sync]
+        C4[Inference Services<br/>Speech / Vision / LLM]
+        C5[Input HUD]
+        C6[Matter / MQTT / BLE]
+    end
+
+    subgraph CoreRuntime ["CORE RUNTIME"]
+        R1[Capability Registry & Loader]
+        R2[Memory Service]
+        R3[State Store & Sync]
+        R4[Event Bus]
+        R5[Scheduler]
+        R6[Zero-Trust Security & Sandboxing]
+        R7[P2P WebRTC Transport]
+    end
+
+    subgraph Nodes ["FRANKN NODES"]
+        N1[Linux PC / Workstation]
+        N2[Windows PC]
+        N3[macOS]
+        N4[Android Mobile]
+        N5[Raspberry Pi / Embedded / Containers]
+    end
+
+    PlatformApps --> Capabilities
+    Capabilities --> CoreRuntime
+    CoreRuntime --> Nodes
 ```
-┌─────────────────────────────────┐           ┌─────────────────────────────────┐
-│         FLUTTER CLIENT          │◄─────────►│            RUST HOST            │
-│         (Mobile App)            │  WebRTC   │        (System Daemon)          │
-│   Immersive Command Terminal    │           │   Direct D-Bus & Linux APIs     │
-└─────────────────────────────────┘           └─────────────────────────────────┘
-                 │                                             │
-                 └──────────►┌─────────────────────────┐◄──────┘
-                             │  RUST SIGNALING SERVER  │
-                             │   (Secure Handshakes)   │
-                             └─────────────────────────┘
+
+---
+
+## 📡 3. Event Bus, State Store & Memory Service Architecture
+
+```mermaid
+sequenceDiagram
+    participant Sensor as Event Source (Sensor / System)
+    participant Bus as Core Event Bus
+    participant State as State Store & Memory Service
+    participant Auto as Automation Engine
+    participant Inf as Inference Service (Optional)
+    participant Action as Action Driver (SSH/D-Bus)
+
+    Sensor->>Bus: Publish Event (e.g. Host Locked)
+    Bus->>State: Persist & Update Context State
+    Bus->>Auto: Dispatch Event Trigger
+    Auto->>Inf: Query Context (If Reasoning Required)
+    Inf-->>Auto: Response / Action Plan
+    Auto->>Bus: Publish Action Intent
+    Bus->>Action: Execute Action Capability
 ```
 
-### Comms Channels
-* **specialized Data Lanes:**
-  * `frankn_cmd`: System diagnostics, process managers, and power states.
-  * `frankn_fs`: High-speed binary storage transfers with recursive indexing and SHA-256 validation.
-  * `frankn_media`: Bidirectional MPRIS track status synchronization and interactive seek control.
-  * `frankn_ssh`: Raw terminal bridge backed by sticky modifier mapping and cache-held session restoration.
-  * `frankn_input`: batch-transmitted pointer movements, precise scroll metrics, and virtual key mapping.
-  * `dohee_x`: Real-time streaming thread connecting to a secure, host-side AI chat engine (`llama-server`).
-* **Discovery Protocol:** High-performance Signaling middleman that facilitates ICE exchanges, verifies unlisted hosts, restricts duplicate registrations, and enforces strict connection timeouts (15s/30s) to prune ghost sockets.
-* **Persistent Configuration:** Workstation preferences are managed via a robust, custom path TOML engine and an interactive terminal-based TUI configurator with Vim-style navigation.
+---
+
+## 🔀 4. Data Channels & Topology
+
+```mermaid
+flowchart LR
+    Client[Flutter Client<br/>Mobile / Desktop] <-->|SDP / ICE Handshake| Signal[Rust Signaling Server]
+    Client <==>|Encrypted WebRTC P2P DataChannels| Host[Rust Host Node<br/>System Daemon]
+    Host <--> Registry[Capability Registry & Loader]
+    Registry <--> Dev[Devices & Subsystems]
+```
+
+### Protocol Lane Isolation
+* `frankn_cmd`: System diagnostics, process managers, D-Bus, and power states.
+* `frankn_fs`: High-speed binary storage transfers with SHA-256 validation.
+* `frankn_media`: MPRIS track synchronization, WirePlumber/PulseAudio volume controls, and seek scrubbers.
+* `frankn_ssh`: Raw terminal bridge backed by sticky modifier key states and persistent background session restoration.
+* `frankn_input`: Batched pointer movements, scroll metrics, and virtual key mapping.
+* `dohee_x`: Real-time streaming thread connecting to host inference daemons (`llama-server`).
+
+*Note: Additional protocol lanes can be introduced dynamically without modifying existing capabilities.*
 
 ---
 
-## 3. Current Development Progress
+## 🛠️ 5. Capability Discovery & Lifecycle
 
-### A. Frankn-Host Server (Rust Daemon)
-* **Security & Sandboxing:** Constant-time Argon2id verifiers, automatic legacy configuration upgrades on startup, and ancestor-validated path sandbox validation inside `fs_sync/mod.rs` to allow deep folder generation during transfers.
-* **Workstation Integration:** Direct bindings to systemd, loginctl, D-Bus notification structures, and Hyprlock background child management.
-* **Media & Audio Mixer:** Volume controls mapped directly to WirePlumber or PulseAudio mixers (`wpctl`/`pactl`) with strict floating-point amplitude safety clamps.
-* **Storage Synchronizations:** Multi-threaded, symlink-aware directory indexing and sequential batch transfers backed by `notify` system directory monitors.
-* **Local LLM Engine:** Host-side `LlmManager` orchestrating model selection, persistent session mapping (`chats.json`), and server-sent stream buffering.
-
-### B. Flutter Mobile Client
-* **Custom Scoped Storage Bypass:** Integrated a custom pure-Dart `LocalDirSelector` modal sheet to bypass scoped storage tree chooser freezes, facilitating sub-millisecond local folder and file traversals.
-* **Default Path Configuration:** Configurable default download directory on the settings screen, allowing users to choose or clear a default landing path, with support for prompting on-demand destination selection for specific files.
-* **Frosted Glassmorphic Context Sheets:** High-fidelity bottom sheets utilizing frosted blurs (`BackdropFilter`), cyan neon rails, dynamic monospaced diagnostics rows (file size, category, and local source indicators), and cybernetic icon buttons.
-* **Interactive Media Deck:** Overhauled the music progress bar with a `LayoutBuilder` and horizontal drag-and-tap gestures to seek audio tracks dynamically via real-time `DcMsgSeek` updates.
-* **Throttled Diagnostic Notifications:** Native notification progress redraw limits (500ms / 2Hz threshold) to prevent Dart-to-Native IPC thread lockups during high-speed transfers.
-* **Precision Trackpad Gestures:** Batched touch gestures including 1-finger long-press for left-click dragging, 3-finger taps for middle-clicking, and dual-state HUD modifier key toggling/locking.
+```mermaid
+stateDiagram-v2
+    [*] --> Discover
+    Discover --> Install
+    Install --> Register
+    Register --> Initialize
+    Initialize --> ExposeServices
+    ExposeServices --> ReceiveEvents
+    ReceiveEvents --> Shutdown
+    Shutdown --> Unload
+    Unload --> [*]
+```
 
 ---
 
-## 4. Phase Roadmap & Milestones
+## 💻 6. Current Implementation Details
 
-### Phase 1: Foundation & Zero-Trust Protocol [COMPLETE]
-- [x] Adopted Argon2id cryptography for challenge-response auth verification.
-- [x] Sandboxed path operations within secure user directories.
-- [x] Hardened discovery server against peer hijacking and socket duplicates.
-- [x] Implemented RAII connection cleanup routines to purge stale file descriptors.
+### A. Rust Node Runtime (`frankn-host`)
+* **Security & Sandboxing:** Constant-time Argon2id verifiers, ancestor-validated path sandboxing, and RAII resource teardown on link drop.
+* **Linux Integrations:** Direct D-Bus bindings for systemd power management, loginctl sessions, Hyprlock background processes, and PulseAudio/WirePlumber audio controls.
+* **Storage Engine:** Multi-threaded directory indexing, chunked binary transfers, and `notify`-backed directory monitoring.
+* **Inference Subsystem:** Modular `LlmManager` orchestrating model selection, persistent session mapping (`chats.json`), and server-sent event streaming.
 
-### Phase 2: Core Workstation Node control [COMPLETE]
-- [x] Power managers, systemctl states, and Hyprlock integration.
-- [x] High-precision touch trackpad gestures and HUD modifier keys.
-- [x] Dynamic, auto-scrolling terminal logs console preview.
-
-### Phase 3: Storage Orchestration & Media [COMPLETE]
-- [x] Recursive, symlink-aware filesystem indexing and editor viewers.
-- [x] Chunked storage transfers with SHA-256 validations.
-- [x] High-fidelity media track updates, volume mixers, and interactive seek scrubbers.
-
-### Phase 4: Configurations & Handshakes [COMPLETE]
-- [x] TOML-based persistence configurations and Vim-based config TUI.
-- [x] QR code automated pairing, manual 12-digit IDs, and screen import decoders.
-- [x] Discovery filtering to support unlisted host registries.
-
-### Phase 5: Advanced Features & Synchronizations [IN PROGRESS]
-- [x] **Notification Mirroring:** PC notification sync mirrors onto phone.
-- [x] **Folder Mirroring:** Sequenced batch folder synchronizations with packet-size chunking (200 files per packet) and stack-based local scanning.
-- [x] **Mobile SAF Bypass:** Pure-Dart local selector to avoid native tree chooser freezes.
-- [x] **Settings Download Configs:** Default path preference controls and on-demand file destination routing.
-- [x] **Visual Theme Hardening:** Frosted glassmorphism panels, cyan neon outlines, and icon-based command controls.
-- [ ] **Neural Assistant:** Direct model selectors, chat stream buffering, and session logging [WIP].
-- [ ] **Reverse Control:** Option to command the mobile node from the workstation terminal.
+### B. Flutter Multi-Platform Client (`frankn`)
+* **Native Vector Diagram Engine (`neo_mermaid_widget.dart`)**: Pure Dart Mermaid flowchart parser and vector renderer with full-screen interactive zoom/pan modal (**zero Webview dependency**, 100% Linux Desktop compatible).
+* **System File Intent Handler (`ACTION_VIEW`)**: Native file opener on Android routing `.md`, `.txt`, `.json`, `.py`, `.rs`, `.dart` files directly to viewer/editor screens.
+* **Persistent SSH Session Restoration**: Back navigation keeps the active SSH WebRTC tunnel and terminal buffer alive in memory for instant re-attachment; explicit exit button tears down the shell.
+* **Glassmorphic Document Interface**: Auto-hiding `SliverAppBar` glassy headers and cyberpunk dark alert box styling for `[!WARNING]`, `[!NOTE]`, etc.
+* **Precision HUD Trackpad**: Touch gestures including 1-finger drags, 3-finger middle clicks, and sticky/locked modifier key states (`CTRL`, `ALT`, `SHIFT`).
 
 ---
 
-*Last Updated: Late May 2026*
+## 🗺️ 7. Master Architectural Roadmap
+
+```mermaid
+timeline
+    title Frankn Master Roadmap
+    Phase 1 : Core Runtime [COMPLETE] : WebRTC P2P Transport : Argon2id Auth : Directory Sandboxing
+    Phase 2 : Remote Operations [COMPLETE] : Systemctl & Process Managers : Interactive Terminal SSH : Precision HUD Trackpad
+    Phase 3 : Storage & Media [COMPLETE] : High-Speed Binary Transceivers : Native Vector Mermaid Engine : Media Sync & Seek Scrubbing
+    Phase 4 : Inference Runtime [IN PROGRESS] : Isolated dohee_x Streaming Lane : Model Selector : Rust Inference Sidecar
+    Phase 5 : Automation Engine [PLANNED] : Event-Driven Pub/Sub Engine : Workflow Rules
+    Phase 6 : Developer SDK [PLANNED] : Plugin ABI & Capability Registry : Developer Tooling
+    Phase 7 : IoT Runtime [PLANNED] : Native Matter & MQTT Bridging : BLE Device Discovery
+    Phase 8 : Multi-Node Clustering [FUTURE] : P2P Node Mesh Discovery : Distributed State Sync
+    Phase 9 : Robotics Platform [FUTURE] : ROS Bridge : Hardware & Sensor Streaming
+```
+
+---
+
+*Master Technical Blueprint — Last Updated: July 2026*

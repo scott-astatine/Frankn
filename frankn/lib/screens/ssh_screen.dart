@@ -61,21 +61,25 @@ class _SShScreenState extends State<SShScreen> {
 
   @override
   void dispose() {
-    _controller.dispose();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
-    _controller = SshController(widget.client);
+    if (widget.client.activeSshController != null) {
+      _controller = widget.client.activeSshController as SshController;
+    } else {
+      _controller = SshController(widget.client);
+      widget.client.activeSshController = _controller;
 
-    _controller.terminal.write('\x1b[36mFRANKN TERMINAL v1.2\x1b[0m\r\n');
-    _controller.terminal.write('Status: \x1b[32mREADY\x1b[0m\r\n');
-    _controller.terminal.write('Uplink: \x1b[35mENCRYPTED P2P\x1b[0m\r\n\n');
+      _controller.terminal.write('\x1b[36mFRANKN TERMINAL v1.2\x1b[0m\r\n');
+      _controller.terminal.write('Status: \x1b[32mREADY\x1b[0m\r\n');
+      _controller.terminal.write('Uplink: \x1b[35mENCRYPTED P2P\x1b[0m\r\n\n');
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (mounted && !_controller.isConnected && !_controller.isConnecting) {
         if (widget.client.lastSshUsername != null) {
           _attemptAutoLogin();
         } else {
@@ -98,6 +102,18 @@ class _SShScreenState extends State<SShScreen> {
     }
   }
 
+  void _handleExplicitExit() {
+    if (widget.client.activeSshController != null) {
+      final ctrl = widget.client.activeSshController as SshController;
+      ctrl.stopSession();
+      ctrl.dispose();
+      widget.client.activeSshController = null;
+    }
+    widget.client.lastSshUsername = null;
+    widget.client.lastSshPassword = null;
+    Navigator.pop(context);
+  }
+
   Widget _buildHud(bool isKeyboardActive) {
     return Container(
       decoration: BoxDecoration(
@@ -113,14 +129,19 @@ class _SShScreenState extends State<SShScreen> {
             SshKeyBar(
               ctrlState: _controller.ctrlState,
               altState: _controller.altState,
+              shiftState: _controller.shiftState,
               onToggleCtrl: _controller.toggleCtrl,
+              onLockCtrl: _controller.lockCtrl,
               onToggleAlt: _controller.toggleAlt,
+              onLockAlt: _controller.lockAlt,
+              onToggleShift: _controller.toggleShift,
+              onLockShift: _controller.lockShift,
               onSendRaw: _controller.sendRaw,
             ),
           SshStatusBar(
             isConnected: _controller.isConnected,
             isConnecting: _controller.isConnecting,
-            onExit: () => Navigator.pop(context),
+            onExit: _handleExplicitExit,
           ),
         ],
       ),
@@ -180,6 +201,12 @@ class _SShScreenState extends State<SShScreen> {
         actions: [
           TextButton(
             onPressed: () {
+              if (widget.client.activeSshController != null) {
+                final ctrl = widget.client.activeSshController as SshController;
+                ctrl.stopSession();
+                ctrl.dispose();
+                widget.client.activeSshController = null;
+              }
               Navigator.pop(context);
               Navigator.pop(context);
             },
