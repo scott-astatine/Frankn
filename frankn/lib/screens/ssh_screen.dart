@@ -21,6 +21,7 @@ class SShScreen extends StatefulWidget {
 
 class _SShScreenState extends State<SShScreen> {
   late final SshController _controller;
+  late final TerminalController _terminalController;
   final _userController = TextEditingController(text: '');
   final _passController = TextEditingController();
 
@@ -40,8 +41,10 @@ class _SShScreenState extends State<SShScreen> {
                 child: SafeArea(
                   child: TerminalContextMenu(
                     terminal: _controller.terminal,
+                    controller: _terminalController,
                     child: TerminalView(
                       _controller.terminal,
+                      controller: _terminalController,
                       theme: SshTheme.terminalTheme,
                       textStyle: TerminalStyle(
                         fontSize: SettingsService().terminalFontSize,
@@ -61,12 +64,14 @@ class _SShScreenState extends State<SShScreen> {
 
   @override
   void dispose() {
+    _terminalController.dispose();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    _terminalController = TerminalController();
     if (widget.client.activeSshController != null) {
       _controller = widget.client.activeSshController as SshController;
     } else {

@@ -3,10 +3,9 @@ use std::sync::atomic::Ordering;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
-use tokio_tungstenite::tungstenite::Bytes;
 use sha2::{Digest, Sha256};
 
-use crate::{HostMessage, transport::webrtc::connection::RTCConn, utils::Status};
+use crate::{HostMessage, transport::context::CommandContext, utils::Status};
 use super::framing::{parse_frame_header, TransferFrameHeader, FRAME_HEADER_SIZE, FLAG_FINAL, FLAG_ACK_REQUESTED};
 use super::state::{
     TransferState, UploadSession, UPLOAD_SESSIONS, DOWNLOAD_TASKS,
@@ -14,18 +13,15 @@ use super::state::{
 };
 
 pub async fn handle_transfer_init(
-    id: &str,
+    ctx: &CommandContext,
     path: &str,
     hash: Option<String>,
     total_size: u64,
     resume_offset: u64,
-    rtc_conn: Arc<Mutex<RTCConn>>,
-    channel_label: &str,
-    client_id: &str,
 ) -> HostMessage {
     crate::log!(
         "FS: Transfer init for {} — path={}, size={}, resume_offset={}",
-        id,
+        ctx.id,
         path,
         total_size,
         resume_offset
@@ -35,7 +31,7 @@ pub async fn handle_transfer_init(
         Ok(p) => p,
         Err(e) => {
             return HostMessage::Response {
-                id: id.to_string(),
+                id: ctx.id.clone(),
                 status: Status::Error(e),
                 data: None,
                 timestamp: crate::utils::get_timestamp(),
@@ -58,7 +54,7 @@ pub async fn handle_transfer_init(
                 if actual_offset != resume_offset {
                     crate::elog!(
                         "FS: Resume offset mismatch for {} — expected {}, got {}",
-                        id,
+                        ctx.id,
                         resume_offset,
                         actual_offset
                     );
@@ -67,7 +63,7 @@ pub async fn handle_transfer_init(
                         Ok(f) => f,
                         Err(e) => {
                             return HostMessage::Response {
-                                id: id.to_string(),
+                                id: ctx.id.clone(),
                                 status: Status::Error(format!("Failed to create file: {}", e)),
                                 data: None,
                                 timestamp: crate::utils::get_timestamp(),
@@ -75,7 +71,7 @@ pub async fn handle_transfer_init(
                         }
                     }
                 } else {
-                    crate::log!("FS: Resuming {} from offset {}", id, actual_offset);
+                    crate::log!("FS: Resuming {} from offset {}", ctx.id, actual_offset);
                     match tokio::fs::OpenOptions::new()
                         .write(true)
                         .append(true)
@@ -85,7 +81,7 @@ pub async fn handle_transfer_init(
                         Ok(f) => f,
                         Err(e) => {
                             return HostMessage::Response {
-                                id: id.to_string(),
+                                id: ctx.id.clone(),
                                 status: Status::Error(format!("Failed to open partial: {}", e)),
                                 data: None,
                                 timestamp: crate::utils::get_timestamp(),
@@ -99,7 +95,7 @@ pub async fn handle_transfer_init(
                     Ok(f) => f,
                     Err(e) => {
                         return HostMessage::Response {
-                            id: id.to_string(),
+                            id: ctx.id.clone(),
                             status: Status::Error(format!("Failed to create file: {}", e)),
                             data: None,
                             timestamp: crate::utils::get_timestamp(),
@@ -113,7 +109,7 @@ pub async fn handle_transfer_init(
             Ok(f) => f,
             Err(e) => {
                 return HostMessage::Response {
-                    id: id.to_string(),
+                    id: ctx.id.clone(),
                     status: Status::Error(format!("Failed to create file: {}", e)),
                     data: None,
                     timestamp: crate::utils::get_timestamp(),
@@ -129,11 +125,11 @@ pub async fn handle_transfer_init(
         total_size,
         last_seq: 0,
         path: path_str.clone(),
-        client_id: client_id.to_string(),
+        client_id: ctx.client_id.clone(),
     };
 
     let state = TransferState {
-        transfer_id: id.to_string(),
+        transfer_id: ctx.id.clone(),
         path: path_str.clone(),
         total_size,
         current_offset: actual_offset,
@@ -141,16 +137,16 @@ pub async fn handle_transfer_init(
         last_seq: 0,
     };
     if let Err(e) = write_state(&path_str, &state).await {
-        crate::elog!("FS: Failed to write state for {}: {}", id, e);
+        crate::elog!("FS: Failed to write state for {}: {}", ctx.id, e);
     }
 
     {
         let mut sessions = UPLOAD_SESSIONS.lock().await;
-        sessions.insert(id.to_string(), Arc::new(Mutex::new(session)));
+        sessions.insert(ctx.id.clone(), Arc::new(Mutex::new(session)));
     }
 
     let resp = HostMessage::Response {
-        id: id.to_string(),
+        id: ctx.id.clone(),
         status: Status::Success,
         data: Some(serde_json::json!({
             "message": "Transfer ready",
@@ -158,12 +154,7 @@ pub async fn handle_transfer_init(
         })),
         timestamp: crate::utils::get_timestamp(),
     };
-    if let Ok(json) = serde_json::to_string(&resp) {
-        let conn = rtc_conn.lock().await;
-        if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
-            crate::elog!("FS ERROR: Failed to send transfer_init response: {}", e);
-        }
-    }
+    let _ = ctx.stream(resp.clone()).await;
 
     resp
 }
@@ -198,8 +189,7 @@ pub async fn handle_transfer_cancel(id: &str) -> HostMessage {
 
 pub async fn handle_transfer_chunk_raw(
     data: &[u8],
-    rtc_conn: Arc<Mutex<RTCConn>>,
-    channel_label: &str,
+    ctx: &CommandContext,
 ) {
     let Some(header) = parse_frame_header(data) else {
         crate::elog!(
@@ -279,20 +269,15 @@ pub async fn handle_transfer_chunk_raw(
             seq: seq_now,
             timestamp: crate::utils::get_timestamp(),
         };
-        if let Ok(json) = serde_json::to_string(&ack) {
-            let conn = rtc_conn.lock().await;
-            if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
-                crate::elog!("FS ERROR: Failed to send transfer_ack: {}", e);
-            }
-        }
+        let _ = ctx.stream(ack).await;
     }
 
     if is_final {
-        finalize_upload(&transfer_id_clone, rtc_conn, channel_label).await;
+        finalize_upload(&transfer_id_clone, ctx).await;
     }
 }
 
-async fn finalize_upload(id: &str, rtc_conn: Arc<Mutex<RTCConn>>, channel_label: &str) {
+async fn finalize_upload(id: &str, ctx: &CommandContext) {
     let session = {
         let mut sessions = UPLOAD_SESSIONS.lock().await;
         sessions.remove(id)
@@ -325,12 +310,7 @@ async fn finalize_upload(id: &str, rtc_conn: Arc<Mutex<RTCConn>>, channel_label:
         hash: hash_hex,
         timestamp: crate::utils::get_timestamp(),
     };
-    if let Ok(json) = serde_json::to_string(&complete) {
-        let conn = rtc_conn.lock().await;
-        if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
-            crate::elog!("FS ERROR: Failed to send transfer_complete: {}", e);
-        }
-    }
+    let _ = ctx.stream(complete).await;
 
     crate::log!("FS: Transfer {} completed", id);
 }

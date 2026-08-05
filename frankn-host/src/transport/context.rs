@@ -63,4 +63,29 @@ impl CommandContext {
             .await
             .map_err(|e| e.to_string())
     }
+
+    /// Send a raw binary frame directly over the data channel.
+    pub async fn send_binary(&self, bytes: Vec<u8>) -> Result<(), String> {
+        let conn = self.rtc_conn.lock().await;
+        let channels = conn.data_channels.lock().await;
+        if let Some(dc) = channels.get(&self.label) {
+            dc.send(&Bytes::from(bytes))
+                .await
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        } else {
+            Err(format!("Data channel {} not found", self.label))
+        }
+    }
+
+    /// Retrieve the current buffered amount of the data channel.
+    pub async fn buffered_amount(&self) -> usize {
+        let conn = self.rtc_conn.lock().await;
+        let channels = conn.data_channels.lock().await;
+        if let Some(dc) = channels.get(&self.label) {
+            dc.buffered_amount().await
+        } else {
+            0
+        }
+    }
 }

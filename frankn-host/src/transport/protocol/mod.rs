@@ -9,8 +9,9 @@ use tokio_tungstenite::tungstenite::Bytes;
 use crate::auth::AuthManager;
 use crate::config::HostConfig;
 use crate::capabilities::inference::LlmManager;
-use crate::transport::webrtc::connection::{PeerMap, RTCConn};
+use crate::transport::webrtc::connection::PeerMap;
 use crate::utils::get_timestamp;
+use crate::transport::context::CommandContext;
 
 /// Decode a text data channel message and route it to the appropriate capability handler.
 pub async fn parse_dc_msg(
@@ -36,7 +37,14 @@ pub async fn parse_dc_msg(
     // Fast-path: check for binary frame magic byte BEFORE allocating a String copy.
     // Binary uploads on frankn_fs use [0x01][36-byte ID][data] framing.
     if data.len() >= 37 && data[0] == 0x01 && label == "frankn_fs" {
-        parse_binary_msg(data, rtc_conn, label).await;
+        let ctx = CommandContext::new(
+            String::new(),
+            client_id.to_string(),
+            label.to_string(),
+            Arc::clone(&config),
+            Arc::clone(&rtc_conn),
+        );
+        parse_binary_msg(data, &ctx).await;
         return;
     }
 
@@ -128,45 +136,34 @@ pub async fn parse_dc_msg(
                 resume_offset,
                 ..
             } => {
-                crate::log!("FS: Transfer init for {} → {}", id, path);
-                let resp = crate::capabilities::fs::transfer::handle_transfer_init(
-                    &id,
+                let ctx = CommandContext::new(
+                    id,
+                    client_id.to_string(),
+                    label.to_string(),
+                    Arc::clone(&config),
+                    Arc::clone(&rtc_conn),
+                );
+                crate::capabilities::fs::transfer::handle_transfer_init(
+                    &ctx,
                     &path,
                     hash,
                     total_size,
                     resume_offset,
-                    Arc::clone(&rtc_conn),
-                    label,
-                    client_id,
                 )
                 .await;
-                if let HostMessage::Response {
-                    status: Status::Error(_),
-                    ..
-                } = &resp
-                {
-                    if let Ok(json) = serde_json::to_string(&resp) {
-                        let rtc_clone = Arc::clone(&rtc_conn);
-                        let label_clone = label.to_string();
-                        tokio::spawn(async move {
-                            let conn = rtc_clone.lock().await;
-                            let _ = conn.send_message(&label_clone, &Bytes::from(json)).await;
-                        });
-                    }
-                }
             }
 
             ClientMessage::TransferCancel { id, .. } => {
                 crate::log!("FS: Transfer cancel for {}", id);
-                let resp = crate::capabilities::fs::transfer::handle_transfer_cancel(&id).await;
-                if let Ok(json) = serde_json::to_string(&resp) {
-                    let rtc_clone = Arc::clone(&rtc_conn);
-                    let label_clone = label.to_string();
-                    tokio::spawn(async move {
-                        let conn = rtc_clone.lock().await;
-                        let _ = conn.send_message(&label_clone, &Bytes::from(json)).await;
-                    });
-                }
+                let ctx = CommandContext::new(
+                    id,
+                    client_id.to_string(),
+                    label.to_string(),
+                    Arc::clone(&config),
+                    Arc::clone(&rtc_conn),
+                );
+                let resp = crate::capabilities::fs::transfer::handle_transfer_cancel(&ctx.id).await;
+                let _ = ctx.stream(resp).await;
             }
 
             ClientMessage::DownloadInit {
@@ -175,34 +172,19 @@ pub async fn parse_dc_msg(
                 resume_offset,
                 ..
             } => {
-                crate::log!(
-                    "FS: Download init for {} ← {} (offset={})",
+                let ctx = CommandContext::new(
                     id,
-                    path,
-                    resume_offset
+                    client_id.to_string(),
+                    label.to_string(),
+                    Arc::clone(&config),
+                    Arc::clone(&rtc_conn),
                 );
-                let resp = crate::capabilities::fs::transfer::handle_download_init(
-                    &id,
+                crate::capabilities::fs::transfer::handle_download_init(
+                    ctx,
                     &path,
                     resume_offset,
-                    Arc::clone(&rtc_conn),
-                    label,
                 )
                 .await;
-                if let HostMessage::Response {
-                    status: Status::Error(_),
-                    ..
-                } = &resp
-                {
-                    if let Ok(json) = serde_json::to_string(&resp) {
-                        let rtc_clone = Arc::clone(&rtc_conn);
-                        let label_clone = label.to_string();
-                        tokio::spawn(async move {
-                            let conn = rtc_clone.lock().await;
-                            let _ = conn.send_message(&label_clone, &Bytes::from(json)).await;
-                        });
-                    }
-                }
             }
 
             ClientMessage::ClientGenMsg {
@@ -258,11 +240,11 @@ pub async fn parse_dc_msg(
     }
 }
 
-pub async fn parse_binary_msg(data: &Vec<u8>, rtc_conn: Arc<Mutex<RTCConn>>, label: &str) {
-    if label == "frankn_fs"
+pub async fn parse_binary_msg(data: &Vec<u8>, ctx: &CommandContext) {
+    if ctx.label == "frankn_fs"
         && data.len() >= crate::capabilities::fs::transfer::FRAME_HEADER_SIZE
         && data[0] == 0x01
     {
-        crate::capabilities::fs::transfer::handle_transfer_chunk_raw(data, rtc_conn, label).await;
+        crate::capabilities::fs::transfer::handle_transfer_chunk_raw(data, ctx).await;
     }
 }

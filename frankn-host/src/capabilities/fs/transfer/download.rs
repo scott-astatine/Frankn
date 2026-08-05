@@ -3,26 +3,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::io::SeekFrom;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use tokio::sync::Mutex;
-use tokio_tungstenite::tungstenite::Bytes;
 use sha2::{Digest, Sha256};
 
-use crate::{HostMessage, transport::webrtc::connection::RTCConn, utils::Status};
+use crate::{HostMessage, transport::context::CommandContext, utils::Status};
 use super::framing::{FRAME_HEADER_SIZE, FRAME_MAGIC, FLAG_FINAL};
 use super::state::DOWNLOAD_TASKS;
 
 pub async fn handle_download_init(
-    id: &str,
+    ctx: CommandContext,
     path: &str,
     resume_offset: u64,
-    rtc_conn: Arc<Mutex<RTCConn>>,
-    channel_label: &str,
 ) -> HostMessage {
     let sandbox_path = match crate::capabilities::fs::check_sandbox_default(path, false) {
         Ok(p) => p,
         Err(e) => {
             return HostMessage::Response {
-                id: id.to_string(),
+                id: ctx.id.clone(),
                 status: Status::Error(e),
                 data: None,
                 timestamp: crate::utils::get_timestamp(),
@@ -34,7 +30,7 @@ pub async fn handle_download_init(
         Ok(f) => f,
         Err(e) => {
             return HostMessage::Response {
-                id: id.to_string(),
+                id: ctx.id.clone(),
                 status: Status::Error(format!("File open failed: {}", e)),
                 data: None,
                 timestamp: 0,
@@ -46,7 +42,7 @@ pub async fn handle_download_init(
         Ok(m) => m,
         Err(e) => {
             return HostMessage::Response {
-                id: id.to_string(),
+                id: ctx.id.clone(),
                 status: Status::Error(format!("Metadata failed: {}", e)),
                 data: None,
                 timestamp: 0,
@@ -63,7 +59,7 @@ pub async fn handle_download_init(
         .unwrap_or_default();
 
     let start_msg = HostMessage::DownloadStart {
-        id: id.to_string(),
+        id: ctx.id.clone(),
         file_name,
         total_size,
         offset: actual_offset,
@@ -71,74 +67,45 @@ pub async fn handle_download_init(
         timestamp: crate::utils::get_timestamp(),
     };
 
-    if let Ok(json) = serde_json::to_string(&start_msg) {
-        let conn = rtc_conn.lock().await;
-        if let Err(e) = conn.send_message(channel_label, &Bytes::from(json)).await {
-            crate::elog!("FS ERROR: Failed to send download_start: {}", e);
-        }
-    }
+    let _ = ctx.stream(start_msg).await;
 
     let mut f = file;
     if let Err(e) = f.seek(SeekFrom::Start(actual_offset)).await {
-        crate::elog!("FS: Seek error for download {}: {}", id, e);
+        crate::elog!("FS: Seek error for download {}: {}", ctx.id, e);
         let end_msg = HostMessage::DownloadEnd {
-            id: id.to_string(),
+            id: ctx.id.clone(),
             hash: String::new(),
             timestamp: crate::utils::get_timestamp(),
         };
-        if let Ok(json) = serde_json::to_string(&end_msg) {
-            let conn = rtc_conn.lock().await;
-            if let Err(e) = conn
-                .send_message(
-                    channel_label,
-                    &tokio_tungstenite::tungstenite::Bytes::from(json),
-                )
-                .await
-            {
-                crate::elog!("FS ERROR: Failed to send download_end seek error: {}", e);
-            }
-        }
+        let _ = ctx.stream(end_msg).await;
         return HostMessage::Response {
-            id: id.to_string(),
+            id: ctx.id.clone(),
             status: Status::Success,
             data: None,
             timestamp: 0,
         };
     }
 
-    let transfer_id = id.to_string();
-    let label = channel_label.to_string();
-
     let cancel_flag = Arc::new(AtomicBool::new(false));
     let cancel_flag_clone = Arc::clone(&cancel_flag);
+    let ctx_clone = ctx.clone();
 
-    let dc = {
-        let conn = rtc_conn.lock().await;
-        let channels = conn.data_channels.lock().await;
-        channels.get(&label).cloned()
-    };
-
-    if let Some(dc_arc) = dc {
-        tokio::spawn(async move {
-            let _ = stream_download(
-                f,
-                transfer_id,
-                dc_arc,
-                cancel_flag_clone,
-            )
-            .await;
-        });
-    } else {
-        crate::elog!("FS: Data channel {} not found for download!", label);
-    }
+    tokio::spawn(async move {
+        let _ = stream_download(
+            f,
+            ctx_clone,
+            cancel_flag_clone,
+        )
+        .await;
+    });
 
     DOWNLOAD_TASKS
         .lock()
         .await
-        .insert(id.to_string(), cancel_flag);
+        .insert(ctx.id.clone(), cancel_flag);
 
     HostMessage::Response {
-        id: id.to_string(),
+        id: ctx.id.clone(),
         status: Status::Success,
         data: Some(serde_json::json!({
             "message": "Download started",
@@ -151,8 +118,7 @@ pub async fn handle_download_init(
 
 async fn stream_download(
     mut file: File,
-    id: String,
-    dc: Arc<webrtc::data_channel::RTCDataChannel>,
+    ctx: CommandContext,
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<(), std::io::Error> {
     const CHUNK_SIZE: usize = 61440;
@@ -166,7 +132,7 @@ async fn stream_download(
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
-            crate::log!("FS: Download task {} exited gracefully.", id);
+            crate::log!("FS: Download task {} exited gracefully.", ctx.id);
             return Ok(());
         }
 
@@ -182,7 +148,7 @@ async fn stream_download(
         let mut frame = Vec::with_capacity(FRAME_HEADER_SIZE + n);
         frame.push(FRAME_MAGIC);
 
-        let id_bytes = id.as_bytes();
+        let id_bytes = ctx.id.as_bytes();
         frame.extend_from_slice(id_bytes);
         for _ in id_bytes.len()..36 {
             frame.push(0);
@@ -198,21 +164,18 @@ async fn stream_download(
 
         loop {
             if cancel_flag.load(Ordering::Relaxed) {
-                crate::log!("FS: Download task {} exited gracefully.", id);
+                crate::log!("FS: Download task {} exited gracefully.", ctx.id);
                 return Ok(());
             }
 
-            let buffered = dc.buffered_amount().await;
+            let buffered = ctx.buffered_amount().await;
             if buffered < 1024 * 1024 {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
 
-        if let Err(e) = dc
-            .send(&tokio_tungstenite::tungstenite::Bytes::from(frame))
-            .await
-        {
+        if let Err(e) = ctx.send_binary(frame).await {
             crate::elog!("FS: Failed to send chunk {}: {}", seq, e);
             break;
         }
@@ -223,13 +186,11 @@ async fn stream_download(
     let full_hash = hex::encode(hasher.finalize());
 
     let end_msg = HostMessage::DownloadEnd {
-        id,
+        id: ctx.id.clone(),
         hash: full_hash,
         timestamp: crate::utils::get_timestamp(),
     };
-    if let Ok(json) = serde_json::to_string(&end_msg) {
-        let _ = dc.send(&Bytes::from(json)).await;
-    }
+    let _ = ctx.stream(end_msg).await;
 
     crate::log!("FS: Download stream finished");
     Ok(())

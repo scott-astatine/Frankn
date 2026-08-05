@@ -62,7 +62,7 @@ sudo cp target/release/frankn-host /usr/bin/frankn-host
 mkdir -p "$HOME/.config/systemd/user"
 
 echo "Installing user systemd service..."
-cp ../frankn-host.service "$HOME/.config/systemd/user/frankn-host.service"
+cp ./frankn-host.service "$HOME/.config/systemd/user/frankn-host.service"
 
 echo "Reloading user systemd daemon..."
 systemctl --user daemon-reload

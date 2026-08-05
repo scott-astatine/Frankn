@@ -42,4 +42,4 @@ uinput = "0.1.3"
 notify = "6.1.1"
 walkdir = "2.5.0"
 subtle = "2.5"
-dohee-engine = { path = "/home/scott/Projects/agi/dohee/crates/dohee-engine", features = ["vulkan"] }
+dohee-engine = { path = "/home/scott/Projects/agi/dohee/crates/dohee-engine", features = ["cuda"] }

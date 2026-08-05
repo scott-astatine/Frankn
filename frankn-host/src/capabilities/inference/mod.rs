@@ -1,10 +1,12 @@
+use crate::transport::context::CommandContext;
+use crate::utils::Status;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use serde::{Deserialize, Serialize};
 
-pub mod store;
 pub mod engine;
+pub mod store;
 pub mod tools;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -43,13 +45,6 @@ impl LlmManager {
             use_in_process_engine: true,
         }
     }
-}
-
-
-use crate::transport::context::CommandContext;
-use crate::utils::Status;
-
-impl LlmManager {
     pub async fn handle_list_models(ctx: &CommandContext) {
         let model_dir = ctx.config.llm_model_dir.clone().unwrap_or_else(|| {
             dirs::home_dir()
@@ -111,8 +106,7 @@ impl LlmManager {
                     .clone()
                     .unwrap_or_else(|| "gemma2:9b".to_string())
             };
-            engine::chat_stream_detached(ctx_clone, llm_m, model, msg, sys_prompt, cid)
-                .await;
+            engine::chat_stream_detached(ctx_clone, llm_m, model, msg, sys_prompt, cid).await;
         });
     }
 

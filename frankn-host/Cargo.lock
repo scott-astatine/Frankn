@@ -1244,6 +1244,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dohee-infer",
+ "dohee-prompt",
  "llama-cpp-2",
  "serde",
  "thiserror 2.0.17",
@@ -1257,10 +1258,10 @@ dependencies = [
  "anyhow",
  "dohee-context",
  "dohee-infer",
+ "dohee-prompt",
  "dohee-sandbox",
  "dohee-tools",
  "llama-cpp-2",
- "minijinja",
  "regex",
  "serde",
  "serde_json",
@@ -1297,6 +1298,17 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "dohee-prompt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "minijinja",
+ "regex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
