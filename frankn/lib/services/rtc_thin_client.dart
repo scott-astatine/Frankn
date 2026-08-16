@@ -309,6 +309,8 @@ class RtcThinClient {
 
   void requestHostList() => sendIntent(IsolateAction.requestHostList);
 
+  void subscribeHosts() => sendIntent(IsolateAction.subscribeHosts);
+
   void sendDcMsg(DcMsg cmd) =>
       sendIntent(IsolateAction.sendDcMsg, cmd.toJson());
 

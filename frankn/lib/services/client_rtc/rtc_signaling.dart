@@ -25,6 +25,109 @@ mixin RtcSignaling on RtcClientBase {
   /// 5. Registers client with device information
   ///
   /// The connection is kept alive automatically and will reconnect on failures.
+  Future<crypto_pkg.SimpleKeyPair> _getOrCreateIdentityKey() async {
+    final client = this as RtcClient;
+    if (client.clientKeyPair != null) {
+      return client.clientKeyPair!;
+    }
+
+    const storage = FlutterSecureStorage();
+    final savedSeedBase64 = await storage.read(key: 'frankn_client_identity_seed');
+
+    final algorithm = crypto_pkg.Ed25519();
+    if (savedSeedBase64 != null) {
+      try {
+        final seedBytes = base64Decode(savedSeedBase64);
+        final keyPair = await algorithm.newKeyPairFromSeed(seedBytes);
+        client.clientKeyPair = keyPair;
+        return keyPair;
+      } catch (e) {
+        log("ERROR: Stored identity seed was corrupted, generating new identity... $e");
+      }
+    }
+
+    log("IDENTITY: Generating new persistent cryptographic client identity...");
+    final keyPair = await algorithm.newKeyPair();
+    final keyPairData = await keyPair.extract();
+    final seedBytes = keyPairData.bytes;
+
+    await storage.write(
+      key: 'frankn_client_identity_seed',
+      value: base64Encode(seedBytes),
+    );
+
+    client.clientKeyPair = keyPair;
+    return keyPair;
+  }
+
+  Future<void> _handleAuthChallenge(String challengeStr) async {
+    try {
+      final keyPair = await _getOrCreateIdentityKey();
+      final publicKey = await keyPair.extractPublicKey();
+      final publicKeyBytes = publicKey.bytes;
+      final publicKeyHex = hex.encode(publicKeyBytes);
+
+      final rawPeerId = sha256.convert(publicKeyBytes).bytes;
+      final derivedPeerId = base64Url.encode(rawPeerId).replaceAll('=', '');
+      
+      final client = this as RtcClient;
+      client.selfId = derivedPeerId;
+
+      String normalizeBase64Url(String input) {
+        String output = input.replaceAll('-', '+').replaceAll('_', '/');
+        switch (output.length % 4) {
+          case 0:
+            break;
+          case 2:
+            output += '==';
+            break;
+          case 3:
+            output += '=';
+            break;
+          default:
+            throw Exception('Illegal base64url string!');
+        }
+        return output;
+      }
+      final challengeBytes = base64Decode(normalizeBase64Url(challengeStr));
+
+      final algorithm = crypto_pkg.Ed25519();
+      final signature = await algorithm.sign(challengeBytes, keyPair: keyPair);
+      final signatureHex = hex.encode(signature.bytes);
+
+      String displayName = "Unknown Device";
+      try {
+        final deviceInfo = DeviceInfoPlugin();
+        if (Platform.isAndroid) {
+          final androidInfo = await deviceInfo.androidInfo;
+          displayName = "${androidInfo.manufacturer} ${androidInfo.model}";
+        } else if (Platform.isLinux) {
+          final linuxInfo = await deviceInfo.linuxInfo;
+          displayName = linuxInfo.name;
+        } else if (Platform.isIOS) {
+          final iosInfo = await deviceInfo.iosInfo;
+          displayName = iosInfo.name;
+        }
+      } catch (e) {
+        log("Error getting device info: $e");
+      }
+
+      _sendToSignaling('register', {
+        'protocol_version': 1,
+        'peer_id': derivedPeerId,
+        'peer_type': 'Client',
+        'display_name': displayName,
+        'is_public': false,
+        'public_key': publicKeyHex,
+        'signature': signatureHex,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (e) {
+      log("ERROR in challenge response: $e");
+      _handleDisconnection();
+    }
+  }
+
   @override
   Future<void> connectToSignaling() async {
     final client = this as RtcClient;
@@ -57,37 +160,6 @@ mixin RtcSignaling on RtcClientBase {
         },
       );
 
-      // Generate unique client ID if not set
-      selfId ??= const Uuid().v4();
-
-      // Get device information for display name
-      String displayName = "Unknown Device";
-      try {
-        final deviceInfo = DeviceInfoPlugin();
-        if (Platform.isAndroid) {
-          final androidInfo = await deviceInfo.androidInfo;
-          displayName = "${androidInfo.manufacturer} ${androidInfo.model}";
-        } else if (Platform.isLinux) {
-          final linuxInfo = await deviceInfo.linuxInfo;
-          displayName = linuxInfo.name;
-        } else if (Platform.isIOS) {
-          final iosInfo = await deviceInfo.iosInfo;
-          displayName = iosInfo.name;
-        }
-      } catch (e) {
-        log("Error getting device info: $e");
-      }
-
-      // Register with signaling server
-      _sendToSignaling('register', {
-        'peer_id': selfId,
-        'peer_type': 'Client',
-        'display_name': displayName,
-        'is_public': false,
-      });
-
-      // Optimistically set to connected after registration is sent
-      _updateSigState(SignalConnectionState.connected);
       _reconnectDelaySeconds = 2; // Reset reconnect delay on successful connection
     } catch (e) {
       log("Fatal Connection Error: $e");
@@ -211,10 +283,19 @@ mixin RtcSignaling on RtcClientBase {
   void _handleSignalingMessage(Map<String, dynamic> data) async {
     final type = data['type'];
     switch (type) {
+      case SignalingMessage.AuthChallenge:
+        final challenge = data['challenge'] as String;
+        await _handleAuthChallenge(challenge);
+        break;
+
       case SignalingMessage.RegisterSuccess:
         log("Identity Verified. Access Granted!");
+        final client = this as RtcClient;
+        client.sessionId = data['session_id'];
+        client.sequence = 1;
         _updateSigState(SignalConnectionState.connected);
         requestHostList();
+        subscribeToSavedHosts();
         break;
 
       case SignalingMessage.RegisterFailure:
@@ -265,11 +346,8 @@ mixin RtcSignaling on RtcClientBase {
           break;
         }
 
-        final msgSessionId = data['session_id'];
-        if (msgSessionId != activeAttempt.sessionUuid) {
-          log("WARN: Received SDP answer with mismatched Session ID ($msgSessionId vs ${activeAttempt.sessionUuid}). Discarding stale handshake.");
-          break;
-        }
+        final msgSessionId = data['session_id'] as String;
+        activeAttempt.hostSessionId = msgSessionId;
 
         // Set the remote SDP answer to complete WebRTC handshake
         try {
@@ -290,8 +368,8 @@ mixin RtcSignaling on RtcClientBase {
         }
 
         final msgSessionId = data['session_id'];
-        if (msgSessionId != activeAttempt.sessionUuid) {
-          log("WARN: Received ICE candidate with mismatched Session ID ($msgSessionId vs ${activeAttempt.sessionUuid}). Discarding stale handshake.");
+        if (activeAttempt.hostSessionId != null && msgSessionId != activeAttempt.hostSessionId) {
+          log("WARN: Received ICE candidate with mismatched Host Session ID ($msgSessionId vs ${activeAttempt.hostSessionId}). Discarding stale candidate.");
           break;
         }
 
@@ -309,6 +387,27 @@ mixin RtcSignaling on RtcClientBase {
           log("CORE ERROR: Failed to add ICE candidate: $e");
         }
         break;
+      case SignalingMessage.HostsStatusResponse:
+        final client = this as RtcClient;
+        final statuses = data['statuses'] as Map<String, dynamic>?;
+        if (statuses != null) {
+          statuses.forEach((id, isOnline) {
+            final onlineBool = isOnline == true;
+            if (onlineBool) {
+              log("Subscribed host online: $id");
+              client.onlineHostIds.add(id);
+            } else {
+              log("Subscribed host offline: $id");
+              client.onlineHostIds.remove(id);
+            }
+            client._peerStatusController.add({
+              'type': 'peer_status_update',
+              'peer_id': id,
+              'online': onlineBool,
+            });
+          });
+        }
+        break;
       case SignalingMessage.Error:
         log("DEBUG: Signaling error: ${data['message']}");
         final client = this as RtcClient;
@@ -319,10 +418,6 @@ mixin RtcSignaling on RtcClientBase {
     }
   }
 
-  /// Requests the current list of available hosts from the signaling server.
-  ///
-  /// This populates the host list that users can select from in the UI.
-  /// Rate-limited to prevent spamming the signaling server.
   @override
   void requestHostList() {
     final now = DateTime.now();
@@ -332,6 +427,24 @@ mixin RtcSignaling on RtcClientBase {
     }
     _lastHostListRequest = now;
     _sendToSignaling('list_hosts', {});
+  }
+
+  @override
+  void subscribeToSavedHosts() {
+    final client = this as RtcClient;
+    if (client.sigState == SignalConnectionState.connected) {
+      SettingsService().reload().then((_) {
+        final savedHosts = SettingsService().savedHosts;
+        if (savedHosts.isNotEmpty) {
+          final hostIds = savedHosts.map((h) => h['id']!).toList();
+          log("Subscribing to presence status for saved hosts: $hostIds");
+          _sendToSignaling(SignalingMessage.SubscribeHosts, {
+            'host_ids': hostIds,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          });
+        }
+      });
+    }
   }
 
   /// Updates the signaling connection state and notifies listeners.

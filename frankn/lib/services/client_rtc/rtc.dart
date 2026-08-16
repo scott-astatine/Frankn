@@ -22,6 +22,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:convert/convert.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -32,6 +33,8 @@ import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:cryptography/cryptography.dart' as crypto_pkg;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:frankn/main.dart';
 import 'package:frankn/utils/utils.dart';
@@ -83,9 +86,14 @@ abstract class RtcClientBase {
   /// Get list of active Hosts from the signaling server.
   void requestHostList();
 
+  /// Subscribes to private presence status updates for all saved hosts.
+  void subscribeToSavedHosts();
+
   /// Sends a message to the signaling server via WebSocket.
   /// Includes timestamp and client ID in all messages.
   void _sendToSignaling(String type, Map<String, dynamic> payload);
+
+  Future<void> _sendDataPlaneToSignaling(String type, Map<String, dynamic> payload);
 
   void disconnectFromHost();
 
@@ -220,6 +228,15 @@ abstract class RtcClientBase {
   String? get selfId;
   set selfId(String? value);
 
+  String? get sessionId;
+  set sessionId(String? value);
+
+  crypto_pkg.SimpleKeyPair? get clientKeyPair;
+  set clientKeyPair(crypto_pkg.SimpleKeyPair? value);
+
+  int get sequence;
+  set sequence(int value);
+
   /// Current state of the signaling server connection.
   SignalConnectionState get sigState;
   set sigState(SignalConnectionState value);
@@ -335,6 +352,15 @@ class RtcClient extends RtcClientBase
 
   @override
   String? selfId;
+
+  @override
+  String? sessionId;
+
+  @override
+  crypto_pkg.SimpleKeyPair? clientKeyPair;
+
+  @override
+  int sequence = 0;
 
   @override
   String? currentPassword;
@@ -541,6 +567,120 @@ class RtcClient extends RtcClientBase
       log("Send Error: $e");
     }
   }
+
+  @override
+  Future<void> _sendDataPlaneToSignaling(String type, Map<String, dynamic> payload) async {
+    if (signalingChannel == null) return;
+
+    try {
+      final msgType = type == SignalingMessage.Offer ? 1 : 3; // 1 = Offer, 3 = IceCandidate
+      final to = payload['to'] as String;
+      final content = type == SignalingMessage.Offer ? payload['sdp'] : payload['candidate'];
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final seq = sequence++;
+
+      final signatureHex = await signEnvelope(
+        msgType: msgType,
+        toPeerId: to,
+        payload: content,
+        sequence: seq,
+        timestamp: timestamp,
+      );
+
+      final msg = {
+        'type': type,
+        'from': selfId,
+        'to': to,
+        'session_id': sessionId,
+        'sequence': seq,
+        'signature': signatureHex,
+        'timestamp': timestamp,
+        ...payload,
+      };
+
+      signalingChannel!.sink.add(jsonEncode(msg));
+    } catch (e) {
+      log("Data Plane Send Error: $e");
+    }
+  }
+
+  Future<String> signEnvelope({
+    required int msgType,
+    required String toPeerId,
+    required String payload,
+    required int sequence,
+    required int timestamp,
+  }) async {
+    final keyPair = clientKeyPair;
+    if (keyPair == null) {
+      throw Exception("No client identity keypair loaded");
+    }
+
+    final activeSessionId = sessionId;
+    if (activeSessionId == null) {
+      throw Exception("No active signaling session");
+    }
+
+    final buf = Uint8List(160);
+
+    // Domain Separator (14 bytes)
+    final domain = utf8.encode("FRANKN-SIG-V1\u0000");
+    buf.setRange(0, 14, domain);
+
+    // Version (1 byte)
+    buf[14] = 0x01;
+
+    // Message Type ID (1 byte)
+    buf[15] = msgType;
+
+    // Session ID (32 bytes)
+    String normalizeBase64Url(String input) {
+      String output = input.replaceAll('-', '+').replaceAll('_', '/');
+      switch (output.length % 4) {
+        case 0:
+          break;
+        case 2:
+          output += '==';
+          break;
+        case 3:
+          output += '=';
+          break;
+        default:
+          throw Exception('Illegal base64url string!');
+      }
+      return output;
+    }
+    final sessionBytes = base64Decode(normalizeBase64Url(activeSessionId));
+    buf.setRange(16, 48, sessionBytes);
+
+    // Sequence (8 bytes BE)
+    final seqData = ByteData(8)..setUint64(0, sequence, Endian.big);
+    buf.setRange(48, 56, seqData.buffer.asUint8List());
+
+    // Timestamp (8 bytes BE ms)
+    final tsData = ByteData(8)..setUint64(0, timestamp, Endian.big);
+    buf.setRange(56, 64, tsData.buffer.asUint8List());
+
+    // From Peer ID (32 bytes)
+    final fromBytes = base64Decode(normalizeBase64Url(selfId!));
+    buf.setRange(64, 96, fromBytes);
+
+    // To Peer ID (32 bytes)
+    final toBytes = base64Decode(normalizeBase64Url(toPeerId));
+    buf.setRange(96, 128, toBytes);
+
+    // Payload Hash (32 bytes)
+    final payloadBytes = utf8.encode(payload);
+    final payloadHash = sha256.convert(payloadBytes).bytes;
+    buf.setRange(128, 160, payloadHash);
+
+    // Sign
+    final algorithm = crypto_pkg.Ed25519();
+    final signature = await algorithm.sign(buf, keyPair: keyPair);
+
+    return hex.encode(signature.bytes);
+  }
 }
 
 /// Centralized connection phase timeouts
@@ -554,6 +694,7 @@ class ConnectionTimeouts {
 class RtcConnectionAttempt {
   final int generationId;
   final String sessionUuid;
+  String? hostSessionId;
   
   final WebSocketChannel signalingSocket;
   final RTCPeerConnection peerConnection;
@@ -580,8 +721,7 @@ class RtcConnectionAttempt {
     peerConnection.onIceCandidate = null;
     peerConnection.onIceConnectionState = null;
     peerConnection.onSignalingState = null;
-    
-    try { signalingSocket.sink.close(); } catch (_) {}
+    // Do not close the shared signalingSocket here as it is persistent
     try { peerConnection.dispose(); } catch (_) {}
   }
 }

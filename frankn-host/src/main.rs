@@ -26,10 +26,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Manage host configuration
+    /// Configure host settings
     Config,
     /// Display pairing ID and QR code
     Pair,
+    /// Run as a separate Dohee worker process (stdio IPC)
+    DoheeWorker {
+        #[arg(long)]
+        model: String,
+    },
 }
 
 #[tokio::main]
@@ -60,6 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let qr_payload = format!("{}|{}", config.host_id, config.host_name);
             print_qr(&qr_payload).expect("Failed to print QR code");
             println!("\nKeep this ID secure.\n");
+            Ok(())
+        }
+        Some(Commands::DoheeWorker { model }) => {
+            crate::capabilities::inference::engine::run_dohee_worker(&model).await;
             Ok(())
         }
         None => {

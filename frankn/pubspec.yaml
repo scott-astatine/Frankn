@@ -23,6 +23,9 @@ dependencies:
   flutter_foreground_task: ^9.2.0
   volume_controller: ^3.4.1
   file_picker: ^10.3.8
+  flutter_secure_storage: ^9.2.2
+  cryptography: ^2.7.0
+  cryptography_flutter: ^2.3.4
   awesome_notifications: ^0.11.0
   audio_service: ^0.18.18
   just_audio: ^0.10.5
@@ -45,6 +48,7 @@ dependencies:
   intl: ^0.20.2
   google_fonts: ^8.0.2
   flutter_markdown: ^0.7.7+1
+  pdfx: ^2.6.0
   flutter_highlighter: ^0.1.1
   markdown: ^7.3.1
   flutter_math_fork: ^0.7.4

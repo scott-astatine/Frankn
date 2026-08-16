@@ -25,28 +25,80 @@ pub struct PeerConnection {
     pub peer_type: PeerType,
     pub display_name: String,
     pub is_public: bool,
+    pub public_key: Vec<u8>,       // 32-byte Ed25519 public key
+    pub session_id: String,       // Server-issued active session ID
+    pub allowed_peers: Vec<String>, // Whitelist of client peer_ids
+    pub last_sequence: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum SignalingMessage {
+    #[serde(rename = "auth_challenge")]
+    AuthChallenge {
+        challenge: String,         // Base64URL encoded CSPRNG challenge
+    },
+
     #[serde(rename = "register")]
     Register {
-        peer_id: String,
+        protocol_version: u8,
+        peer_id: String,           // Base64URL encoded Hash(public_key)
         peer_type: PeerType,
         display_name: String,
         is_public: bool,
+        public_key: String,        // Hex encoded Ed25519 public key
+        signature: String,         // Hex signature of the challenge
         timestamp: u64,
     },
 
     #[serde(rename = "register_success")]
-    RegisterSuccess { peer_id: String, timestamp: u64 },
+    RegisterSuccess {
+        peer_id: String,
+        session_id: String,        // Ephemeral session ID
+        timestamp: u64,
+    },
 
     #[serde(rename = "register_failure")]
-    RegisterFailure { error: String, timestamp: u64 },
+    RegisterFailure {
+        error: String,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "session_replaced")]
+    SessionReplaced {
+        reason: String,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "subscribe_hosts")]
+    SubscribeHosts {
+        host_ids: Vec<String>,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "check_hosts_status")]
+    CheckHostsStatus {
+        host_ids: Vec<String>,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "hosts_status_response")]
+    HostsStatusResponse {
+        statuses: HashMap<String, bool>,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "update_host_acl")]
+    UpdateHostAcl {
+        allowed_peers: Vec<String>,
+        timestamp: u64,
+        signature: String,
+    },
 
     #[serde(rename = "list_hosts")]
-    ListHosts { timestamp: u64 },
+    ListHosts {
+        timestamp: u64,
+    },
 
     #[serde(rename = "host_list")]
     HostList {
@@ -66,8 +118,10 @@ pub enum SignalingMessage {
         from: String,
         to: String,
         sdp: String,
+        session_id: String,
+        sequence: u64,
+        signature: String,
         timestamp: u64,
-        session_id: Option<String>,
     },
 
     #[serde(rename = "answer")]
@@ -75,8 +129,10 @@ pub enum SignalingMessage {
         from: String,
         to: String,
         sdp: String,
+        session_id: String,
+        sequence: u64,
+        signature: String,
         timestamp: u64,
-        session_id: Option<String>,
     },
 
     #[serde(rename = "ice_candidate")]
@@ -86,12 +142,17 @@ pub enum SignalingMessage {
         candidate: String,
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
+        session_id: String,
+        sequence: u64,
+        signature: String,
         timestamp: u64,
-        session_id: Option<String>,
     },
 
     #[serde(rename = "error")]
-    Error { message: String, timestamp: u64 },
+    Error {
+        message: String,
+        timestamp: u64,
+    },
 }
 /// Log the output with timestamp
 #[macro_export]

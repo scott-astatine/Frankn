@@ -42,8 +42,15 @@ class InputSig {
 }
 
 class SignalingMessage {
+  static const AuthChallenge = "auth_challenge";
+  static const Register = "register";
   static const RegisterSuccess = "register_success";
   static const RegisterFailure = "register_failure";
+  static const SessionReplaced = "session_replaced";
+  static const SubscribeHosts = "subscribe_hosts";
+  static const CheckHostsStatus = "check_hosts_status";
+  static const HostsStatusResponse = "hosts_status_response";
+  static const UpdateHostAcl = "update_host_acl";
   static const ListHosts = "list_hosts";
   static const HostList = "host_list";
   static const PeerStatusUpdate = "peer_status_update";

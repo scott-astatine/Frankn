@@ -39,9 +39,18 @@ impl SessionManager {
 
     pub async fn run_signaling_loop(self: Arc<Self>) -> Result<(), Box<dyn std::error::Error>> {
         loop {
+            let signing_key = match self.config.get_identity_key() {
+                Ok(k) => k,
+                Err(e) => {
+                    crate::elog!("NODE: Failed to load identity key: {e}");
+                    tokio::time::sleep(Duration::from_secs(20)).await;
+                    continue;
+                }
+            };
+
             let (signaling_client, mut signaling_rx) = match SignalingClient::connect(
                 &self.config.signaling_url,
-                self.config.host_id.clone(),
+                signing_key,
                 self.config.host_name.clone(),
                 self.config.is_public,
             )
@@ -50,7 +59,7 @@ impl SessionManager {
                 Ok(c) => c,
                 Err(e) => {
                     crate::elog!("NODE: Handshake with signaling server failed: {e}");
-                    tokio::time::sleep(Duration::from_millis(20000)).await;
+                    tokio::time::sleep(Duration::from_secs(20)).await;
                     continue;
                 }
             };
@@ -64,7 +73,7 @@ impl SessionManager {
                     }
                     SignalingMessage::RegisterFailure { error, .. } => {
                         crate::elog!("NODE: Handshake rejected: {}", error);
-                        break; // Break the while loop to close the channel and trigger a reconnect
+                        break;
                     }
                     SignalingMessage::Offer { from, sdp, session_id, .. } => {
                         let manager = Arc::clone(&self);
@@ -92,7 +101,7 @@ impl SessionManager {
                     _ => {}
                 }
             }
-            tokio::time::sleep(Duration::from_millis(5000)).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }
 
@@ -102,13 +111,13 @@ impl SessionManager {
         candidate: String,
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
-        session_id: Option<String>,
+        session_id: String,
     ) {
         let map = self.peer_map.lock().await;
         if let Some(rtc_conn) = map.get(&from) {
             let conn = rtc_conn.lock().await;
             let active_sid = conn.session_id.lock().await;
-            if active_sid.is_some() && active_sid.as_ref() != session_id.as_ref() {
+            if active_sid.is_some() && active_sid.as_ref() != Some(&session_id) {
                 crate::log!("ICE_GATHER: Discarding stale remote candidate due to mismatched session ID ({:?} vs {:?})", session_id, active_sid);
                 return;
             }
@@ -125,7 +134,7 @@ impl SessionManager {
         &self,
         client_id: String,
         sdp_offer: String,
-        session_id: Option<String>,
+        session_id: String,
         signaling_client: Arc<SignalingClient>,
     ) -> Result<(), String> {
         let rtc_conn = Arc::new(Mutex::new(RTCConn::new().await.map_err(|e| e.to_string())?));
@@ -134,7 +143,7 @@ impl SessionManager {
         {
             let conn = rtc_conn.lock().await;
             let mut active_sid = conn.session_id.lock().await;
-            *active_sid = session_id.clone();
+            *active_sid = Some(session_id.clone());
         }
 
         // Manage sessions
@@ -154,12 +163,10 @@ impl SessionManager {
             let r_conn = rtc_conn.lock().await;
             let sig = Arc::clone(&signaling_client);
             let cid = client_id.clone();
-            let sid = session_id.clone();
             r_conn.on_ice_candidate(move |candidate| {
                 if let Some(c) = candidate {
                     let sig_cl = Arc::clone(&sig);
                     let cid_cl = cid.clone();
-                    let sid_cl = sid.clone();
                     tokio::spawn(async move {
                         if let Ok(init) = c.to_json() {
                             crate::log!(
@@ -172,9 +179,8 @@ impl SessionManager {
                                     init.candidate,
                                     init.sdp_mid,
                                     init.sdp_mline_index,
-                                    sid_cl,
                                 )
-                                    .await;
+                                .await;
                         }
                     });
                 }
@@ -250,7 +256,7 @@ impl SessionManager {
             };
 
             signaling_client
-                .send_answer(&client_id, answer.sdp, session_id.clone())
+                .send_answer(&client_id, answer.sdp)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok::<(), String>(())

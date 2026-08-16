@@ -3,6 +3,7 @@ import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/screens/code_editor_screen.dart';
 import 'package:frankn/screens/image_viewer_screen.dart';
 import 'package:frankn/screens/markdown_viewer_screen.dart';
+import 'package:frankn/screens/pdf_viewer_screen.dart';
 import 'package:frankn/services/file_transfer_mixin.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/utils/file_browser/file_browser_state.dart';
@@ -152,6 +153,17 @@ class _FileBrowserScreenState extends State<FileBrowserScreen>
               context,
               MaterialPageRoute(
                 builder: (_) => ImageViewerScreen(
+                  remotePath: fullPath,
+                  fileName: name,
+                  client: widget.client,
+                ),
+              ),
+            );
+          } else if (name.toLowerCase().endsWith('.pdf')) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PdfViewerScreen(
                   remotePath: fullPath,
                   fileName: name,
                   client: widget.client,

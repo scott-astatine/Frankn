@@ -69,7 +69,16 @@ class _HostListPanelState extends State<HostListPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSectionHeader(l10n.neuralLinks, Icons.link),
+                _buildSectionHeader(
+                  l10n.neuralLinks,
+                  Icons.link,
+                  action: _HeaderRefreshButton(
+                    onPressed: () {
+                      widget.client.requestHostList();
+                      widget.client.subscribeHosts();
+                    },
+                  ),
+                ),
                 const SizedBox(height: 16),
                 if (savedHosts.isEmpty)
                   Center(
@@ -97,7 +106,15 @@ class _HostListPanelState extends State<HostListPanel> {
                     ),
                   ),
                 const SizedBox(height: 32),
-                _buildSectionHeader(l10n.publicDiscovery, Icons.radar),
+                _buildSectionHeader(
+                  l10n.publicDiscovery,
+                  Icons.radar,
+                  action: _HeaderRefreshButton(
+                    onPressed: () {
+                      widget.client.requestHostList();
+                    },
+                  ),
+                ),
                 const SizedBox(height: 16),
                 _buildDiscoveryContent(savedHosts, l10n),
               ],
@@ -112,20 +129,26 @@ class _HostListPanelState extends State<HostListPanel> {
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildSectionHeader(String title, IconData icon, {Widget? action}) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Icon(icon, color: Colors.white24, size: 14),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white24,
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
-          ),
+        Row(
+          children: [
+            Icon(icon, color: Colors.white24, size: 14),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white24,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
         ),
+        if (action != null) action,
       ],
     );
   }
@@ -255,7 +278,10 @@ class _HostListPanelState extends State<HostListPanel> {
                 context: context,
                 builder: (context) => const HostPairingDialog(),
               );
-              if (result == true) setState(() {});
+              if (result == true) {
+                widget.client.subscribeHosts();
+                setState(() {});
+              }
             },
           ),
         ),
@@ -272,7 +298,7 @@ class _HostListPanelState extends State<HostListPanel> {
   }) {
     final Color accentColor = isSaved ? AppColors.accentSecondary : AppColors.accentPrimary;
 
-    return Padding(
+    final cardWidget = Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: CyberCard(
         borderColor: isOnline
@@ -286,10 +312,6 @@ class _HostListPanelState extends State<HostListPanel> {
                 height: 60,
                 decoration: BoxDecoration(
                   color: isOnline ? accentColor : Colors.white10,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    bottomLeft: Radius.circular(16),
-                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -313,14 +335,37 @@ class _HostListPanelState extends State<HostListPanel> {
                         letterSpacing: 1,
                       ),
                     ),
-                    Text(
-                      "ID: $id",
-                      style: const TextStyle(
-                        color: Colors.white10,
-                        fontSize: 9,
-                        fontFamily: 'JetBrainsMonoNerdFont',
-                        fontWeight: FontWeight.bold,
-                      ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: isOnline ? accentColor : Colors.white10,
+                            shape: BoxShape.circle,
+                            boxShadow: isOnline
+                                ? [
+                                    BoxShadow(
+                                      color: accentColor.withValues(alpha: 0.5),
+                                      blurRadius: 4,
+                                      spreadRadius: 1,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isOnline ? "ONLINE" : "OFFLINE",
+                          style: TextStyle(
+                            color: isOnline ? accentColor.withValues(alpha: 0.8) : Colors.white12,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -333,28 +378,58 @@ class _HostListPanelState extends State<HostListPanel> {
                     isSmall: true,
                     onPressed: () => _authDialog(context, id, name),
                   ),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.link_off,
-                      color: Colors.white10,
-                      size: 20,
-                    ),
-                    onPressed: isSaved
-                        ? () async {
-                            await SettingsService().forgetHost(id);
-                            setState(() {});
-                          }
-                        : null,
-                  ),
                 ),
             ],
           ),
         ),
       ),
+    );
+
+    if (!isSaved) return cardWidget;
+
+    return Dismissible(
+      key: Key('host_card_$id'),
+      direction: DismissDirection.endToStart,
+      onDismissed: (_) async {
+        await SettingsService().forgetHost(id);
+        widget.client.subscribeHosts();
+        setState(() {});
+      },
+      background: Container(),
+      secondaryBackground: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        alignment: Alignment.centerRight,
+        decoration: BoxDecoration(
+          color: AppColors.accentError.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.accentError.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.delete_outline,
+              color: AppColors.accentError,
+              size: 20,
+            ),
+            SizedBox(width: 8),
+            Text(
+              "FORGET",
+              style: TextStyle(
+                color: AppColors.accentError,
+                fontWeight: FontWeight.w900,
+                fontSize: 10,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+      child: cardWidget,
     );
   }
 
@@ -490,6 +565,49 @@ class _HostListPanelState extends State<HostListPanel> {
                 ),
             ],
           );
+        },
+      ),
+    );
+  }
+}
+
+class _HeaderRefreshButton extends StatefulWidget {
+  final VoidCallback onPressed;
+  const _HeaderRefreshButton({required this.onPressed});
+
+  @override
+  State<_HeaderRefreshButton> createState() => _HeaderRefreshButtonState();
+}
+
+class _HeaderRefreshButtonState extends State<_HeaderRefreshButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RotationTransition(
+      turns: Tween(begin: 0.0, end: 1.0).animate(_controller),
+      child: IconButton(
+        icon: const Icon(Icons.refresh, size: 14, color: AppColors.accentPrimary),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        onPressed: () {
+          _controller.forward(from: 0.0);
+          widget.onPressed();
         },
       ),
     );

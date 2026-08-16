@@ -348,6 +348,9 @@ class FranknTaskHandler extends TaskHandler {
       case IsolateAction.requestHostList:
         RtcClient().requestHostList();
         break;
+      case IsolateAction.subscribeHosts:
+        RtcClient().subscribeToSavedHosts();
+        break;
       case IsolateAction.syncState:
         syncState();
         break;

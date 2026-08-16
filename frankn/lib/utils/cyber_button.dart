@@ -32,9 +32,9 @@ class _CyberButtonState extends State<CyberButton>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 50),
+      duration: const Duration(milliseconds: 80),
       lowerBound: 0.0,
-      upperBound: 4.0,
+      upperBound: 1.0,
     );
   }
 
@@ -71,25 +71,27 @@ class _CyberButtonState extends State<CyberButton>
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {
-          return Transform.translate(
-            offset: Offset(_controller.value, _controller.value),
+          final scale = 1.0 - (_controller.value * 0.05);
+
+          return Transform.scale(
+            scale: scale,
             child: Container(
               padding: EdgeInsets.symmetric(
-                horizontal: widget.isSmall ? 12 : 20,
-                vertical: widget.isSmall ? 8 : 12,
+                horizontal: widget.isSmall ? 14 : 24,
+                vertical: widget.isSmall ? 8 : 14,
               ),
               decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
-                border: Border.all(color: Colors.black, width: 1.5),
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: color.withOpacity(0.8),
+                  width: 1.2,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withValues(alpha: 0.4),
-                    offset: Offset(
-                      4 - _controller.value,
-                      4 - _controller.value,
-                    ),
-                    blurRadius: 0,
+                    color: color.withValues(alpha: 0.25 - _controller.value * 0.05),
+                    blurRadius: 10 + _controller.value * 4,
+                    spreadRadius: 0.5,
                   ),
                 ],
               ),
@@ -101,20 +103,26 @@ class _CyberButtonState extends State<CyberButton>
                     Icon(
                       widget.icon,
                       size: widget.isSmall ? 14 : 18,
-                      color: Colors.black,
+                      color: color,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                   ],
                   Flexible(
                     child: Text(
                       widget.text.toUpperCase(),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
-                      style: const TextStyle(
-                        color: Colors.black,
+                      style: TextStyle(
+                        color: color,
                         fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        letterSpacing: 1,
+                        fontSize: widget.isSmall ? 11 : 13,
+                        letterSpacing: 1.5,
+                        shadows: [
+                          Shadow(
+                            color: color.withValues(alpha: 0.6),
+                            blurRadius: 6,
+                          ),
+                        ],
                       ),
                     ),
                   ),

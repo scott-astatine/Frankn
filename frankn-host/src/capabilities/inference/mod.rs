@@ -29,7 +29,7 @@ pub struct LlmManager {
     pub chats: Arc<Mutex<HashMap<String, ChatSession>>>,
     pub chats_loaded: bool,
     pub approval_registry: HashMap<String, tokio::sync::oneshot::Sender<bool>>,
-    pub engine: Option<Arc<dohee_engine::DoheeEngine>>,
+    pub dohee_child: Option<tokio::process::Child>,
     pub use_in_process_engine: bool,
 }
 
@@ -41,7 +41,7 @@ impl LlmManager {
             chats: Arc::new(Mutex::new(HashMap::new())),
             chats_loaded: false,
             approval_registry: HashMap::new(),
-            engine: None,
+            dohee_child: None,
             use_in_process_engine: true,
         }
     }
@@ -70,10 +70,15 @@ impl LlmManager {
         model_path: &str,
         llm_manager: Arc<Mutex<LlmManager>>,
     ) {
+        let resolved = Self::resolve_model_path(model_path, &ctx.config.llm_model_dir);
+        let resolved_str = resolved.to_string_lossy().to_string();
+
+        crate::log!("Resolved model path: {}", resolved_str);
+
         match llm_manager
             .lock()
             .await
-            .start_server(model_path, &ctx.config)
+            .start_server(&resolved_str, &ctx.config)
             .await
         {
             Ok(_) => {
@@ -84,6 +89,34 @@ impl LlmManager {
             }
         }
     }
+
+fn resolve_model_path(model_path: &str, config_model_dir: &Option<String>) -> std::path::PathBuf {
+    let path = std::path::Path::new(model_path);
+    if path.is_absolute() || path.exists() {
+        return path.to_path_buf();
+    }
+
+    let model_dir = config_model_dir.clone().unwrap_or_else(|| {
+        dirs::home_dir()
+            .map(|mut p| {
+                p.push("Models");
+                p.to_string_lossy().to_string()
+            })
+            .unwrap_or_else(|| "~/.config/frankn/llms/".to_string())
+    });
+
+    let dir_path = if model_dir.starts_with("~/") {
+        if let Some(home) = dirs::home_dir() {
+            home.join(&model_dir[2..])
+        } else {
+            std::path::PathBuf::from(&model_dir)
+        }
+    } else {
+        std::path::PathBuf::from(&model_dir)
+    };
+
+    dir_path.join(path)
+}
 
     pub async fn handle_chat(
         ctx: &CommandContext,

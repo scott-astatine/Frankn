@@ -17,28 +17,76 @@ pub enum PeerType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum SignalingMessage {
+    #[serde(rename = "auth_challenge")]
+    AuthChallenge {
+        challenge: String,         // Base64URL encoded CSPRNG challenge
+    },
+
     #[serde(rename = "register")]
     Register {
-        peer_id: String,
+        protocol_version: u8,
+        peer_id: String,           // Base64URL encoded Hash(public_key)
         peer_type: PeerType,
         display_name: String,
         is_public: bool,
+        public_key: String,        // Hex encoded Ed25519 public key
+        signature: String,         // Hex signature of the challenge
         timestamp: u64,
     },
 
     #[serde(rename = "register_success")]
-    RegisterSuccess { peer_id: String, timestamp: u64 },
+    RegisterSuccess {
+        peer_id: String,
+        session_id: String,        // Ephemeral session ID
+        timestamp: u64,
+    },
 
     #[serde(rename = "register_failure")]
-    RegisterFailure { error: String, timestamp: u64 },
+    RegisterFailure {
+        error: String,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "session_replaced")]
+    SessionReplaced {
+        reason: String,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "subscribe_hosts")]
+    SubscribeHosts {
+        host_ids: Vec<String>,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "check_hosts_status")]
+    CheckHostsStatus {
+        host_ids: Vec<String>,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "hosts_status_response")]
+    HostsStatusResponse {
+        statuses: std::collections::HashMap<String, bool>,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "update_host_acl")]
+    UpdateHostAcl {
+        allowed_peers: Vec<String>,
+        timestamp: u64,
+        signature: String,
+    },
 
     #[serde(rename = "offer")]
     Offer {
         from: String,
         to: String,
         sdp: String,
+        session_id: String,
+        sequence: u64,
+        signature: String,
         timestamp: u64,
-        session_id: Option<String>,
     },
 
     #[serde(rename = "answer")]
@@ -46,8 +94,10 @@ pub enum SignalingMessage {
         from: String,
         to: String,
         sdp: String,
+        session_id: String,
+        sequence: u64,
+        signature: String,
         timestamp: u64,
-        session_id: Option<String>,
     },
 
     #[serde(rename = "ice_candidate")]
@@ -57,16 +107,24 @@ pub enum SignalingMessage {
         candidate: String,
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
+        session_id: String,
+        sequence: u64,
+        signature: String,
         timestamp: u64,
-        session_id: Option<String>,
     },
 
     #[serde(rename = "error")]
-    Error { message: String, timestamp: u64 },
+    Error {
+        message: String,
+        timestamp: u64,
+    },
 }
 
 pub struct SignalingClient {
-    peer_id: String,
+    pub peer_id: String,
+    pub session_id: String,
+    pub signing_key: ed25519_dalek::SigningKey,
+    pub sequence: std::sync::atomic::AtomicU64,
     sender: Arc<RwLock<Option<UnboundedSender<SignalingMessage>>>>,
 }
 
@@ -74,7 +132,7 @@ impl SignalingClient {
     /// Connect to a signaling server
     pub async fn connect(
         signaling_server_url: &str,
-        peer_id: String,
+        signing_key: ed25519_dalek::SigningKey,
         display_name: String,
         is_public: bool,
     ) -> Result<(Self, UnboundedReceiver<SignalingMessage>), Box<dyn std::error::Error>> {
@@ -85,6 +143,67 @@ impl SignalingClient {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let (incoming_tx, incoming_rx) = tokio::sync::mpsc::unbounded_channel();
 
+        // 1. Wait for AuthChallenge from server
+        let challenge = match read.next().await {
+            Some(Ok(Message::Text(text))) => {
+                let msg: SignalingMessage = serde_json::from_str(&text)?;
+                if let SignalingMessage::AuthChallenge { challenge } = msg {
+                    challenge
+                } else {
+                    return Err("Expected AuthChallenge from server".into());
+                }
+            }
+            _ => return Err("Failed to receive AuthChallenge".into()),
+        };
+
+        // 2. Decode challenge and sign
+        use base64::Engine;
+        let challenge_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&challenge)?;
+
+        use ed25519_dalek::Signer;
+        let signature = signing_key.sign(&challenge_bytes);
+        let signature_hex = hex::encode(signature.to_bytes());
+
+        // 3. Derive Peer ID and Public Key
+        let public_key_bytes = signing_key.verifying_key().to_bytes();
+        let public_key_hex = hex::encode(public_key_bytes);
+
+        use sha2::Digest;
+        let raw_peer_id = sha2::Sha256::digest(&public_key_bytes);
+        let peer_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&raw_peer_id);
+
+        // 4. Send Register payload
+        let register_msg = SignalingMessage::Register {
+            protocol_version: 1,
+            peer_id: peer_id.clone(),
+            peer_type: PeerType::Host,
+            display_name,
+            is_public,
+            public_key: public_key_hex,
+            signature: signature_hex,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+        };
+        let text = serde_json::to_string(&register_msg)?;
+        write.send(Message::Text(text.into())).await?;
+
+        // 5. Wait for RegisterSuccess
+        let session_id = match read.next().await {
+            Some(Ok(Message::Text(text))) => {
+                let msg: SignalingMessage = serde_json::from_str(&text)?;
+                if let SignalingMessage::RegisterSuccess { session_id, .. } = msg {
+                    session_id
+                } else if let SignalingMessage::RegisterFailure { error, .. } = msg {
+                    return Err(format!("Registration failed: {}", error).into());
+                } else {
+                    return Err("Expected RegisterSuccess".into());
+                }
+            }
+            _ => return Err("Failed to receive RegisterSuccess".into()),
+        };
+
         let sender = Arc::new(RwLock::new(Some(tx.clone())));
 
         tokio::spawn(async move {
@@ -92,7 +211,6 @@ impl SignalingClient {
             let mut last_seen = std::time::Instant::now();
             loop {
                 tokio::select! {
-                    // 1. Handle outgoing messages from the app
                     Some(msg) = rx.recv() => {
                         let text = serde_json::to_string(&msg).unwrap();
                         if write.send(Message::Text(text.into())).await.is_err() {
@@ -100,7 +218,6 @@ impl SignalingClient {
                             break;
                         }
                     }
-                    // 2. Handle incoming messages from the server
                     msg_result = read.next() => {
                         last_seen = std::time::Instant::now();
                         match msg_result {
@@ -116,12 +233,8 @@ impl SignalingClient {
                                     }
                                 }
                             }
-                            Some(Ok(Message::Ping(_))) => {
-                                // Tungstenite handles Pong automatically in most cases
-                            }
-                            Some(Ok(Message::Pong(_))) => {
-                                // Heartbeat acknowledged
-                            }
+                            Some(Ok(Message::Ping(_))) => {}
+                            Some(Ok(Message::Pong(_))) => {}
                             Some(Ok(Message::Close(_))) => {
                                 log!("NODE: Signaling server closed connection.");
                                 break;
@@ -137,7 +250,6 @@ impl SignalingClient {
                             _ => {}
                         }
                     }
-                    // 3. Heartbeat
                     _ = interval.tick() => {
                         if last_seen.elapsed().as_secs() > 30 {
                             elog!("NODE: Signaling server timeout (no response). Terminating connection.");
@@ -154,24 +266,64 @@ impl SignalingClient {
         });
 
         let client = Self {
-            peer_id: peer_id.clone(),
+            peer_id,
+            session_id,
+            signing_key,
+            sequence: std::sync::atomic::AtomicU64::new(1),
             sender,
         };
 
-        client
-            .send_message(SignalingMessage::Register {
-                peer_id,
-                peer_type: PeerType::Host,
-                display_name,
-                is_public,
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            })
-            .await?;
-
         Ok((client, incoming_rx))
+    }
+
+    /// Sign data-plane message using the 160-byte canonical binary structure
+    pub fn sign_envelope(
+        &self,
+        msg_type: u8,
+        to_peer_id_str: &str,
+        payload_str: &str,
+        sequence: u64,
+        timestamp: u64,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let mut buf = [0u8; 160];
+        
+        // Domain Separator (14 bytes)
+        buf[0..14].copy_from_slice(b"FRANKN-SIG-V1\0");
+        
+        // Version (1 byte)
+        buf[14] = 0x01;
+        
+        // Message Type ID (1 byte)
+        buf[15] = msg_type;
+        
+        // Session ID (32 bytes)
+        use base64::Engine;
+        let session_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&self.session_id)?;
+        buf[16..48].copy_from_slice(&session_bytes);
+        
+        // Sequence (8 bytes BE)
+        buf[48..56].copy_from_slice(&sequence.to_be_bytes());
+        
+        // Timestamp (8 bytes BE ms)
+        buf[56..64].copy_from_slice(&timestamp.to_be_bytes());
+        
+        // From Peer ID (32 bytes)
+        let from_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&self.peer_id)?;
+        buf[64..96].copy_from_slice(&from_bytes);
+        
+        // To Peer ID (32 bytes)
+        let to_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(to_peer_id_str)?;
+        buf[96..128].copy_from_slice(&to_bytes);
+        
+        // Payload Hash (32 bytes)
+        use sha2::{Sha256, Digest};
+        let payload_hash = Sha256::digest(payload_str.as_bytes());
+        buf[128..160].copy_from_slice(&payload_hash);
+        
+        use ed25519_dalek::Signer;
+        let signature = self.signing_key.sign(&buf);
+        
+        Ok(hex::encode(signature.to_bytes()))
     }
 
     /// Send msg of type `SignalingMessage`
@@ -193,17 +345,24 @@ impl SignalingClient {
         &self,
         to: &str,
         sdp: String,
-        session_id: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::sync::atomic::Ordering;
+        let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        let signature = self.sign_envelope(0x02, to, &sdp, sequence, timestamp)?;
+
         self.send_message(SignalingMessage::Answer {
             from: self.peer_id.clone(),
             to: to.to_string(),
             sdp,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            session_id,
+            session_id: self.session_id.clone(),
+            sequence,
+            signature,
+            timestamp,
         })
         .await
     }
@@ -215,19 +374,26 @@ impl SignalingClient {
         candidate: String,
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
-        session_id: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::sync::atomic::Ordering;
+        let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        let signature = self.sign_envelope(0x03, to, &candidate, sequence, timestamp)?;
+
         self.send_message(SignalingMessage::IceCandidate {
             from: self.peer_id.clone(),
             to: to.to_string(),
             candidate,
             sdp_mid,
             sdp_m_line_index,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            session_id,
+            session_id: self.session_id.clone(),
+            sequence,
+            signature,
+            timestamp,
         })
         .await
     }

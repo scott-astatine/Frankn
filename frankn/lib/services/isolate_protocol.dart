@@ -45,6 +45,7 @@ class IsolateAction {
   static const startSsh = "start_ssh";
   static const stopSsh = "stop_ssh";
   static const requestHostList = "request_host_list";
+  static const subscribeHosts = "subscribe_hosts";
   static const syncState = "sync_state";
   static const uploadInit = "upload_init";
   static const logIntent = "log_intent";

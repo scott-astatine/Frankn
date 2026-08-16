@@ -145,14 +145,25 @@ mixin RtcConnection on RtcClientBase {
               if (client.sigState != SignalConnectionState.connected) {
                 log("[RECONNECT] Signaling server offline. Postponing neural P2P link retry.");
                 _reconnectTimer = Timer(const Duration(seconds: 2), () async {
+                  _reconnectTimer = null;
                   if (currentHostId != null && !isIntentionalDisconnect) {
-                    _transitionTo(HostConnectionState.connecting, "Retrying connection after signaling check");
-                    connectToHost(currentHostId!);
+                    if (client.onlineHostIds.contains(currentHostId)) {
+                      _transitionTo(HostConnectionState.connecting, "Retrying connection after signaling check");
+                      connectToHost(currentHostId!);
+                    } else {
+                      log("[RECONNECT] Host is offline after signaling check. Retrying later.");
+                      _transitionTo(HostConnectionState.failed, "Host offline");
+                    }
                   }
                 });
               } else {
-                _transitionTo(HostConnectionState.connecting, "Retrying connection");
-                connectToHost(currentHostId!);
+                if (client.onlineHostIds.contains(currentHostId)) {
+                  _transitionTo(HostConnectionState.connecting, "Retrying connection");
+                  connectToHost(currentHostId!);
+                } else {
+                  log("[RECONNECT] Host is offline. Retrying later.");
+                  _transitionTo(HostConnectionState.failed, "Host offline");
+                }
               }
             }
           });
@@ -320,9 +331,8 @@ mixin RtcConnection on RtcClientBase {
       peerConnection!.onIceCandidate = (candidate) {
         if (attemptGen != client.connectionGeneration) return;
         log("ICE_GATHER: Generated local ICE candidate: ${candidate.candidate}");
-        _sendToSignaling(SignalingMessage.IceCandidate, {
+        _sendDataPlaneToSignaling(SignalingMessage.IceCandidate, {
           'to': hostId,
-          'session_id': sessionUuid,
           'candidate': candidate.candidate,
           'sdp_mid': candidate.sdpMid,
           'sdp_m_line_index': candidate.sdpMLineIndex,
@@ -361,9 +371,8 @@ mixin RtcConnection on RtcClientBase {
       );
 
       _transitionTo(HostConnectionState.signaling, "Sending SDP Offer");
-      _sendToSignaling(SignalingMessage.Offer, {
+      _sendDataPlaneToSignaling(SignalingMessage.Offer, {
         'to': hostId,
-        'session_id': sessionUuid,
         'sdp': offer.sdp,
       });
     } catch (e) {

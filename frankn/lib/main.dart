@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:frankn/generated/l10n/app_localizations.dart';
@@ -19,6 +20,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterCryptography.enable();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   FlutterForegroundTask.initCommunicationPort();
 
@@ -105,6 +107,7 @@ Future<void> initForegroundService() async {
 
 @pragma('vm:entry-point')
 void startCallback() {
+  FlutterCryptography.enable();
   FlutterForegroundTask.setTaskHandler(FranknTaskHandler());
 }
 

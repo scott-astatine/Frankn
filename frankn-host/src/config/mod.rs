@@ -7,6 +7,7 @@ pub mod tui;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::fs;
+use ed25519_dalek::SigningKey;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HostConfig {
@@ -52,7 +53,7 @@ impl HostConfig {
     pub async fn load_or_init(custom_path: Option<PathBuf>) -> Self {
         let config_path = custom_path.clone().unwrap_or_else(Self::config_file);
 
-        if config_path.exists() {
+        let mut config = if config_path.exists() {
             match fs::read_to_string(&config_path).await {
                 Ok(content) => match toml::from_str::<HostConfig>(&content) {
                     Ok(mut config) => {
@@ -75,20 +76,32 @@ impl HostConfig {
                             config.save().await;
                             crate::log!("UPGRADE: Successful.");
                         }
-                        return config;
+                        config
                     }
                     Err(e) => {
                         elog!("Failed to parse config: {}. Re-initializing...", e);
+                        Self::init_interactive(custom_path).await
                     }
                 },
                 Err(e) => {
                     elog!("Failed to read config file: {}. Re-initializing...", e);
+                    Self::init_interactive(custom_path).await
                 }
             }
+        } else {
+            Self::init_interactive(custom_path).await
+        };
+
+        if let Ok(key) = config.get_identity_key() {
+            let pub_bytes = key.verifying_key().to_bytes();
+            use sha2::Digest;
+            let raw_id = sha2::Sha256::digest(&pub_bytes);
+            use base64::Engine;
+            let peer_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&raw_id);
+            config.host_id = peer_id;
         }
 
-        // First run or corrupted config
-        Self::init_interactive(custom_path).await
+        config
     }
 
     async fn init_interactive(custom_path: Option<PathBuf>) -> Self {
@@ -200,6 +213,62 @@ impl HostConfig {
             Err(e) => {
                 elog!("Failed to serialize config: {}", e);
             }
+        }
+    }
+
+    pub fn identity_file() -> PathBuf {
+        let mut path = Self::config_dir();
+        path.push("identity.pem");
+        path
+    }
+
+    pub fn get_identity_key(&self) -> Result<SigningKey, Box<dyn std::error::Error>> {
+        let path = Self::identity_file();
+        if !path.exists() {
+            log!("IDENTITY: No identity file found. Generating new Ed25519 keypair...");
+            
+            let dir = Self::config_dir();
+            if !dir.exists() {
+                std::fs::create_dir_all(&dir)?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+                }
+            }
+
+            use rand_core::OsRng;
+            let mut csprng = OsRng;
+            let signing_key = SigningKey::generate(&mut csprng);
+
+            use base64::Engine;
+            let pem = format!(
+                "-----BEGIN ED25519 PRIVATE KEY-----\n{}\n-----END ED25519 PRIVATE KEY-----\n",
+                base64::engine::general_purpose::STANDARD.encode(signing_key.to_bytes())
+            );
+
+            std::fs::write(&path, pem)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+            }
+
+            log!("IDENTITY: Keypair generated and saved to {:?}", path);
+            Ok(signing_key)
+        } else {
+            let content = std::fs::read_to_string(&path)?;
+            let b64 = content
+                .lines()
+                .filter(|line| !line.starts_with("-----"))
+                .collect::<Vec<_>>()
+                .concat();
+            
+            use base64::Engine;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(b64.trim())?;
+            let raw: [u8; 32] = bytes.as_slice().try_into().map_err(|_| "Invalid Ed25519 private key length")?;
+            let signing_key = SigningKey::from_bytes(&raw);
+            Ok(signing_key)
         }
     }
 }

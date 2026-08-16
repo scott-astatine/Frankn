@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frankn/screens/code_editor_screen.dart';
 import 'package:frankn/screens/markdown_viewer_screen.dart';
+import 'package:frankn/screens/pdf_viewer_screen.dart';
 
 class FileViewerService with WidgetsBindingObserver {
   static const _channel = MethodChannel('frankn/file_viewer');
@@ -59,18 +60,30 @@ class FileViewerService with WidgetsBindingObserver {
     if (navState != null) {
       final isMd = name.toLowerCase().endsWith('.md') ||
           name.toLowerCase().endsWith('.markdown');
+      final isPdf = name.toLowerCase().endsWith('.pdf');
+
+      Widget buildViewer() {
+        if (isMd) {
+          return MarkdownViewerScreen(
+            fileName: name,
+            localFilePath: path,
+          );
+        } else if (isPdf) {
+          return PdfViewerScreen(
+            fileName: name,
+            localFilePath: path,
+          );
+        } else {
+          return CodeEditorScreen(
+            fileName: name,
+            localFilePath: path,
+          );
+        }
+      }
 
       navState.push(
         MaterialPageRoute(
-          builder: (_) => isMd
-              ? MarkdownViewerScreen(
-                  fileName: name,
-                  localFilePath: path,
-                )
-              : CodeEditorScreen(
-                  fileName: name,
-                  localFilePath: path,
-                ),
+          builder: (_) => buildViewer(),
         ),
       ).then((_) {
         _lastOpenedPath = null;
