@@ -353,7 +353,7 @@ impl NodeRuntime {
                                     };
 
                                     if let Some(track) = video_track {
-                                        let runner = crate::capabilities::node::camera::CameraRunner::new(track);
+                                        let runner = crate::capabilities::camera::CameraRunner::new(track, None);
                                         runner.start().await;
                                     }
 

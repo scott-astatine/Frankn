@@ -300,6 +300,9 @@ impl SignalingClient {
         // Session ID (32 bytes)
         use base64::Engine;
         let session_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&self.session_id)?;
+        if session_bytes.len() != 32 {
+            return Err("Invalid session_id length: expected 32 bytes".into());
+        }
         buf[16..48].copy_from_slice(&session_bytes);
         
         // Sequence (8 bytes BE)
@@ -310,10 +313,16 @@ impl SignalingClient {
         
         // From Peer ID (32 bytes)
         let from_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&self.peer_id)?;
+        if from_bytes.len() != 32 {
+            return Err("Invalid from_peer_id length: expected 32 bytes".into());
+        }
         buf[64..96].copy_from_slice(&from_bytes);
         
         // To Peer ID (32 bytes)
         let to_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(to_peer_id_str)?;
+        if to_bytes.len() != 32 {
+            return Err(format!("Invalid target peer ID '{}': expected 32 bytes after base64 decode, got {}", to_peer_id_str, to_bytes.len()).into());
+        }
         buf[96..128].copy_from_slice(&to_bytes);
         
         // Payload Hash (32 bytes)

@@ -4,29 +4,44 @@ use tokio::process::Command;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::TrackLocalWriter;
 
+use super::probe::get_best_camera_device;
+
 pub struct CameraRunner {
     track: Arc<TrackLocalStaticRTP>,
+    device_path: Option<String>,
 }
 
 impl CameraRunner {
-    pub fn new(track: Arc<TrackLocalStaticRTP>) -> Self {
-        Self { track }
+    pub fn new(track: Arc<TrackLocalStaticRTP>, device_path: Option<String>) -> Self {
+        Self { track, device_path }
     }
 
     pub async fn start(self) {
         tokio::spawn(async move {
             crate::log!("CAMERA: Starting camera streaming thread...");
-            
-            let dev_exists = std::path::Path::new("/dev/video0").exists();
+
+            let device = match self.device_path {
+                Some(ref p) if !p.is_empty() => p.clone(),
+                _ => get_best_camera_device()
+                    .await
+                    .unwrap_or_else(|| "/dev/video0".to_string()),
+            };
+
+            let dev_exists = std::path::Path::new(&device).exists();
             let gst_available = which::which("gst-launch-1.0").is_ok();
 
             if dev_exists && gst_available {
-                crate::log!("CAMERA: V4L2 camera and GStreamer detected. Initializing UDP bridge...");
-                
+                crate::log!(
+                    "CAMERA: Target device '{}' and GStreamer detected. Initializing UDP bridge...",
+                    device
+                );
+
                 let sock = match UdpSocket::bind("127.0.0.1:0").await {
                     Ok(s) => s,
                     Err(e) => {
-                        crate::elog!("CAMERA: Failed to bind UDP socket: {e}. Falling back to synthetic stream.");
+                        crate::elog!(
+                            "CAMERA: Failed to bind UDP socket: {e}. Falling back to synthetic stream."
+                        );
                         self.run_synthetic_loop().await;
                         return;
                     }
@@ -35,23 +50,40 @@ impl CameraRunner {
                 let port = match sock.local_addr() {
                     Ok(addr) => addr.port(),
                     Err(e) => {
-                        crate::elog!("CAMERA: Failed to get local address: {e}. Falling back to synthetic stream.");
+                        crate::elog!(
+                            "CAMERA: Failed to get local address: {e}. Falling back to synthetic stream."
+                        );
                         self.run_synthetic_loop().await;
                         return;
                     }
                 };
 
-                crate::log!("CAMERA: UDP bridge listening on port {port}. Spawning GStreamer pipeline...");
+                crate::log!(
+                    "CAMERA: UDP bridge listening on port {port}. Spawning GStreamer pipeline for '{device}'..."
+                );
 
-                // Spawn GStreamer process
+                let device_arg = format!("device={}", device);
+
+                // Spawn GStreamer pipeline. Use videoconvert to support MJPG/YUYV/raw seamlessly.
                 let mut child = match Command::new("gst-launch-1.0")
                     .args(&[
-                        "v4l2src", "device=/dev/video0",
-                        "!", "video/x-raw,width=640,height=480,framerate=30/1",
-                        "!", "videoconvert",
-                        "!", "vp8enc", "target-bitrate=800000", "deadline=1", "cpu-used=4",
-                        "!", "rtpvp8pay", "pt=96", "ssrc=12345",
-                        "!", "udpsink", "host=127.0.0.1", &format!("port={}", port)
+                        "v4l2src",
+                        &device_arg,
+                        "!",
+                        "videoconvert",
+                        "!",
+                        "vp8enc",
+                        "target-bitrate=800000",
+                        "deadline=1",
+                        "cpu-used=4",
+                        "!",
+                        "rtpvp8pay",
+                        "pt=96",
+                        "ssrc=12345",
+                        "!",
+                        "udpsink",
+                        "host=127.0.0.1",
+                        &format!("port={}", port),
                     ])
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
@@ -59,7 +91,9 @@ impl CameraRunner {
                 {
                     Ok(c) => c,
                     Err(e) => {
-                        crate::elog!("CAMERA: Failed to spawn GStreamer child: {e}. Falling back to synthetic stream.");
+                        crate::elog!(
+                            "CAMERA: Failed to spawn GStreamer child: {e}. Falling back to synthetic stream."
+                        );
                         self.run_synthetic_loop().await;
                         return;
                     }
@@ -93,7 +127,10 @@ impl CameraRunner {
 
                 let _ = child.kill().await;
             } else {
-                crate::log!("CAMERA: No physical V4L2 camera or GStreamer available. Streaming synthetic VP8 source...");
+                crate::log!(
+                    "CAMERA: Device '{}' or GStreamer unavailable. Streaming synthetic VP8 source...",
+                    device
+                );
                 self.run_synthetic_loop().await;
             }
         });

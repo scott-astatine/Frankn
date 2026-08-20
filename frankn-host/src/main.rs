@@ -35,6 +35,8 @@ enum Commands {
         #[arg(long)]
         model: String,
     },
+    /// Detect, inspect and report status of video capture devices (/dev/video*)
+    ProbeCamera,
 }
 
 #[tokio::main]
@@ -69,6 +71,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(Commands::DoheeWorker { model }) => {
             crate::capabilities::inference::engine::run_dohee_worker(&model).await;
+            Ok(())
+        }
+        Some(Commands::ProbeCamera) => {
+            println!("=== FRANKN CAMERA PROBE ===");
+            let cameras = capabilities::camera::probe_cameras().await;
+            if cameras.is_empty() {
+                println!("No /dev/video* devices found.");
+            } else {
+                for cam in &cameras {
+                    println!("\nDevice Path : {}", cam.device_path);
+                    println!("  Name        : {}", cam.name);
+                    println!("  Functional  : {}", if cam.is_functional { "YES" } else { "NO" });
+                    println!("  Type        : {}", if cam.is_dummy { "Virtual/Loopback" } else { "Physical Hardware" });
+                    println!("  Formats     : {}", if cam.formats.is_empty() { "None/Unknown".into() } else { cam.formats.join(", ") });
+                    println!("  Resolutions : {}", if cam.resolutions.is_empty() { "None/Unknown".into() } else { cam.resolutions.join(", ") });
+                }
+
+                if let Some(best) = capabilities::camera::get_best_camera_device().await {
+                    println!("\n>>> Primary selected capture camera: {}\n", best);
+                }
+            }
             Ok(())
         }
         None => {

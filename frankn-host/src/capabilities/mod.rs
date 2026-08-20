@@ -9,5 +9,6 @@ pub mod ssh;
 pub mod system;
 pub mod registry;
 pub mod node;
+pub mod camera;
 
 pub use inference::tools as inference_tools;
