@@ -58,8 +58,8 @@ pub async fn restart_host(ctx: &CommandContext) {
 }
 
 pub async fn disconnect(ctx: &CommandContext) {
-    let rtc = ctx.rtc_conn.lock().await;
-    let _ = rtc.peer_connection.close().await;
+    let sess = ctx.session.lock().await;
+    let _ = sess.close().await;
     let _ = ctx.reply(Status::Success, None).await;
 }
 

@@ -169,7 +169,8 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                             if let Ok(json) = serde_json::to_string(&msg) {
                                 let map = pm_metadata.lock().await;
                                 for conn in map.values() {
-                                    let r_conn = conn.lock().await;
+                                    let sess = conn.lock().await;
+                                    let r_conn = sess.conn.lock().await;
                                     let _ = r_conn
                                         .send_message("frankn_media", &Bytes::from(json.clone()))
                                         .await;
@@ -193,7 +194,8 @@ pub async fn start_media_sync(peer_map: PeerMap) {
                             if let Ok(json) = serde_json::to_string(&msg) {
                                 let map = pm_metadata.lock().await;
                                 for conn in map.values() {
-                                    let r_conn = conn.lock().await;
+                                    let sess = conn.lock().await;
+                                    let r_conn = sess.conn.lock().await;
                                     let _ = r_conn
                                         .send_message("frankn_media", &Bytes::from(json.clone()))
                                         .await;

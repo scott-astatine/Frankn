@@ -72,8 +72,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         None => {
-            let runtime = app::HostRuntime::new(config);
-            runtime.run().await
+            match config.mode {
+                config::RuntimeMode::Host => {
+                    let runtime = app::HostRuntime::new(config);
+                    runtime.run().await
+                }
+                config::RuntimeMode::Node => {
+                    let runtime = app::NodeRuntime::new(config);
+                    runtime.run().await
+                }
+            }
         }
     }
 }

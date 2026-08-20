@@ -365,11 +365,15 @@ pub async fn chat_stream_detached(
                     timestamp: get_timestamp(),
                 }).await;
 
+                let rtc_conn = {
+                    let s = ctx.session.lock().await;
+                    Arc::clone(&s.conn)
+                };
                 let tool_result = crate::capabilities::inference_tools::execute_tool(
                     &tool.name,
                     &tool.args,
                     &llm_manager,
-                    &ctx.rtc_conn,
+                    &rtc_conn,
                     &ctx.label,
                 )
                 .await;
@@ -506,11 +510,15 @@ pub async fn chat_stream_detached(
         if let Some(tool) = crate::capabilities::inference_tools::parse_tool_call(&assistant_content) {
             crate::log!("LLM: Extracted tool call '{}'", tool.name);
 
+            let rtc_conn = {
+                let s = ctx.session.lock().await;
+                Arc::clone(&s.conn)
+            };
             let tool_result = crate::capabilities::inference_tools::execute_tool(
                 &tool.name,
                 &tool.args,
                 &llm_manager,
-                &ctx.rtc_conn,
+                &rtc_conn,
                 &ctx.label,
             )
             .await;

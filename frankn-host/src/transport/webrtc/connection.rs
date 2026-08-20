@@ -17,7 +17,19 @@ use webrtc::{
 
 use crate::log;
 
-pub type PeerMap = Arc<Mutex<HashMap<String, Arc<Mutex<RTCConn>>>>>;
+pub type PeerMap = Arc<Mutex<HashMap<String, Arc<Mutex<PeerSession>>>>>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RtcRole {
+    Offerer,
+    Answerer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeerRole {
+    Client,
+    Node,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteDescriptionState {
@@ -28,12 +40,46 @@ pub enum RemoteDescriptionState {
 pub struct RTCConn {
     pub peer_connection: Arc<RTCPeerConnection>,
     pub data_channels: Arc<Mutex<HashMap<String, Arc<RTCDataChannel>>>>,
-    pub authenticated: Arc<Mutex<bool>>,
-    pub current_challenge: Arc<Mutex<Option<String>>>,
-    pub ssh_bridge_stop: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     pub pending_candidates: Arc<Mutex<Vec<RTCIceCandidateInit>>>,
     pub remote_desc_state: Arc<Mutex<RemoteDescriptionState>>,
     pub session_id: Arc<Mutex<Option<String>>>,
+    pub role: RtcRole,
+}
+
+pub struct PeerSession {
+    pub client_id: String,
+    pub session_id: String,
+    pub conn: Arc<Mutex<RTCConn>>,
+    pub authenticated: Arc<Mutex<bool>>,
+    pub current_challenge: Arc<Mutex<Option<String>>>,
+    pub ssh_bridge_stop: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+}
+
+impl PeerSession {
+    pub fn new(client_id: String, session_id: String, conn: Arc<Mutex<RTCConn>>) -> Self {
+        Self {
+            client_id,
+            session_id,
+            conn,
+            authenticated: Arc::new(Mutex::new(false)),
+            current_challenge: Arc::new(Mutex::new(None)),
+            ssh_bridge_stop: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub async fn close(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let bridge_stop = {
+            let mut stop_lock = self.ssh_bridge_stop.lock().await;
+            stop_lock.take()
+        };
+        if let Some(tx) = bridge_stop {
+            let _ = tx.send(());
+            log!("Bridge stop signal sent.");
+        }
+
+        let conn = self.conn.lock().await;
+        conn.close().await
+    }
 }
 
 impl std::fmt::Display for RTCConn {
@@ -43,8 +89,9 @@ impl std::fmt::Display for RTCConn {
 }
 
 impl RTCConn {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(role: RtcRole) -> Result<Self, Box<dyn std::error::Error>> {
         let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
 
         let mut registry = Registry::new();
 
@@ -99,13 +146,41 @@ impl RTCConn {
         Ok(Self {
             peer_connection,
             data_channels: Arc::new(Mutex::new(HashMap::new())),
-            authenticated: Arc::new(Mutex::new(false)),
-            current_challenge: Arc::new(Mutex::new(None)),
-            ssh_bridge_stop: Arc::new(Mutex::new(None)),
             pending_candidates: Arc::new(Mutex::new(Vec::new())),
             remote_desc_state: Arc::new(Mutex::new(RemoteDescriptionState::Waiting)),
             session_id: Arc::new(Mutex::new(None)),
+            role,
         })
+    }
+
+    pub async fn add_video_track(
+        &self,
+        stream_id: &str,
+        track_id: &str,
+    ) -> Result<Arc<webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP>, Box<dyn std::error::Error>> {
+        use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+        use webrtc::track::track_local::TrackLocal;
+        use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
+
+        let capability = RTCRtpCodecCapability {
+            mime_type: "video/VP8".to_string(),
+            clock_rate: 90000,
+            channels: 0,
+            sdp_fmtp_line: String::new(),
+            rtcp_feedback: vec![],
+        };
+
+        let video_track = Arc::new(TrackLocalStaticRTP::new(
+            capability,
+            track_id.to_string(),
+            stream_id.to_string(),
+        ));
+
+        let _rtp_sender = self.peer_connection
+            .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
+            .await?;
+
+        Ok(video_track)
     }
 
     pub async fn set_remote_data_channel_handler(
@@ -130,6 +205,21 @@ impl RTCConn {
                     on_channel(d_clone);
                 })
             }));
+    }
+
+    pub async fn create_data_channel(
+        &self,
+        label: &str,
+    ) -> Result<Arc<RTCDataChannel>, Box<dyn std::error::Error>> {
+        let dc = self.peer_connection.create_data_channel(label, None).await?;
+        let dc_clone = Arc::clone(&dc);
+        let dc_label = label.to_string();
+        let data_channels = Arc::clone(&self.data_channels);
+        {
+            let mut map = data_channels.lock().await;
+            map.insert(dc_label, dc_clone);
+        }
+        Ok(dc)
     }
 
     pub async fn send_message(
@@ -231,15 +321,6 @@ impl RTCConn {
 
     pub async fn close(&self) -> Result<(), Box<dyn std::error::Error>> {
         log!("Closing RTCConnection and all data channels");
-
-        // Stop SSH bridge if active
-        let bridge_stop = {
-            let mut stop_lock = self.ssh_bridge_stop.lock().await;
-            stop_lock.take()
-        };
-        if let Some(tx) = bridge_stop {
-            let _ = tx.send(());
-        }
 
         // Close all data channels
         let mut channels = self.data_channels.lock().await;

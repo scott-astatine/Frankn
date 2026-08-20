@@ -135,6 +135,7 @@ impl SignalingClient {
         signing_key: ed25519_dalek::SigningKey,
         display_name: String,
         is_public: bool,
+        peer_type: PeerType,
     ) -> Result<(Self, UnboundedReceiver<SignalingMessage>), Box<dyn std::error::Error>> {
         log!("Connecting to signaling server: {}", signaling_server_url);
 
@@ -176,7 +177,7 @@ impl SignalingClient {
         let register_msg = SignalingMessage::Register {
             protocol_version: 1,
             peer_id: peer_id.clone(),
-            peer_type: PeerType::Host,
+            peer_type: peer_type.clone(),
             display_name,
             is_public,
             public_key: public_key_hex,
@@ -338,6 +339,33 @@ impl SignalingClient {
         } else {
             Err("Sender not available".into())
         }
+    }
+
+    /// Send Offer to Target Peer
+    pub async fn send_offer(
+        &self,
+        to: &str,
+        sdp: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::sync::atomic::Ordering;
+        let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        let signature = self.sign_envelope(0x01, to, &sdp, sequence, timestamp)?;
+
+        self.send_message(SignalingMessage::Offer {
+            from: self.peer_id.clone(),
+            to: to.to_string(),
+            sdp,
+            session_id: self.session_id.clone(),
+            sequence,
+            signature,
+            timestamp,
+        })
+        .await
     }
 
     /// Send Answer to Client

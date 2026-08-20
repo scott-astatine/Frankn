@@ -223,3 +223,112 @@ impl CapabilityRegistry {
         });
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CapabilityProvider {
+    pub kind: String, // "host" or "node"
+    pub provider_id: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CapabilityInventoryEntry {
+    pub descriptor: CapabilityDescriptor,
+    pub provider: CapabilityProvider,
+    pub availability: String, // "available", "unavailable"
+}
+
+pub struct CapabilityInventory {
+    pub entries: Vec<CapabilityInventoryEntry>,
+}
+
+impl CapabilityInventory {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    pub fn register(&mut self, entry: CapabilityInventoryEntry) {
+        self.entries.retain(|e| {
+            !(e.descriptor.id == entry.descriptor.id && e.provider == entry.provider)
+        });
+        self.entries.push(entry);
+    }
+
+    pub fn unregister_by_provider(&mut self, kind: &str, provider_id: &str) {
+        self.entries.retain(|e| {
+            !(e.provider.kind == kind && e.provider.provider_id == provider_id)
+        });
+    }
+
+    pub fn list(&self) -> Vec<CapabilityInventoryEntry> {
+        self.entries.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_capability_inventory_duplication_and_provider() {
+        let mut inventory = CapabilityInventory::new();
+        
+        let descriptor = CapabilityDescriptor {
+            id: "camera".to_string(),
+            name: "Camera".to_string(),
+            version: "1.0.0".to_string(),
+            actions: vec![],
+            properties: HashMap::new(),
+            events: vec![],
+            schemas: HashMap::new(),
+            permissions: vec![],
+            platform_support: vec![],
+            health: "healthy".to_string(),
+        };
+
+        let provider_node1 = CapabilityProvider {
+            kind: "node".to_string(),
+            provider_id: "node-01".to_string(),
+        };
+
+        let provider_node2 = CapabilityProvider {
+            kind: "node".to_string(),
+            provider_id: "node-02".to_string(),
+        };
+
+        // Register camera under node-01
+        inventory.register(CapabilityInventoryEntry {
+            descriptor: descriptor.clone(),
+            provider: provider_node1.clone(),
+            availability: "available".to_string(),
+        });
+
+        // Register camera under node-02
+        inventory.register(CapabilityInventoryEntry {
+            descriptor: descriptor.clone(),
+            provider: provider_node2.clone(),
+            availability: "available".to_string(),
+        });
+
+        // We should have 2 entries in inventory
+        assert_eq!(inventory.list().len(), 2);
+
+        // Register camera under node-01 again (updating it)
+        inventory.register(CapabilityInventoryEntry {
+            descriptor: descriptor.clone(),
+            provider: provider_node1.clone(),
+            availability: "available".to_string(),
+        });
+
+        // We should still have 2 entries in inventory (no duplicates)
+        assert_eq!(inventory.list().len(), 2);
+
+        // Unregister node-01
+        inventory.unregister_by_provider("node", "node-01");
+
+        // We should have 1 entry left (node-02)
+        assert_eq!(inventory.list().len(), 1);
+        assert_eq!(inventory.list()[0].provider.provider_id, "node-02");
+    }
+}

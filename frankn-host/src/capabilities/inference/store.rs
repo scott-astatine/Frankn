@@ -1,6 +1,6 @@
+use super::{ChatSession, LlmManager};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use super::{ChatSession, LlmManager};
 
 pub async fn get_chats_path() -> PathBuf {
     let mut path = dirs::home_dir().unwrap_or_default();
@@ -54,7 +54,8 @@ impl LlmManager {
     pub async fn load_chat(&mut self, chat_id: &str) -> Option<serde_json::Value> {
         self.ensure_chats_loaded().await;
         let c = self.chats.lock().await;
-        c.get(chat_id).map(|s| serde_json::to_value(s).unwrap_or(serde_json::Value::Null))
+        c.get(chat_id)
+            .map(|s| serde_json::to_value(s).unwrap_or(serde_json::Value::Null))
     }
 
     pub async fn delete_chat(&mut self, chat_id: &str) -> bool {

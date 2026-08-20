@@ -93,7 +93,9 @@ pub async fn _send_notification_to_client(
         let connections = peer_map.lock().await;
         for (client_id, conn) in connections.iter() {
             log!("Sending notification to client {}", client_id);
-            let _ = conn.lock().await.send_message("frankn_cmd", &Bytes::from(json.clone())).await;
+            let sess = conn.lock().await;
+            let r_conn = sess.conn.lock().await;
+            let _ = r_conn.send_message("frankn_cmd", &Bytes::from(json.clone())).await;
         }
     }
 }

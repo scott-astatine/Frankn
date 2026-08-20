@@ -19,6 +19,9 @@ pub struct HostRuntime {
     peer_map: PeerMap,
     llm_manager: Arc<Mutex<LlmManager>>,
     input_manager: Option<Arc<Mutex<capabilities::input::InputManager>>>,
+    node_registry: Arc<Mutex<capabilities::node::registry::NodeRegistry>>,
+    capability_inventory: Arc<Mutex<capabilities::registry::CapabilityInventory>>,
+    capability_sessions: Arc<Mutex<capabilities::node::registry::CapabilitySessionRegistry>>,
 }
 
 impl HostRuntime {
@@ -41,12 +44,34 @@ impl HostRuntime {
             }
         };
 
+        let node_registry = Arc::new(Mutex::new(capabilities::node::registry::NodeRegistry::new()));
+
+        let mut capability_inventory = capabilities::registry::CapabilityInventory::new();
+        let registry = capabilities::registry::CapabilityRegistry::new();
+        for cap in registry.list() {
+            capability_inventory.register(capabilities::registry::CapabilityInventoryEntry {
+                descriptor: cap,
+                provider: capabilities::registry::CapabilityProvider {
+                    kind: "host".to_string(),
+                    provider_id: config.host_id.clone(),
+                },
+                availability: "available".to_string(),
+            });
+        }
+        let capability_inventory = Arc::new(Mutex::new(capability_inventory));
+        let capability_sessions = Arc::new(Mutex::new(
+            capabilities::node::registry::CapabilitySessionRegistry::new(),
+        ));
+
         Self {
             config,
             auth_manager,
             peer_map,
             llm_manager,
             input_manager,
+            node_registry,
+            capability_inventory,
+            capability_sessions,
         }
     }
 
@@ -66,6 +91,64 @@ impl HostRuntime {
         let pm_media = Arc::clone(&self.peer_map);
         tokio::spawn(async move {
             capabilities::media::start_media_sync(pm_media).await;
+        });
+
+        // =============================================================================
+        // NODE LIVENESS MONITOR
+        // =============================================================================
+        let nr_liveness = Arc::clone(&self.node_registry);
+        let ci_liveness = Arc::clone(&self.capability_inventory);
+        let cs_liveness = Arc::clone(&self.capability_sessions);
+        let pm_liveness = Arc::clone(&self.peer_map);
+        tokio::spawn(async move {
+            let timeout = Duration::from_secs(60);
+            loop {
+                tokio::time::sleep(Duration::from_secs(15)).await;
+
+                let timed_out = {
+                    let nr = nr_liveness.lock().await;
+                    nr.collect_timed_out(timeout)
+                };
+
+                for node_id in timed_out {
+                    crate::log!("NODE: Liveness timeout for '{}'. Cleaning up.", node_id);
+
+                    // Close all capability sessions belonging to this node
+                    {
+                        let mut cs = cs_liveness.lock().await;
+                        let sessions_to_close: Vec<_> = cs.list().into_iter()
+                            .filter(|s| s.node_id == node_id)
+                            .collect();
+                        for mut sess in sessions_to_close {
+                            sess.status = capabilities::node::registry::CapabilitySessionStatus::Closed;
+                            cs.register(sess);
+                        }
+                    }
+
+                    // Remove provider entries
+                    {
+                        let mut ci = ci_liveness.lock().await;
+                        ci.unregister_by_provider("node", &node_id);
+                    }
+
+                    // Unregister the node
+                    {
+                        let mut nr = nr_liveness.lock().await;
+                        nr.unregister(&node_id);
+                    }
+
+                    // Close the peer session if it still exists
+                    {
+                        let mut map = pm_liveness.lock().await;
+                        if let Some(existing) = map.remove(&node_id) {
+                            let sess = existing.lock().await;
+                            let _ = sess.close().await;
+                        }
+                    }
+
+                    crate::log!("NODE: '{}' removed due to liveness timeout.", node_id);
+                }
+            }
         });
 
         // =============================================================================
@@ -101,7 +184,8 @@ impl HostRuntime {
                     if let Ok(json) = serde_json::to_string(&msg) {
                         let map = pm_telemetry.lock().await;
                         for conn in map.values() {
-                            let r_conn = conn.lock().await;
+                            let sess = conn.lock().await;
+                            let r_conn = sess.conn.lock().await;
                             let _ = r_conn
                                 .send_message("frankn_cmd", &Bytes::from(json.clone()))
                                 .await;
@@ -119,6 +203,9 @@ impl HostRuntime {
             Arc::clone(&self.peer_map),
             Arc::clone(&self.llm_manager),
             self.input_manager.clone(),
+            Arc::clone(&self.node_registry),
+            Arc::clone(&self.capability_inventory),
+            Arc::clone(&self.capability_sessions),
         ));
 
         session_manager.run_signaling_loop().await

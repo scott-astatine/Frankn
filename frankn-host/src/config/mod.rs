@@ -9,8 +9,30 @@ use std::path::PathBuf;
 use tokio::fs;
 use ed25519_dalek::SigningKey;
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RuntimeMode {
+    Host,
+    Node,
+}
+
+impl Default for RuntimeMode {
+    fn default() -> Self {
+        Self::Host
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeConfig {
+    pub host_peer_id: String,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HostConfig {
+    #[serde(default)]
+    pub mode: RuntimeMode,
     pub host_id: String,
     pub host_name: String,
     pub password_hash: String,
@@ -24,6 +46,13 @@ pub struct HostConfig {
     pub sync_pairs: Vec<SyncPair>,
     #[serde(default)]
     pub sandbox_home: bool,
+    
+    // Node-Specific Configuration
+    #[serde(default)]
+    pub node: Option<NodeConfig>,
+    #[serde(default)]
+    pub allowed_nodes: Vec<String>,
+
     #[serde(skip)]
     pub custom_config_path: Option<PathBuf>,
 }
@@ -116,7 +145,7 @@ impl HostConfig {
         let config = tokio::task::spawn_blocking(move || {
             println!(
                 "
-⚡ Welcome to Frankn Host Setup
+物理 / Virtual Pairing: Setup Host Profile
 "
             );
 
@@ -174,6 +203,7 @@ impl HostConfig {
             let salt = auth_manager.salt.clone();
 
             HostConfig {
+                mode: RuntimeMode::Host,
                 host_id,
                 host_name,
                 password_hash,
@@ -184,6 +214,8 @@ impl HostConfig {
                 llm_model_dir,
                 sync_pairs: Vec::new(),
                 sandbox_home,
+                node: None,
+                allowed_nodes: Vec::new(),
                 custom_config_path: custom_path_clone,
             }
         })
@@ -216,18 +248,24 @@ impl HostConfig {
         }
     }
 
-    pub fn identity_file() -> PathBuf {
-        let mut path = Self::config_dir();
-        path.push("identity.pem");
-        path
+    pub fn identity_file(&self) -> PathBuf {
+        if let Some(ref custom_path) = self.custom_config_path {
+            let mut path = custom_path.clone();
+            path.set_extension("pem");
+            path
+        } else {
+            let mut path = Self::config_dir();
+            path.push("identity.pem");
+            path
+        }
     }
 
     pub fn get_identity_key(&self) -> Result<SigningKey, Box<dyn std::error::Error>> {
-        let path = Self::identity_file();
+        let path = self.identity_file();
         if !path.exists() {
             log!("IDENTITY: No identity file found. Generating new Ed25519 keypair...");
             
-            let dir = Self::config_dir();
+            let dir = path.parent().unwrap();
             if !dir.exists() {
                 std::fs::create_dir_all(&dir)?;
                 #[cfg(unix)]

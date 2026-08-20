@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Bytes;
 use crate::config::HostConfig;
-use crate::transport::webrtc::connection::RTCConn;
+use crate::transport::webrtc::connection::PeerSession;
 use crate::transport::protocol::messages::{HostMessage, Status};
 use crate::utils::get_timestamp;
 
@@ -13,7 +13,7 @@ pub struct CommandContext {
     pub client_id: String,
     pub label: String,
     pub config: Arc<HostConfig>,
-    pub rtc_conn: Arc<Mutex<RTCConn>>,
+    pub session: Arc<Mutex<PeerSession>>,
 }
 
 impl CommandContext {
@@ -22,14 +22,14 @@ impl CommandContext {
         client_id: String,
         label: String,
         config: Arc<HostConfig>,
-        rtc_conn: Arc<Mutex<RTCConn>>,
+        session: Arc<Mutex<PeerSession>>,
     ) -> Self {
         Self {
             id,
             client_id,
             label,
             config,
-            rtc_conn,
+            session,
         }
     }
 
@@ -58,7 +58,8 @@ impl CommandContext {
 
     async fn send(&self, msg: HostMessage) -> Result<(), String> {
         let json = serde_json::to_string(&msg).map_err(|e| e.to_string())?;
-        let conn = self.rtc_conn.lock().await;
+        let session = self.session.lock().await;
+        let conn = session.conn.lock().await;
         conn.send_message(&self.label, &Bytes::from(json))
             .await
             .map_err(|e| e.to_string())
@@ -66,7 +67,8 @@ impl CommandContext {
 
     /// Send a raw binary frame directly over the data channel.
     pub async fn send_binary(&self, bytes: Vec<u8>) -> Result<(), String> {
-        let conn = self.rtc_conn.lock().await;
+        let session = self.session.lock().await;
+        let conn = session.conn.lock().await;
         let channels = conn.data_channels.lock().await;
         if let Some(dc) = channels.get(&self.label) {
             dc.send(&Bytes::from(bytes))
@@ -80,7 +82,8 @@ impl CommandContext {
 
     /// Retrieve the current buffered amount of the data channel.
     pub async fn buffered_amount(&self) -> usize {
-        let conn = self.rtc_conn.lock().await;
+        let session = self.session.lock().await;
+        let conn = session.conn.lock().await;
         let channels = conn.data_channels.lock().await;
         if let Some(dc) = channels.get(&self.label) {
             dc.buffered_amount().await

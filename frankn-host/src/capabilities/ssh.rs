@@ -6,13 +6,12 @@ use tokio_tungstenite::tungstenite::Bytes;
 use webrtc::data_channel::RTCDataChannel;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 
-use crate::transport::webrtc::connection::RTCConn;
 use crate::{Status, elog, log};
 
 use crate::transport::context::CommandContext;
 
 pub async fn start_ssh_tunnel(ctx: &CommandContext) {
-    let _ = stop_ssh_tunnel_internal(&ctx.rtc_conn).await;
+    let _ = stop_ssh_tunnel_internal(&ctx.session).await;
 
     log!("[SSH] Starting bridge for request: {}", ctx.id);
 
@@ -20,7 +19,8 @@ pub async fn start_ssh_tunnel(ctx: &CommandContext) {
     let mut dc = None;
     for _ in 0..20 {
         // Wait up to 2 seconds
-        let conn = ctx.rtc_conn.lock().await;
+        let sess = ctx.session.lock().await;
+        let conn = sess.conn.lock().await;
         let map = conn.data_channels.lock().await;
         if let Some(found_dc) = map.get("frankn_ssh").cloned() {
             dc = Some(found_dc);
@@ -28,6 +28,7 @@ pub async fn start_ssh_tunnel(ctx: &CommandContext) {
         }
         drop(map);
         drop(conn);
+        drop(sess);
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
@@ -36,8 +37,8 @@ pub async fn start_ssh_tunnel(ctx: &CommandContext) {
             Ok(_) => {
                 let (stop_tx, stop_rx) = tokio::sync::oneshot::channel();
                 {
-                    let conn = ctx.rtc_conn.lock().await;
-                    let mut bridge_stop = conn.ssh_bridge_stop.lock().await;
+                    let session = ctx.session.lock().await;
+                    let mut bridge_stop = session.ssh_bridge_stop.lock().await;
                     *bridge_stop = Some(stop_tx);
                 }
 
@@ -67,17 +68,17 @@ pub async fn start_ssh_tunnel(ctx: &CommandContext) {
 }
 
 pub async fn stop_ssh_tunnel(ctx: &CommandContext) {
-    stop_ssh_tunnel_internal(&ctx.rtc_conn).await;
+    stop_ssh_tunnel_internal(&ctx.session).await;
     let _ = ctx.reply(
         Status::Success,
         Some(serde_json::json!({ "message": "Bridge terminated." })),
     ).await;
 }
 
-async fn stop_ssh_tunnel_internal(rtc_conn: &Arc<Mutex<RTCConn>>) {
+async fn stop_ssh_tunnel_internal(session: &Arc<Mutex<crate::transport::webrtc::connection::PeerSession>>) {
     let bridge_stop = {
-        let conn = rtc_conn.lock().await;
-        let mut stop_lock = conn.ssh_bridge_stop.lock().await;
+        let sess = session.lock().await;
+        let mut stop_lock = sess.ssh_bridge_stop.lock().await;
         stop_lock.take()
     };
 

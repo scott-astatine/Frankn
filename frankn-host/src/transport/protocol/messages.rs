@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use super::router::DcMsg;
 
-#[derive(Debug, Serialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Status {
     Success,
     Error(String),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
     #[serde(rename = "auth_request")]
@@ -50,9 +50,58 @@ pub enum ClientMessage {
         #[serde(default)]
         resume_offset: u64,
     },
+
+    // --- Node ↔ Host Control Messages ---
+    #[serde(rename = "node_register")]
+    NodeRegister {
+        node_id: String,
+        display_name: String,
+        capabilities: Vec<crate::capabilities::registry::CapabilityDescriptor>,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "node_heartbeat")]
+    NodeHeartbeat {
+        node_id: String,
+        timestamp: u64,
+        status: String,
+    },
+
+    #[serde(rename = "node_signal")]
+    NodeSignal {
+        client_id: String,
+        session_id: String,
+        signal: crate::signaling::SignalingMessage,
+    },
+
+    #[serde(rename = "node_activation_status")]
+    NodeActivationStatus {
+        capability_id: String,
+        session_id: String,
+        status: crate::capabilities::node::registry::CapabilitySessionStatus,
+        error: Option<String>,
+    },
+
+    #[serde(rename = "activate_capability")]
+    ActivateCapability {
+        capability_id: String,
+        session_id: String,
+        provider_id: Option<String>,
+        properties: std::collections::HashMap<String, serde_json::Value>,
+        timestamp: u64,
+        auth_token: String,
+    },
+
+    #[serde(rename = "deactivate_capability")]
+    DeactivateCapability {
+        capability_id: String,
+        session_id: String,
+        timestamp: u64,
+        auth_token: String,
+    },
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum HostMessage {
     #[serde(rename = "challenge")]
@@ -190,6 +239,45 @@ pub enum HostMessage {
         root_path: String,
         files: Vec<serde_json::Value>,
         is_final: bool,
+        timestamp: u64,
+    },
+
+    // --- Host ↔ Node Control Messages ---
+    #[serde(rename = "node_register_ack")]
+    NodeRegisterAck {
+        status: Status,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "node_activate_capability")]
+    NodeActivateCapability {
+        capability_id: String,
+        session_id: String,
+        client_id: String,
+        properties: std::collections::HashMap<String, serde_json::Value>,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "node_deactivate_capability")]
+    NodeDeactivateCapability {
+        capability_id: String,
+        session_id: String,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "host_signal")]
+    HostSignal {
+        client_id: String,
+        session_id: String,
+        signal: crate::signaling::SignalingMessage,
+    },
+
+    #[serde(rename = "capability_activation_status")]
+    CapabilityActivationStatus {
+        capability_id: String,
+        session_id: String,
+        status: crate::capabilities::node::registry::CapabilitySessionStatus,
+        error: Option<String>,
         timestamp: u64,
     },
 }

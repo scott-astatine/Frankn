@@ -1,5 +1,6 @@
 pub mod messages;
 pub mod router;
+pub mod node;
 
 pub use messages::{ClientMessage, HostMessage, Status};
 
@@ -13,45 +14,57 @@ use crate::transport::webrtc::connection::PeerMap;
 use crate::utils::get_timestamp;
 use crate::transport::context::CommandContext;
 
+/// Shared state passed to all protocol message handlers.
+pub struct ProtocolContext {
+    pub peer_map: PeerMap,
+    pub auth_manager: Arc<AuthManager>,
+    pub llm_manager: Arc<Mutex<LlmManager>>,
+    pub config: Arc<HostConfig>,
+    pub node_registry: Arc<Mutex<crate::capabilities::node::registry::NodeRegistry>>,
+    pub capability_inventory: Arc<Mutex<crate::capabilities::registry::CapabilityInventory>>,
+    pub capability_sessions: Arc<Mutex<crate::capabilities::node::registry::CapabilitySessionRegistry>>,
+}
+
 /// Decode a text data channel message and route it to the appropriate capability handler.
 pub async fn parse_dc_msg(
     data: &Vec<u8>,
-    peer_map: PeerMap,
-    auth_manager: Arc<AuthManager>,
+    ctx: &ProtocolContext,
     client_id: &str,
     label: &str,
-    llm_manager: Arc<Mutex<LlmManager>>,
-    config: Arc<HostConfig>,
 ) {
-    let rtc_conn = {
-        let map = peer_map.lock().await;
+    let session = {
+        let map = ctx.peer_map.lock().await;
         match map.get(client_id) {
-            Some(conn) => Arc::clone(conn),
+            Some(s) => Arc::clone(s),
             None => {
                 crate::elog!("CRITICAL: Link to {} severed.", client_id);
                 return;
             }
         }
     };
+    let rtc_conn = {
+        let s = session.lock().await;
+        Arc::clone(&s.conn)
+    };
 
     // Fast-path: check for binary frame magic byte BEFORE allocating a String copy.
     // Binary uploads on frankn_fs use [0x01][36-byte ID][data] framing.
     if data.len() >= 37 && data[0] == 0x01 && label == "frankn_fs" {
-        let ctx = CommandContext::new(
+        let cmd_ctx = CommandContext::new(
             String::new(),
             client_id.to_string(),
             label.to_string(),
-            Arc::clone(&config),
-            Arc::clone(&rtc_conn),
+            Arc::clone(&ctx.config),
+            Arc::clone(&session),
         );
-        parse_binary_msg(data, &ctx).await;
+        parse_binary_msg(data, &cmd_ctx).await;
         return;
     }
 
     let text = match String::from_utf8(data.clone()) {
         Ok(t) => t,
         Err(_) => {
-            // Not valid UTF-8 and not a binary frame — drop silently.
+            crate::elog!("PROTOCOL: Non-UTF8 payload received.");
             return;
         }
     };
@@ -60,15 +73,15 @@ pub async fn parse_dc_msg(
         Ok(msg) => match msg {
             ClientMessage::AuthRequest => {
                 crate::log!("CHALLENGE: Generating for client...");
-                let challenge = auth_manager.generate_challenge();
+                let challenge = ctx.auth_manager.generate_challenge();
                 {
-                    let conn = rtc_conn.lock().await;
-                    let mut current_challenge = conn.current_challenge.lock().await;
+                    let sess = session.lock().await;
+                    let mut current_challenge = sess.current_challenge.lock().await;
                     *current_challenge = Some(challenge.clone());
                 }
                 let response = HostMessage::Challenge {
                     challenge,
-                    salt: auth_manager.salt.clone(),
+                    salt: ctx.auth_manager.salt.clone(),
                     timestamp: get_timestamp(),
                 };
                 if let Ok(json) = serde_json::to_string(&response) {
@@ -78,16 +91,16 @@ pub async fn parse_dc_msg(
             }
             ClientMessage::AuthResponse { response, .. } => {
                 let expected_challenge = {
-                    let conn = rtc_conn.lock().await;
-                    let mut challenge_lock = conn.current_challenge.lock().await;
+                    let sess = session.lock().await;
+                    let mut challenge_lock = sess.current_challenge.lock().await;
                     challenge_lock.take()
                 };
                 if let Some(expected) = expected_challenge {
-                    if let Some(token) = auth_manager.verify_response(&expected, &response).await {
+                    if let Some(token) = ctx.auth_manager.verify_response(&expected, &response).await {
                         crate::log!("AUTH: Success for client {}.", client_id);
                         {
-                            let conn = rtc_conn.lock().await;
-                            let mut auth_lock = conn.authenticated.lock().await;
+                            let sess = session.lock().await;
+                            let mut auth_lock = sess.authenticated.lock().await;
                             *auth_lock = true;
                         }
                         let home_dir = dirs::home_dir()
@@ -104,9 +117,15 @@ pub async fn parse_dc_msg(
                         }
 
                         // Send capability manifest inventory immediately after pairing
-                        let registry = crate::capabilities::registry::CapabilityRegistry::new();
+                        let mut caps = Vec::new();
+                        {
+                            let ci = ctx.capability_inventory.lock().await;
+                            for entry in ci.list() {
+                                caps.push(entry.descriptor);
+                            }
+                        }
                         let inventory = HostMessage::CapabilitiesInventory {
-                            capabilities: registry.list(),
+                            capabilities: caps,
                             timestamp: get_timestamp(),
                         };
                         if let Ok(json) = serde_json::to_string(&inventory) {
@@ -136,15 +155,15 @@ pub async fn parse_dc_msg(
                 resume_offset,
                 ..
             } => {
-                let ctx = CommandContext::new(
+                let cmd_ctx = CommandContext::new(
                     id,
                     client_id.to_string(),
                     label.to_string(),
-                    Arc::clone(&config),
-                    Arc::clone(&rtc_conn),
+                    Arc::clone(&ctx.config),
+                    Arc::clone(&session),
                 );
                 crate::capabilities::fs::transfer::handle_transfer_init(
-                    &ctx,
+                    &cmd_ctx,
                     &path,
                     hash,
                     total_size,
@@ -155,15 +174,15 @@ pub async fn parse_dc_msg(
 
             ClientMessage::TransferCancel { id, .. } => {
                 crate::log!("FS: Transfer cancel for {}", id);
-                let ctx = CommandContext::new(
+                let cmd_ctx = CommandContext::new(
                     id,
                     client_id.to_string(),
                     label.to_string(),
-                    Arc::clone(&config),
-                    Arc::clone(&rtc_conn),
+                    Arc::clone(&ctx.config),
+                    Arc::clone(&session),
                 );
-                let resp = crate::capabilities::fs::transfer::handle_transfer_cancel(&ctx.id).await;
-                let _ = ctx.stream(resp).await;
+                let resp = crate::capabilities::fs::transfer::handle_transfer_cancel(&cmd_ctx.id).await;
+                let _ = cmd_ctx.stream(resp).await;
             }
 
             ClientMessage::DownloadInit {
@@ -172,15 +191,15 @@ pub async fn parse_dc_msg(
                 resume_offset,
                 ..
             } => {
-                let ctx = CommandContext::new(
+                let cmd_ctx = CommandContext::new(
                     id,
                     client_id.to_string(),
                     label.to_string(),
-                    Arc::clone(&config),
-                    Arc::clone(&rtc_conn),
+                    Arc::clone(&ctx.config),
+                    Arc::clone(&session),
                 );
                 crate::capabilities::fs::transfer::handle_download_init(
-                    ctx,
+                    cmd_ctx,
                     &path,
                     resume_offset,
                 )
@@ -191,35 +210,29 @@ pub async fn parse_dc_msg(
                 id,
                 command,
                 auth_token,
-                ..
             } => {
                 let is_auth = {
-                    let conn = rtc_conn.lock().await;
-                    let auth_lock = conn.authenticated.lock().await;
+                    let sess = session.lock().await;
+                    let auth_lock = sess.authenticated.lock().await;
                     *auth_lock
                 };
-                if is_auth && auth_manager.verify_token(&auth_token).await {
+                if is_auth && ctx.auth_manager.verify_token(&auth_token).await {
                     if let Some(response) = router::DcMsg::parse_msg(
                         &id,
                         &command,
-                        Arc::clone(&peer_map),
+                        Arc::clone(&ctx.peer_map),
                         client_id,
                         label,
-                        Arc::clone(&llm_manager),
-                        Arc::clone(&config),
+                        Arc::clone(&ctx.llm_manager),
+                        Arc::clone(&ctx.config),
                     )
                     .await {
                         if let Ok(json) = serde_json::to_string(&response) {
-                            let rtc_clone = Arc::clone(&rtc_conn);
-                            let label_clone = label.to_string();
-                            tokio::spawn(async move {
-                                let conn = rtc_clone.lock().await;
-                                let _ = conn.send_message(&label_clone, &Bytes::from(json)).await;
-                            });
+                            let conn = rtc_conn.lock().await;
+                            let _ = conn.send_message(label, &Bytes::from(json)).await;
                         }
                     }
                 } else {
-                    crate::elog!("EXEC: Permission denied for command {} (ID: {})", id, id);
                     let res = HostMessage::Response {
                         id,
                         status: Status::Error("Access Denied.".into()),
@@ -231,6 +244,50 @@ pub async fn parse_dc_msg(
                         let _ = conn.send_message(label, &Bytes::from(json)).await;
                     }
                 }
+            }
+
+            // --- Node ↔ Host Control Messages ---
+            ClientMessage::NodeRegister { node_id, display_name, capabilities, .. } => {
+                node::handle_register(
+                    &node_id, &display_name, &capabilities,
+                    &rtc_conn, label, &ctx.config, &ctx.node_registry, &ctx.capability_inventory,
+                ).await;
+            }
+
+            ClientMessage::NodeHeartbeat { node_id, .. } => {
+                node::handle_heartbeat(&node_id, &ctx.node_registry).await;
+            }
+
+            ClientMessage::NodeSignal { session_id, signal, .. } => {
+                node::handle_signal(
+                    client_id, session_id, signal,
+                    &ctx.peer_map, &ctx.node_registry, &ctx.capability_sessions,
+                ).await;
+            }
+
+            ClientMessage::NodeActivationStatus { capability_id, session_id, status, error, .. } => {
+                node::handle_activation_status(
+                    capability_id, session_id, status, error,
+                    &ctx.peer_map, &ctx.capability_sessions,
+                ).await;
+            }
+
+            ClientMessage::ActivateCapability {
+                capability_id, session_id, provider_id, properties, auth_token, ..
+            } => {
+                node::handle_activate_capability(
+                    client_id, capability_id, session_id, provider_id, properties, &auth_token,
+                    &rtc_conn, label, &ctx.auth_manager, &ctx.node_registry, &ctx.capability_sessions,
+                ).await;
+            }
+
+            ClientMessage::DeactivateCapability {
+                capability_id, session_id, auth_token, ..
+            } => {
+                node::handle_deactivate_capability(
+                    capability_id, session_id, &auth_token,
+                    &ctx.auth_manager, &ctx.node_registry, &ctx.capability_sessions,
+                ).await;
             }
         },
         Err(e) => {

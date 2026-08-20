@@ -8,5 +8,6 @@ pub mod proc_manager;
 pub mod ssh;
 pub mod system;
 pub mod registry;
+pub mod node;
 
 pub use inference::tools as inference_tools;
