@@ -177,8 +177,10 @@ class NodePeerSession extends ChangeNotifier {
           updateState(NodeSessionState.connecting);
           break;
         case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
-        case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
           updateState(NodeSessionState.failed, 'Peer connection $state');
+          break;
+        case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+          RtcThinClient().log('[NODE_SESSION] Transient peer connection state [$sessionId]: $state');
           break;
         case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
           updateState(NodeSessionState.closed);

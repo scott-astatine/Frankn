@@ -417,15 +417,19 @@ mixin RtcConnection on RtcClientBase {
               "ICE gathering and connection active",
             );
             break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+            log(
+              "[RTC] [G$attemptGen] [${attempt.elapsedMs}] Transient peer connection state: $ps. Waiting for ICE recovery or failure.",
+            );
+            break;
           case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
           case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
-          case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
             log(
               "[RTC] [G$attemptGen] [${attempt.elapsedMs}] Neural Link Severed (PC State: $ps).",
             );
             _transitionTo(
-              HostConnectionState.disconnected,
-              "Peer connection lost",
+              HostConnectionState.failed,
+              "Peer connection lost ($ps)",
             );
             break;
           default:

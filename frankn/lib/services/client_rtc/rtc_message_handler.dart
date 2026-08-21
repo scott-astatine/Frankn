@@ -395,11 +395,11 @@ mixin RtcMessageHandler on RtcClientBase {
 
   void _handleHostResponse(HostMsgResponse msg) {
     genDcMsgController.add(msg);
+    _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
 
     if (msg.data != null && msg.data is Map) {
       final response = msg.data['response'];
       if (response == 'Pong') {
-        _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
         if (_lastPingTime != null) {
           _lastPingMs = DateTime.now().millisecondsSinceEpoch - _lastPingTime!;
           _lastPingTime = null;
@@ -493,6 +493,7 @@ mixin RtcMessageHandler on RtcClientBase {
   }
 
   void _handleJsonMessage(Map<String, dynamic> data) async {
+    _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
     try {
       final strD = data.toString();
       if (!(strD.contains('telemetry') ||
