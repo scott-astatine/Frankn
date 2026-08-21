@@ -44,16 +44,24 @@ mixin RtcConnection on RtcClientBase {
     if (nextState == current) return;
 
     // Transition validation checks
-    if (current == HostConnectionState.disconnecting && nextState != HostConnectionState.disconnected) {
-      log("[FSM] Ignored invalid state transition: $current -> $nextState ($reason)");
+    if (current == HostConnectionState.disconnecting &&
+        nextState != HostConnectionState.disconnected) {
+      log(
+        "[FSM] Ignored invalid state transition: $current -> $nextState ($reason)",
+      );
       return;
     }
 
-    final gen = client.activeAttempt?.generationId ?? client.connectionGeneration;
+    final gen =
+        client.activeAttempt?.generationId ?? client.connectionGeneration;
     final session = client.activeAttempt?.sessionUuid.substring(0, 8) ?? "none";
-    
+
+    final elapsed = client.activeAttempt?.elapsedMs ?? "+0ms";
+
     // Structured Logging
-    log("[LINK] [Gen: $gen] [Session: $session] [State: $current -> $nextState] ($reason)");
+    log(
+      "[LINK] [G$gen] [S:$session] [$elapsed] [State: $current -> $nextState] ($reason)",
+    );
 
     client.currentHostState = nextState;
     hostStateController.add(nextState);
@@ -70,13 +78,19 @@ mixin RtcConnection on RtcClientBase {
       if (client.connectionGeneration == gen &&
           client.currentHostState != HostConnectionState.authenticated &&
           client.currentHostState != HostConnectionState.disconnected) {
-        _transitionTo(HostConnectionState.failed, "Timeout during connection stage: $stateName");
+        _transitionTo(
+          HostConnectionState.failed,
+          "Timeout during connection stage: $stateName",
+        );
       }
     });
   }
 
   /// Centralized state change side-effects handler
-  void _handleStateEffects(HostConnectionState oldState, HostConnectionState newState) {
+  void _handleStateEffects(
+    HostConnectionState oldState,
+    HostConnectionState newState,
+  ) {
     final client = this as RtcClient;
 
     // Timeout orchestration
@@ -89,8 +103,8 @@ mixin RtcConnection on RtcClientBase {
     } else if (newState == HostConnectionState.authenticating) {
       _startTimeoutTimer(ConnectionTimeouts.authentication, "authenticating");
     } else if (newState == HostConnectionState.authenticated ||
-               newState == HostConnectionState.disconnected ||
-               newState == HostConnectionState.failed) {
+        newState == HostConnectionState.disconnected ||
+        newState == HostConnectionState.failed) {
       client.activeAttempt?.timeoutTimer?.cancel();
     }
 
@@ -102,10 +116,10 @@ mixin RtcConnection on RtcClientBase {
         text: '⚡ Connected to Host',
       );
     } else if (newState == HostConnectionState.connecting ||
-               newState == HostConnectionState.signaling ||
-               newState == HostConnectionState.iceConnecting ||
-               newState == HostConnectionState.authenticating ||
-               newState == HostConnectionState.reconnectWaiting) {
+        newState == HostConnectionState.signaling ||
+        newState == HostConnectionState.iceConnecting ||
+        newState == HostConnectionState.authenticating ||
+        newState == HostConnectionState.reconnectWaiting) {
       if (!isIntentionalDisconnect && client.firstDisconnectTime != null) {
         final hostName = client.currentHostName ?? "Remote PC";
         updateBackgroundService(
@@ -114,11 +128,14 @@ mixin RtcConnection on RtcClientBase {
         );
       }
     } else if (newState == HostConnectionState.disconnected ||
-               newState == HostConnectionState.failed) {
+        newState == HostConnectionState.failed) {
+      final hostName = client.currentHostName ?? "Remote PC";
       if (isIntentionalDisconnect || isAuthFailed) {
-        stopBackgroundService();
+        updateBackgroundService(
+          title: "Frankn Active",
+          text: '⚡ Neural Link Standby // Signaling Online',
+        );
       } else {
-        final hostName = client.currentHostName ?? "Remote PC";
         updateBackgroundService(
           title: "☁️ [RECONNECTING] // $hostName",
           text: '⚡ Connection unstable. Retrying...',
@@ -127,38 +144,54 @@ mixin RtcConnection on RtcClientBase {
     }
 
     // Automatic reconnection logic
-    if (newState == HostConnectionState.disconnected || newState == HostConnectionState.failed) {
+    if (newState == HostConnectionState.disconnected ||
+        newState == HostConnectionState.failed) {
       _clearHostConnections();
 
       if (!isIntentionalDisconnect && !isAuthFailed && currentHostId != null) {
         firstDisconnectTime ??= DateTime.now();
         requestHostList();
 
-        final elapsed = DateTime.now().difference(firstDisconnectTime!).inSeconds;
+        final elapsed = DateTime.now()
+            .difference(firstDisconnectTime!)
+            .inSeconds;
         if (elapsed < _reconnectWindowSeconds) {
-          _transitionTo(HostConnectionState.reconnectWaiting, "Scheduling reconnect retry");
-          
+          _transitionTo(
+            HostConnectionState.reconnectWaiting,
+            "Scheduling reconnect retry",
+          );
+
           _reconnectTimer?.cancel();
           _reconnectTimer = Timer(const Duration(seconds: 3), () async {
             _reconnectTimer = null;
             if (currentHostId != null && !isIntentionalDisconnect) {
               if (client.sigState != SignalConnectionState.connected) {
-                log("[RECONNECT] Signaling server offline. Postponing neural P2P link retry.");
+                log(
+                  "[RECONNECT] Signaling server offline. Postponing neural P2P link retry.",
+                );
                 _reconnectTimer = Timer(const Duration(seconds: 2), () async {
                   _reconnectTimer = null;
                   if (currentHostId != null && !isIntentionalDisconnect) {
                     if (client.onlineHostIds.contains(currentHostId)) {
-                      _transitionTo(HostConnectionState.connecting, "Retrying connection after signaling check");
+                      _transitionTo(
+                        HostConnectionState.connecting,
+                        "Retrying connection after signaling check",
+                      );
                       connectToHost(currentHostId!);
                     } else {
-                      log("[RECONNECT] Host is offline after signaling check. Retrying later.");
+                      log(
+                        "[RECONNECT] Host is offline after signaling check. Retrying later.",
+                      );
                       _transitionTo(HostConnectionState.failed, "Host offline");
                     }
                   }
                 });
               } else {
                 if (client.onlineHostIds.contains(currentHostId)) {
-                  _transitionTo(HostConnectionState.connecting, "Retrying connection");
+                  _transitionTo(
+                    HostConnectionState.connecting,
+                    "Retrying connection",
+                  );
                   connectToHost(currentHostId!);
                 } else {
                   log("[RECONNECT] Host is offline. Retrying later.");
@@ -171,7 +204,10 @@ mixin RtcConnection on RtcClientBase {
           log("[RECONNECT] Reconnection window exceeded. Stopping retry loop.");
           firstDisconnectTime = null;
           currentHostId = null;
-          _transitionTo(HostConnectionState.disconnected, "Timeout window exceeded");
+          _transitionTo(
+            HostConnectionState.disconnected,
+            "Timeout window exceeded",
+          );
         }
       } else {
         firstDisconnectTime = null;
@@ -206,11 +242,39 @@ mixin RtcConnection on RtcClientBase {
 
     if (password != null) currentPassword = password;
 
+    final client = this as RtcClient;
+
+    // Enforce Signaling Readiness Barrier: Do NOT create WebRTC PeerConnection or gather ICE candidates
+    // until the signaling WebSocket is connected, Ed25519 identity key is loaded, and session_id is registered.
+    if (client.sigState != SignalConnectionState.connected ||
+        client.sessionId == null ||
+        client.clientKeyPair == null) {
+      log(
+        "Signaling layer not ready (State: ${client.sigState}, Session: ${client.sessionId}). Awaiting registration barrier...",
+      );
+      if (client.sigState == SignalConnectionState.disconnected) {
+        connectToSignaling();
+      }
+      final ready = await waitForSignalingReady(
+        timeout: const Duration(seconds: 10),
+      );
+      if (!ready) {
+        log(
+          "ERROR: Signaling registration barrier timed out. Aborting connectToHost.",
+        );
+        _isConnectingInternal = false;
+        _transitionTo(
+          HostConnectionState.failed,
+          "Signaling layer unavailable",
+        );
+        return;
+      }
+    }
+
     log("Initiating P2P to ${currentHostName ?? hostId}");
 
     // Generate unique session identifier and increment local connection generation
     final sessionUuid = const Uuid().v4();
-    final client = this as RtcClient;
     client.incrementGeneration();
     final attemptGen = client.connectionGeneration;
 
@@ -237,16 +301,29 @@ mixin RtcConnection on RtcClientBase {
         'bundlePolicy': 'max-bundle',
       };
 
-      peerConnection = await createPeerConnection(config);
+      hostPeerConnection = await createPeerConnection(config);
+
+      // Instantiate the active attempt object cleanly (RAII pattern)
+      final attempt = RtcConnectionAttempt(
+        generationId: attemptGen,
+        sessionUuid: sessionUuid,
+        signalingSocket: signalingChannel!,
+        peerConnection: hostPeerConnection!,
+      );
+      client.activeAttempt = attempt;
+
+      log(
+        "[RTC] [G$attemptGen] [${attempt.elapsedMs}] PeerConnection created.",
+      );
 
       // Create data channels in STRICT order with fixed IDs for Host compatibility
-      genDC = await peerConnection!.createDataChannel(
+      genDC = await hostPeerConnection!.createDataChannel(
         'frankn_cmd',
         RTCDataChannelInit()..id = 1,
       );
       _setupChannelHandlers(genDC!);
 
-      sshDC = await peerConnection!.createDataChannel(
+      sshDC = await hostPeerConnection!.createDataChannel(
         'frankn_ssh',
         RTCDataChannelInit()..id = 2,
       );
@@ -260,25 +337,25 @@ mixin RtcConnection on RtcClientBase {
         sshDataController.add(bytes);
       };
 
-      fsDC = await peerConnection!.createDataChannel(
+      fsDC = await hostPeerConnection!.createDataChannel(
         'frankn_fs',
         RTCDataChannelInit()..id = 3,
       );
       _setupChannelHandlers(fsDC!);
 
-      mediaDC = await peerConnection!.createDataChannel(
+      mediaDC = await hostPeerConnection!.createDataChannel(
         'frankn_media',
         RTCDataChannelInit()..id = 4,
       );
       _setupChannelHandlers(mediaDC!);
 
-      aiDC = await peerConnection!.createDataChannel(
+      aiDC = await hostPeerConnection!.createDataChannel(
         'dohee_x',
         RTCDataChannelInit()..id = 5,
       );
       _setupChannelHandlers(aiDC!);
 
-      inputDC = await peerConnection!.createDataChannel(
+      inputDC = await hostPeerConnection!.createDataChannel(
         'frankn_input',
         RTCDataChannelInit()..id = 6,
       );
@@ -287,40 +364,63 @@ mixin RtcConnection on RtcClientBase {
       // Monitor main command channel state for connection progress
       genDC!.onDataChannelState = (dcState) {
         if (attemptGen != client.connectionGeneration) return;
-        log("DC State [frankn_cmd]: $dcState");
+        log(
+          "[RTC] [G$attemptGen] [${attempt.elapsedMs}] DC State [frankn_cmd]: $dcState",
+        );
         switch (dcState) {
           case RTCDataChannelState.RTCDataChannelConnecting:
-            _transitionTo(HostConnectionState.connecting, "Data channel connecting");
+            _transitionTo(
+              HostConnectionState.connecting,
+              "Data channel connecting",
+            );
             break;
           case RTCDataChannelState.RTCDataChannelOpen:
-            log("P2P Uplink Established.");
+            log(
+              "[RTC] [G$attemptGen] [${attempt.elapsedMs}] P2P Uplink Established.",
+            );
             firstDisconnectTime = null; // Reset reconnection timer
-            _transitionTo(HostConnectionState.authenticating, "Data channel open, authenticating");
+            _transitionTo(
+              HostConnectionState.authenticating,
+              "Data channel open, authenticating",
+            );
             if (currentPassword != null) {
               authenticate(currentPassword!);
             }
             break;
           case RTCDataChannelState.RTCDataChannelClosed:
           case RTCDataChannelState.RTCDataChannelClosing:
-            log("DC [frankn_cmd] Severed. Triggering UI Reset.");
-            _transitionTo(HostConnectionState.disconnected, "Data channel closed");
+            log(
+              "[RTC] [G$attemptGen] [${attempt.elapsedMs}] DC [frankn_cmd] Severed.",
+            );
+            _transitionTo(
+              HostConnectionState.disconnected,
+              "Data channel closed",
+            );
             break;
         }
       };
 
       // Monitor overall peer connection state
-      peerConnection!.onConnectionState = (ps) {
+      hostPeerConnection!.onConnectionState = (ps) {
         if (attemptGen != client.connectionGeneration) return;
-        log("PC State: $ps");
+        log("[RTC] [G$attemptGen] [${attempt.elapsedMs}] PC State: $ps");
         switch (ps) {
           case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
-            _transitionTo(HostConnectionState.iceConnecting, "ICE gathering and connection active");
+            _transitionTo(
+              HostConnectionState.iceConnecting,
+              "ICE gathering and connection active",
+            );
             break;
           case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
           case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
           case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
-            log("Neural Link Severed (PC State: $ps). Resetting UI.");
-            _transitionTo(HostConnectionState.disconnected, "Peer connection lost");
+            log(
+              "[RTC] [G$attemptGen] [${attempt.elapsedMs}] Neural Link Severed (PC State: $ps).",
+            );
+            _transitionTo(
+              HostConnectionState.disconnected,
+              "Peer connection lost",
+            );
             break;
           default:
             break;
@@ -328,9 +428,19 @@ mixin RtcConnection on RtcClientBase {
       };
 
       // Forward ICE candidates to signaling server for NAT traversal
-      peerConnection!.onIceCandidate = (candidate) {
+      hostPeerConnection!.onIceCandidate = (candidate) {
         if (attemptGen != client.connectionGeneration) return;
-        log("ICE_GATHER: Generated local ICE candidate: ${candidate.candidate}");
+        attempt.candidateCount++;
+        final parts = candidate.candidate?.split(' ') ?? [];
+        final proto = parts.length > 2 ? parts[2] : 'udp';
+        final candTypeIndex = parts.indexOf('typ');
+        final candType =
+            (candTypeIndex != -1 && parts.length > candTypeIndex + 1)
+                ? parts[candTypeIndex + 1]
+                : 'host';
+        log(
+          "[ICE] [G$attemptGen] [${attempt.elapsedMs}] Local candidate #${attempt.candidateCount} ($proto/$candType)",
+        );
         _sendDataPlaneToSignaling(SignalingMessage.IceCandidate, {
           'to': hostId,
           'candidate': candidate.candidate,
@@ -339,38 +449,36 @@ mixin RtcConnection on RtcClientBase {
         });
       };
 
+      hostPeerConnection!.onIceGatheringState = (state) {
+        if (attemptGen != client.connectionGeneration) return;
+        log(
+          "[ICE] [G$attemptGen] [${attempt.elapsedMs}] Gathering state: $state",
+        );
+      };
+
+      log("[RTC] [G$attemptGen] [${attempt.elapsedMs}] createOffer started");
       // Create and send SDP offer to initiate connection
-      final offer = await peerConnection!.createOffer({
+      final offer = await hostPeerConnection!.createOffer({
         'mandatory': {
           'OfferToReceiveAudio': false,
           'OfferToReceiveVideo': false,
         },
         'optional': [],
       });
+      log("[RTC] [G$attemptGen] [${attempt.elapsedMs}] createOffer completed");
 
-      await peerConnection!.setLocalDescription(offer);
-
-      // Ensure signaling is ready before sending offer
-      int retryCount = 0;
-      while (signalingChannel == null && retryCount < 10) {
-        log("UPLINK: Waiting for Signaling Server... ($retryCount)");
-        await Future.delayed(const Duration(milliseconds: 500));
-        retryCount++;
-      }
-
-      if (signalingChannel == null) {
-        throw Exception("Signaling Server offline. Handshake aborted.");
-      }
-
-      // Instantiate the active attempt object cleanly (RAII pattern)
-      client.activeAttempt = RtcConnectionAttempt(
-        generationId: attemptGen,
-        sessionUuid: sessionUuid,
-        signalingSocket: signalingChannel!,
-        peerConnection: peerConnection!,
+      log(
+        "[RTC] [G$attemptGen] [${attempt.elapsedMs}] setLocalDescription started",
+      );
+      await hostPeerConnection!.setLocalDescription(offer);
+      log(
+        "[RTC] [G$attemptGen] [${attempt.elapsedMs}] setLocalDescription completed",
       );
 
       _transitionTo(HostConnectionState.signaling, "Sending SDP Offer");
+      log(
+        "[SIG] [G$attemptGen] [${attempt.elapsedMs}] Enqueuing SDP Offer to signaling",
+      );
       _sendDataPlaneToSignaling(SignalingMessage.Offer, {
         'to': hostId,
         'sdp': offer.sdp,
@@ -397,13 +505,16 @@ mixin RtcConnection on RtcClientBase {
   @override
   void disconnectFromHost() {
     isIntentionalDisconnect = true;
-    _transitionTo(HostConnectionState.disconnected, "Intentional disconnect requested");
+    _transitionTo(
+      HostConnectionState.disconnected,
+      "Intentional disconnect requested",
+    );
   }
 
   /// Completely cleans up all WebRTC connections and resources.
   Future<void> _clearHostConnections() async {
     final client = this as RtcClient;
-    
+
     // Invalidate session token to prevent stale transmission
     AuthService().clearToken();
 
@@ -411,6 +522,9 @@ mixin RtcConnection on RtcClientBase {
     if (this is RtcMessageHandler) {
       (this as RtcMessageHandler).clearActiveTransfers();
     }
+
+    // Clean up all active Node capability WebRTC sessions
+    await client.capabilitySessionManager.closeAllSessions();
 
     // Cancel any pending reconnect timer
     _reconnectTimer?.cancel();
@@ -425,7 +539,7 @@ mixin RtcConnection on RtcClientBase {
     sshDC = null;
     aiDC = null;
     inputDC = null;
-    peerConnection = null;
+    hostPeerConnection = null;
     // Reset SSH buffering state
     _sshEarlyBuffer.clear();
     _sshHandlerActive = false;

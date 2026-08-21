@@ -1,7 +1,7 @@
 use crate::transport::context::CommandContext;
 use crate::utils::Status;
 use std::collections::HashMap;
-use sysinfo::{ProcessRefreshKind, RefreshKind, System, MemoryRefreshKind};
+use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
 
 pub async fn list_processes(
     ctx: &CommandContext,
@@ -19,7 +19,7 @@ pub async fn list_processes(
             .with_cpu(sysinfo::CpuRefreshKind::everything())
             .with_memory(MemoryRefreshKind::everything()),
     );
-    
+
     sys.refresh_cpu_all();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
@@ -33,37 +33,46 @@ pub async fn list_processes(
 
     for p in sys.processes().values() {
         let name = p.name().to_string_lossy().to_string();
-        let cmd_vec: Vec<String> = p.cmd().iter().map(|s| s.to_string_lossy().to_string()).collect();
+        let cmd_vec: Vec<String> = p
+            .cmd()
+            .iter()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
         let cmd = cmd_vec.join(" ");
 
         // --- Kernel Thread Filter ---
-        if cmd.is_empty() || 
-           name.starts_with("kworker/") || 
-           name.starts_with("migration/") || 
-           name.contains("cpuhp/") ||
-           name == "idle" ||
-           name == "ksoftirqd" ||
-           name == "kthreadd" 
+        if cmd.is_empty()
+            || name.starts_with("kworker/")
+            || name.starts_with("migration/")
+            || name.contains("cpuhp/")
+            || name == "idle"
+            || name == "ksoftirqd"
+            || name == "kthreadd"
         {
             continue;
         }
-        
+
         // Host-side filtering (user search)
         if let Some(ref f) = filter_lower
-            && !name.to_lowercase().contains(f) && !cmd.to_lowercase().contains(f) {
-                continue;
-            }
+            && !name.to_lowercase().contains(f)
+            && !cmd.to_lowercase().contains(f)
+        {
+            continue;
+        }
 
         let status = format!("{:?}", p.status());
-        let user = p.user_id().map(|u| u.to_string()).unwrap_or_else(|| "root".to_string());
+        let user = p
+            .user_id()
+            .map(|u| u.to_string())
+            .unwrap_or_else(|| "root".to_string());
 
         let entry = grouped.entry(name.clone()).or_insert((
-            p.pid().as_u32(), 
-            0, 
-            0.0, 
-            status, 
+            p.pid().as_u32(),
+            0,
+            0.0,
+            status,
             cmd.clone(),
-            user
+            user,
         ));
 
         // Keep the lowest PID as the "representative" for the group
@@ -95,15 +104,23 @@ pub async fn list_processes(
     match sort_by.as_deref() {
         Some("memory") => {
             list.sort_by(|a, b| {
-                b["memory"].as_u64().unwrap_or(0).cmp(&a["memory"].as_u64().unwrap_or(0))
+                b["memory"]
+                    .as_u64()
+                    .unwrap_or(0)
+                    .cmp(&a["memory"].as_u64().unwrap_or(0))
             });
-        },
+        }
         Some("name") => {
             list.sort_by(|a, b| {
-                a["name"].as_str().unwrap_or("").to_lowercase().cmp(&b["name"].as_str().unwrap_or("").to_lowercase())
+                a["name"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .cmp(&b["name"].as_str().unwrap_or("").to_lowercase())
             });
-        },
-        _ => { // Default: CPU (descending)
+        }
+        _ => {
+            // Default: CPU (descending)
             list.sort_by(|a, b| {
                 b["cpu"]
                     .as_f64()
@@ -114,7 +131,7 @@ pub async fn list_processes(
         }
     }
 
-    let data = serde_json::json!({ 
+    let data = serde_json::json!({
         "processes": list.into_iter().take(100).collect::<Vec<_>>(),
         "stats": {
             "total_mem": total_mem,
@@ -146,7 +163,10 @@ pub async fn kill_process(ctx: &CommandContext, proc: &str) {
             if process.kill() {
                 killed_any = true;
             } else {
-                errors.push(format!("Process with PID {} found but kill signal failed", pid_val));
+                errors.push(format!(
+                    "Process with PID {} found but kill signal failed",
+                    pid_val
+                ));
             }
         } else {
             errors.push(format!("Process with PID {} not found", pid_val));
@@ -160,17 +180,23 @@ pub async fn kill_process(ctx: &CommandContext, proc: &str) {
                 if p.kill() {
                     killed_any = true;
                 } else {
-                    errors.push(format!("Failed to kill process '{}' (PID {})", p.name().to_string_lossy(), p.pid()));
+                    errors.push(format!(
+                        "Failed to kill process '{}' (PID {})",
+                        p.name().to_string_lossy(),
+                        p.pid()
+                    ));
                 }
             }
         }
     }
 
     if killed_any {
-        let _ = ctx.reply(
-            Status::Success,
-            Some(serde_json::json!({ "message": format!("Terminated {}", proc) }))
-        ).await;
+        let _ = ctx
+            .reply(
+                Status::Success,
+                Some(serde_json::json!({ "message": format!("Terminated {}", proc) })),
+            )
+            .await;
     } else {
         let error_msg = if errors.is_empty() {
             format!("No process matching '{}' was found", proc)

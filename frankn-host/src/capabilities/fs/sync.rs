@@ -3,30 +3,37 @@ use crate::{
     transport::context::CommandContext,
     utils::{Status, get_timestamp},
 };
-use sha2::{Digest, Sha256};
-use std::path::Path;
-use walkdir::WalkDir;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::fs;
+use std::path::Path;
 use std::time::UNIX_EPOCH;
+use walkdir::WalkDir;
 
 /// Handles a request from the client to generate a folder snapshot for synchronization.
-pub async fn handle_sync_request(
-    ctx: &CommandContext, 
-    path: &str,
-) {
+pub async fn handle_sync_request(ctx: &CommandContext, path: &str) {
     // Normalize path: strip trailing slashes to avoid WalkDir/strip_prefix issues
     let normalized_path = path.trim_end_matches('/').to_string();
-    crate::log!("SYNC: Received snapshot request [{}] for path: {} (normalized: {})", ctx.id, path, normalized_path);
-    
+    crate::log!(
+        "SYNC: Received snapshot request [{}] for path: {} (normalized: {})",
+        ctx.id,
+        path,
+        normalized_path
+    );
+
     let root = Path::new(&normalized_path);
 
     if !root.exists() || !root.is_dir() {
-        crate::elog!("SYNC ERROR: Path does not exist or is not a directory: {}", normalized_path);
-        let _ = ctx.reply(
-            Status::Error("Path does not exist or is not a dir".into()),
-            None,
-        ).await;
+        crate::elog!(
+            "SYNC ERROR: Path does not exist or is not a directory: {}",
+            normalized_path
+        );
+        let _ = ctx
+            .reply(
+                Status::Error("Path does not exist or is not a dir".into()),
+                None,
+            )
+            .await;
         return;
     }
 
@@ -41,9 +48,9 @@ pub async fn handle_sync_request(
         let mut files = Vec::new();
         let mut count = 0;
         let mut skipped = 0;
-        
+
         crate::log!("SYNC: WalkDir starting for {} (Following symlinks)", path_for_task);
-        
+
         for entry in WalkDir::new(&path_for_task).follow_links(true) {
             let entry = match entry {
                 Ok(e) => e,
@@ -55,7 +62,7 @@ pub async fn handle_sync_request(
 
             let entry_path = entry.path();
             let file_type = entry.file_type();
-            
+
             if file_type.is_file() || (file_type.is_symlink() && entry_path.is_file()) {
                 let metadata = match entry.metadata() {
                     Ok(m) => m,
@@ -95,12 +102,21 @@ pub async fn handle_sync_request(
 
     match result {
         Ok((files, count, skipped)) => {
-            crate::log!("SYNC: Snapshot complete for {}. Found {} files ({} metadata failures).", path_clone, count, skipped);
-            
+            crate::log!(
+                "SYNC: Snapshot complete for {}. Found {} files ({} metadata failures).",
+                path_clone,
+                count,
+                skipped
+            );
+
             // Chunk the results to avoid WebRTC Data Channel message size limits (e.g. 64KB)
-            const CHUNK_SIZE: usize = 200; 
-            let total_chunks = if files.is_empty() { 1 } else { (files.len() as f64 / CHUNK_SIZE as f64).ceil() as usize };
-            
+            const CHUNK_SIZE: usize = 200;
+            let total_chunks = if files.is_empty() {
+                1
+            } else {
+                (files.len() as f64 / CHUNK_SIZE as f64).ceil() as usize
+            };
+
             if files.is_empty() {
                 crate::log!("SYNC: Sending empty snapshot for {}", path_clone);
                 let snapshot = HostMessage::SyncSnapshot {
@@ -126,17 +142,18 @@ pub async fn handle_sync_request(
                 }
             }
 
-            let _ = ctx.reply(
-                Status::Success,
-                Some(json!({"message": format!("Snapshot sent in {} parts", total_chunks)})),
-            ).await;
+            let _ = ctx
+                .reply(
+                    Status::Success,
+                    Some(json!({"message": format!("Snapshot sent in {} parts", total_chunks)})),
+                )
+                .await;
         }
         Err(e) => {
             crate::elog!("SYNC ERROR: Snapshot task failed for {}: {}", path_clone, e);
-            let _ = ctx.reply(
-                Status::Error(format!("Snapshot task failed: {}", e)),
-                None,
-            ).await;
+            let _ = ctx
+                .reply(Status::Error(format!("Snapshot task failed: {}", e)), None)
+                .await;
         }
     }
 }
@@ -149,16 +166,24 @@ fn generate_quick_hash(path: &Path) -> Option<String> {
     let mut file = match fs::File::open(path) {
         Ok(f) => f,
         Err(e) => {
-            crate::elog!("SYNC ERROR: Failed to open file for hashing {:?}: {}", path, e);
+            crate::elog!(
+                "SYNC ERROR: Failed to open file for hashing {:?}: {}",
+                path,
+                e
+            );
             return None;
         }
     };
-    
+
     let mut buffer = [0u8; 1024];
     let bytes_read = match file.read(&mut buffer) {
         Ok(n) => n,
         Err(e) => {
-            crate::elog!("SYNC ERROR: Failed to read file for hashing {:?}: {}", path, e);
+            crate::elog!(
+                "SYNC ERROR: Failed to read file for hashing {:?}: {}",
+                path,
+                e
+            );
             return None;
         }
     };
@@ -169,7 +194,7 @@ fn generate_quick_hash(path: &Path) -> Option<String> {
 
     let mut hasher = Sha256::new();
     hasher.update(&buffer[..bytes_read]);
-    
+
     // Include file size to improve collision resistance
     if let Ok(meta) = file.metadata() {
         hasher.update(&meta.len().to_be_bytes());

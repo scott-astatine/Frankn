@@ -12,7 +12,6 @@
 ///  ├── Client-A
 ///  └── Client-B
 /// ```
-
 use super::registry::*;
 use crate::capabilities::registry::{
     CapabilityDescriptor, CapabilityInventory, CapabilityInventoryEntry, CapabilityProvider,
@@ -54,11 +53,7 @@ fn make_session(
     }
 }
 
-fn register_node_capabilities(
-    ci: &mut CapabilityInventory,
-    node_id: &str,
-    capabilities: &[&str],
-) {
+fn register_node_capabilities(ci: &mut CapabilityInventory, node_id: &str, capabilities: &[&str]) {
     for cap_id in capabilities {
         ci.register(CapabilityInventoryEntry {
             descriptor: make_descriptor(cap_id),

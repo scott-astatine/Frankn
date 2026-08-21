@@ -128,6 +128,40 @@ mixin RtcSignaling on RtcClientBase {
     }
   }
 
+  /// Waits until the signaling layer is fully connected, identity key loaded, and session_id established.
+  @override
+  Future<bool> waitForSignalingReady({Duration timeout = const Duration(seconds: 10)}) async {
+    final client = this as RtcClient;
+    if (client.sigState == SignalConnectionState.connected &&
+        client.sessionId != null &&
+        client.clientKeyPair != null) {
+      return true;
+    }
+
+    final completer = Completer<bool>();
+    late StreamSubscription sub;
+    final timer = Timer(timeout, () {
+      if (!completer.isCompleted) {
+        sub.cancel();
+        completer.complete(false);
+      }
+    });
+
+    sub = client.connectionStateStream.listen((state) {
+      if (state == SignalConnectionState.connected &&
+          client.sessionId != null &&
+          client.clientKeyPair != null) {
+        timer.cancel();
+        sub.cancel();
+        if (!completer.isCompleted) {
+          completer.complete(true);
+        }
+      }
+    });
+
+    return completer.future;
+  }
+
   @override
   Future<void> connectToSignaling() async {
     final client = this as RtcClient;
@@ -346,14 +380,18 @@ mixin RtcSignaling on RtcClientBase {
           break;
         }
 
+        log("[SIG] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] Received SDP Answer from host.");
         final msgSessionId = data['session_id'] as String;
         activeAttempt.hostSessionId = msgSessionId;
 
         // Set the remote SDP answer to complete WebRTC handshake
         try {
-          await peerConnection!.setRemoteDescription(
+          log("[RTC] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] setRemoteDescription started");
+          await hostPeerConnection!.setRemoteDescription(
             RTCSessionDescription(data['sdp'], 'answer'),
           );
+          log("[RTC] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] setRemoteDescription completed");
+          _transitionTo(HostConnectionState.iceConnecting, "Received SDP Answer");
         } catch (e) {
           log("CORE ERROR: Failed to set remote description: $e");
         }
@@ -376,13 +414,22 @@ mixin RtcSignaling on RtcClientBase {
         // Add ICE candidate for NAT traversal
         try {
           final candStr = data['candidate'] as String;
-          log("ICE_GATHER: Received remote ICE candidate: $candStr");
+          final parts = candStr.split(' ');
+          final proto = parts.length > 2 ? parts[2] : 'udp';
+          final candTypeIndex = parts.indexOf('typ');
+          final candType =
+              (candTypeIndex != -1 && parts.length > candTypeIndex + 1)
+                  ? parts[candTypeIndex + 1]
+                  : 'host';
+          log(
+            "[ICE] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] Received remote candidate ($proto/$candType)",
+          );
           var candidate = RTCIceCandidate(
             candStr,
             data['sdp_mid'],
             data['sdp_m_line_index'],
           );
-          await peerConnection!.addCandidate(candidate);
+          await hostPeerConnection!.addCandidate(candidate);
         } catch (e) {
           log("CORE ERROR: Failed to add ICE candidate: $e");
         }

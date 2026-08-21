@@ -12,6 +12,7 @@ import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
+import 'package:frankn/services/auth_service.dart';
 import 'package:frankn/services/sync_service.dart';
 import 'package:frankn/services/transfer_engine.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
@@ -132,6 +133,7 @@ class FranknTaskHandler extends TaskHandler {
           final ok = IsolateMsg(
             type: IsolateType.event,
             action: IsolateAction.authSuccess,
+            payload: {'token': AuthService().sessionToken ?? ''},
           );
           _broadcastToMain(ok);
           RtcThinClient().handleMsg(ok);
@@ -240,15 +242,16 @@ class FranknTaskHandler extends TaskHandler {
         RtcThinClient().handleMsg(msg);
       });
 
+      // Initiate signaling connection and await full registration before signaling readiness to UI Isolate
+      RtcClient().connectToSignaling();
+      await RtcClient().waitForSignalingReady(timeout: const Duration(seconds: 10));
+
       print("Background Isolate: SIGNALING_READY");
       _broadcastToMain(
         IsolateMsg(type: IsolateType.state, action: IsolateAction.isolateReady),
       );
 
       syncState();
-
-      // Auto-connect once ready
-      RtcClient().connectToSignaling();
 
       // Start Background Sync Scheduler
       Timer.periodic(const Duration(minutes: 1), (timer) async {
@@ -313,6 +316,9 @@ class FranknTaskHandler extends TaskHandler {
         break;
       case IsolateAction.sendDcMsg:
         RtcClient().sendDcMsg(DcMsg.fromJson(msg.payload));
+        break;
+      case IsolateAction.sendHostMsg:
+        RtcClient().sendHostMessage(msg.payload);
         break;
       case IsolateAction.sendInput:
         RtcClient().sendInputMsg(msg.payload);

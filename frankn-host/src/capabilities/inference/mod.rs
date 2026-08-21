@@ -90,33 +90,36 @@ impl LlmManager {
         }
     }
 
-fn resolve_model_path(model_path: &str, config_model_dir: &Option<String>) -> std::path::PathBuf {
-    let path = std::path::Path::new(model_path);
-    if path.is_absolute() || path.exists() {
-        return path.to_path_buf();
-    }
+    fn resolve_model_path(
+        model_path: &str,
+        config_model_dir: &Option<String>,
+    ) -> std::path::PathBuf {
+        let path = std::path::Path::new(model_path);
+        if path.is_absolute() || path.exists() {
+            return path.to_path_buf();
+        }
 
-    let model_dir = config_model_dir.clone().unwrap_or_else(|| {
-        dirs::home_dir()
-            .map(|mut p| {
-                p.push("Models");
-                p.to_string_lossy().to_string()
-            })
-            .unwrap_or_else(|| "~/.config/frankn/llms/".to_string())
-    });
+        let model_dir = config_model_dir.clone().unwrap_or_else(|| {
+            dirs::home_dir()
+                .map(|mut p| {
+                    p.push("Models");
+                    p.to_string_lossy().to_string()
+                })
+                .unwrap_or_else(|| "~/.config/frankn/llms/".to_string())
+        });
 
-    let dir_path = if model_dir.starts_with("~/") {
-        if let Some(home) = dirs::home_dir() {
-            home.join(&model_dir[2..])
+        let dir_path = if model_dir.starts_with("~/") {
+            if let Some(home) = dirs::home_dir() {
+                home.join(&model_dir[2..])
+            } else {
+                std::path::PathBuf::from(&model_dir)
+            }
         } else {
             std::path::PathBuf::from(&model_dir)
-        }
-    } else {
-        std::path::PathBuf::from(&model_dir)
-    };
+        };
 
-    dir_path.join(path)
-}
+        dir_path.join(path)
+    }
 
     pub async fn handle_chat(
         ctx: &CommandContext,

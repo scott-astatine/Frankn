@@ -44,11 +44,13 @@ import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/services/isolate_protocol.dart';
-
+import 'package:frankn/services/rtc_thin_client.dart';
 part 'rtc_message_handler.dart';
 part 'rtc_signaling.dart';
 part 'rtc_connection.dart';
 part 'rtc_commands.dart';
+part 'node_peer_session.dart';
+part 'capability_session_manager.dart';
 
 /// Abstract base class defining the interface for RTC client implementations.
 ///
@@ -120,6 +122,9 @@ abstract class RtcClientBase {
   /// Handles device registration and background service initialization.
   Future<void> connectToSignaling();
 
+  /// Waits until the signaling layer is connected, identity key loaded, and registered.
+  Future<bool> waitForSignalingReady({Duration timeout = const Duration(seconds: 10)});
+
   /// Initiates the Argon2id challenge-response authentication process.
   /// Sends authentication request to host to begin the security handshake.
   void authenticate(String password);
@@ -188,8 +193,8 @@ abstract class RtcClientBase {
 
   /// Main WebRTC peer connection object.
   /// Manages the P2P connection and all data channels.
-  RTCPeerConnection? get peerConnection;
-  set peerConnection(RTCPeerConnection? value);
+  RTCPeerConnection? get hostPeerConnection;
+  set hostPeerConnection(RTCPeerConnection? value);
 
   // ========== WEBRTC DATA CHANNELS ==========
 
@@ -308,6 +313,9 @@ class RtcClient extends RtcClientBase
   /// Factory constructor that returns the singleton instance.
   factory RtcClient() => _instance;
 
+  CapabilitySessionManager get capabilitySessionManager =>
+      RtcThinClient().capabilitySessionManager;
+
   /// Private constructor for singleton pattern.
   RtcClient._internal();
 
@@ -317,7 +325,7 @@ class RtcClient extends RtcClientBase
   WebSocketChannel? signalingChannel;
 
   @override
-  RTCPeerConnection? peerConnection;
+  RTCPeerConnection? hostPeerConnection;
 
   // ========== CONNECTION ATTEMPT TRACKING ==========
   RtcConnectionAttempt? activeAttempt;
@@ -373,6 +381,19 @@ class RtcClient extends RtcClientBase
 
   @override
   String? homeDir;
+
+  List<Map<String, dynamic>> availableCapabilities = [];
+
+  String? findProviderForCapability(String capabilityId) {
+    for (final cap in availableCapabilities) {
+      final descriptor = cap['descriptor'] as Map?;
+      final provider = cap['provider'] as Map?;
+      if (descriptor?['id'] == capabilityId && provider?['provider_id'] != null) {
+        return provider!['provider_id'].toString();
+      }
+    }
+    return null;
+  }
 
   // ========== RECONNECTION LOGIC ==========
 
@@ -573,6 +594,17 @@ class RtcClient extends RtcClientBase
     if (signalingChannel == null) return;
 
     try {
+      if (clientKeyPair == null) {
+        await _getOrCreateIdentityKey();
+      }
+
+      if (sessionId == null) {
+        for (int i = 0; i < 30; i++) {
+          if (sessionId != null) break;
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+      }
+
       final msgType = type == SignalingMessage.Offer ? 1 : 3; // 1 = Offer, 3 = IceCandidate
       final to = payload['to'] as String;
       final content = type == SignalingMessage.Offer ? payload['sdp'] : payload['candidate'];
@@ -600,6 +632,9 @@ class RtcClient extends RtcClientBase
       };
 
       signalingChannel!.sink.add(jsonEncode(msg));
+      if (type == SignalingMessage.Offer) {
+        log("[SIG] [G${activeAttempt?.generationId ?? connectionGeneration}] [${activeAttempt?.elapsedMs ?? '+0ms'}] SDP Offer transmitted to WebSocket sink.");
+      }
     } catch (e) {
       log("Data Plane Send Error: $e");
     }
@@ -612,10 +647,8 @@ class RtcClient extends RtcClientBase
     required int sequence,
     required int timestamp,
   }) async {
-    final keyPair = clientKeyPair;
-    if (keyPair == null) {
-      throw Exception("No client identity keypair loaded");
-    }
+    var keyPair = clientKeyPair;
+    keyPair ??= await _getOrCreateIdentityKey();
 
     final activeSessionId = sessionId;
     if (activeSessionId == null) {
@@ -699,10 +732,14 @@ class RtcConnectionAttempt {
   final WebSocketChannel signalingSocket;
   final RTCPeerConnection peerConnection;
   Timer? timeoutTimer;
+  final Stopwatch stopwatch = Stopwatch()..start();
+  int candidateCount = 0;
   
   bool _isDisposed = false;
   bool get isDisposed => _isDisposed;
   
+  String get elapsedMs => "+${stopwatch.elapsedMilliseconds}ms";
+
   RtcConnectionAttempt({
     required this.generationId,
     required this.sessionUuid,

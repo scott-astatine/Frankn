@@ -92,7 +92,12 @@ async fn probe_with_v4l2_ctl(device_path: &str) -> Option<CameraDeviceInfo> {
         // Try fallback card name extraction
         if let Some(first_line) = all_stdout.lines().next() {
             if first_line.contains(':') {
-                card_name = first_line.split(':').next().unwrap_or(device_path).trim().to_string();
+                card_name = first_line
+                    .split(':')
+                    .next()
+                    .unwrap_or(device_path)
+                    .trim()
+                    .to_string();
             }
         }
     }
@@ -163,7 +168,7 @@ fn probe_fallback(device_path: &str) -> Option<CameraDeviceInfo> {
 /// Helper to return functional physical cameras, preferring real webcams over loopback dummies.
 pub async fn get_best_camera_device() -> Option<String> {
     let cameras = probe_cameras().await;
-    
+
     // First try functional non-dummy webcams
     if let Some(real_cam) = cameras.iter().find(|c| c.is_functional && !c.is_dummy) {
         return Some(real_cam.device_path.clone());

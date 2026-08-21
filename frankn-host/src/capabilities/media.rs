@@ -1,7 +1,5 @@
 use crate::{
-    HostMessage,
-    transport::context::CommandContext,
-    transport::webrtc::connection::PeerMap,
+    HostMessage, transport::context::CommandContext, transport::webrtc::connection::PeerMap,
     utils::Status,
 };
 use std::sync::Arc;
@@ -48,17 +46,27 @@ pub async fn list_players(ctx: &CommandContext) {
     #[cfg(target_os = "linux")]
     {
         let (players_list, current) = crate::platform::linux::mpris::list_players().await;
-        let _ = ctx.reply(Status::Success, Some(serde_json::json!({
-            "players": players_list,
-            "active_player": current
-        }))).await;
+        let _ = ctx
+            .reply(
+                Status::Success,
+                Some(serde_json::json!({
+                    "players": players_list,
+                    "active_player": current
+                })),
+            )
+            .await;
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = ctx.reply(Status::Success, Some(serde_json::json!({
-            "players": Vec::<String>::new(),
-            "active_player": None::<String>
-        }))).await;
+        let _ = ctx
+            .reply(
+                Status::Success,
+                Some(serde_json::json!({
+                    "players": Vec::<String>::new(),
+                    "active_player": None::<String>
+                })),
+            )
+            .await;
     }
 }
 
@@ -67,9 +75,14 @@ pub async fn set_active_player(ctx: &CommandContext, player_name: &String) {
     {
         crate::platform::linux::mpris::set_active_player(player_name).await;
     }
-    let _ = ctx.reply(Status::Success, Some(serde_json::json!({
-        "message": format!("Active player set to {}", player_name)
-    }))).await;
+    let _ = ctx
+        .reply(
+            Status::Success,
+            Some(serde_json::json!({
+                "message": format!("Active player set to {}", player_name)
+            })),
+        )
+        .await;
 }
 
 pub async fn get_media_status(ctx: &CommandContext) {
@@ -77,35 +90,47 @@ pub async fn get_media_status(ctx: &CommandContext) {
     {
         match crate::platform::linux::mpris::get_media_status().await {
             Ok(d) => {
-                let _ = ctx.reply(Status::Success, Some(serde_json::json!({
-                    "player_name": Some(d.player_name.clone()),
-                    "playing": d.status.to_lowercase().contains("playing"),
-                    "art_data": d.art_data,
-                    "position": Some(d.position),
-                    "length": Some(d.length),
-                    "volume": Some(d.volume),
-                    "metadata": Some(format!("{} - {}", d.title, d.artist)),
-                }))).await;
+                let _ = ctx
+                    .reply(
+                        Status::Success,
+                        Some(serde_json::json!({
+                            "player_name": Some(d.player_name.clone()),
+                            "playing": d.status.to_lowercase().contains("playing"),
+                            "art_data": d.art_data,
+                            "position": Some(d.position),
+                            "length": Some(d.length),
+                            "volume": Some(d.volume),
+                            "metadata": Some(format!("{} - {}", d.title, d.artist)),
+                        })),
+                    )
+                    .await;
             }
             Err(_) => {
-                let _ = ctx.reply(Status::Success, Some(serde_json::json!({
-                    "player_name": None::<String>,
-                    "playing": false,
-                    "metadata": Some("No Media".to_string()),
-                    "art_data": None::<String>,
-                    "position": None::<u64>,
-                    "length": None::<u64>,
-                    "volume": None::<f64>,
-                }))).await;
+                let _ = ctx
+                    .reply(
+                        Status::Success,
+                        Some(serde_json::json!({
+                            "player_name": None::<String>,
+                            "playing": false,
+                            "metadata": Some("No Media".to_string()),
+                            "art_data": None::<String>,
+                            "position": None::<u64>,
+                            "length": None::<u64>,
+                            "volume": None::<f64>,
+                        })),
+                    )
+                    .await;
             }
         }
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = ctx.reply(
-            Status::Success,
-            Some(serde_json::json!({ "media_status": "unknown" })),
-        ).await;
+        let _ = ctx
+            .reply(
+                Status::Success,
+                Some(serde_json::json!({ "media_status": "unknown" })),
+            )
+            .await;
     }
 }
 
@@ -259,14 +284,13 @@ pub async fn get_all_audio_devices(ctx: &CommandContext) {
                 }));
             }
         }
-        let _ = ctx.reply(Status::Success, Some(json!({ "devices": devices }))).await;
+        let _ = ctx
+            .reply(Status::Success, Some(json!({ "devices": devices })))
+            .await;
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = ctx.reply(
-            Status::Error("Not supported".into()),
-            None,
-        ).await;
+        let _ = ctx.reply(Status::Error("Not supported".into()), None).await;
     }
 }
 

@@ -1,19 +1,19 @@
+use crate::auth::AuthManager;
+use crate::config::HostConfig;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
-    Frame, Terminal,
 };
 use std::{error::Error, io};
-use crate::config::HostConfig;
-use crate::auth::AuthManager;
 
 enum InputMode {
     Normal,
@@ -116,14 +116,24 @@ impl App {
                     match i {
                         0 => self.config.host_name = self.input.clone(),
                         2 => self.config.signaling_url = self.input.clone(),
-                        4 => self.config.llm_model_dir = if self.input.is_empty() { None } else { Some(self.input.clone()) },
+                        4 => {
+                            self.config.llm_model_dir = if self.input.is_empty() {
+                                None
+                            } else {
+                                Some(self.input.clone())
+                            }
+                        }
                         _ => {}
                     }
                 }
                 self.input_mode = InputMode::Normal;
             }
             InputMode::VerifyingPassword => {
-                if AuthManager::verify_password(&self.input, &self.config.password_hash, &self.config.salt) {
+                if AuthManager::verify_password(
+                    &self.input,
+                    &self.config.password_hash,
+                    &self.config.salt,
+                ) {
                     self.input_mode = InputMode::SettingNewPassword;
                     self.error_msg = None;
                 } else {
@@ -173,70 +183,76 @@ pub async fn run_tui(config: HostConfig) -> Result<(), Box<dyn Error>> {
 
 async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<HostConfig> {
     loop {
-        terminal.draw(|f| ui(f, &mut app)).map_err(|e| io::Error::other(e.to_string()))?;
+        terminal
+            .draw(|f| ui(f, &mut app))
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         if event::poll(std::time::Duration::from_millis(100))?
-            && let Event::Key(key) = event::read()? {
-                match app.input_mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => return Ok(app.config),
-                        KeyCode::Char('j') | KeyCode::Down => {
-                            app.error_msg = None;
-                            app.next();
-                        },
-                        KeyCode::Char('k') | KeyCode::Up => {
-                            app.error_msg = None;
-                            app.previous();
-                        },
-                        KeyCode::Enter => {
-                            app.error_msg = None;
-                            if let Some(i) = app.state.selected() {
-                                match i {
-                                    0 => {
-                                        app.input_mode = InputMode::Editing;
-                                        app.input = app.config.host_name.clone();
-                                        app.cursor_position = app.input.len();
-                                    }
-                                    1 => {
-                                        app.config.is_public = !app.config.is_public;
-                                    }
-                                    2 => {
-                                        app.input_mode = InputMode::Editing;
-                                        app.input = app.config.signaling_url.clone();
-                                        app.cursor_position = app.input.len();
-                                    }
-                                    3 => {
-                                        app.input_mode = InputMode::VerifyingPassword;
-                                        app.input.clear();
-                                        app.cursor_position = 0;
-                                    }
-                                    4 => {
-                                        app.input_mode = InputMode::Editing;
-                                        app.input = app.config.llm_model_dir.clone().unwrap_or_default();
-                                        app.cursor_position = app.input.len();
-                                    }
-                                    5 => return Ok(app.config.clone()),
-                                    _ => {}
+            && let Event::Key(key) = event::read()?
+        {
+            match app.input_mode {
+                InputMode::Normal => match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => return Ok(app.config),
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        app.error_msg = None;
+                        app.next();
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        app.error_msg = None;
+                        app.previous();
+                    }
+                    KeyCode::Enter => {
+                        app.error_msg = None;
+                        if let Some(i) = app.state.selected() {
+                            match i {
+                                0 => {
+                                    app.input_mode = InputMode::Editing;
+                                    app.input = app.config.host_name.clone();
+                                    app.cursor_position = app.input.len();
                                 }
+                                1 => {
+                                    app.config.is_public = !app.config.is_public;
+                                }
+                                2 => {
+                                    app.input_mode = InputMode::Editing;
+                                    app.input = app.config.signaling_url.clone();
+                                    app.cursor_position = app.input.len();
+                                }
+                                3 => {
+                                    app.input_mode = InputMode::VerifyingPassword;
+                                    app.input.clear();
+                                    app.cursor_position = 0;
+                                }
+                                4 => {
+                                    app.input_mode = InputMode::Editing;
+                                    app.input =
+                                        app.config.llm_model_dir.clone().unwrap_or_default();
+                                    app.cursor_position = app.input.len();
+                                }
+                                5 => return Ok(app.config.clone()),
+                                _ => {}
                             }
                         }
-                        _ => {}
-                    },
-                    InputMode::Editing | InputMode::VerifyingPassword | InputMode::SettingNewPassword => match key.code {
-                        KeyCode::Enter => app.submit_input(),
-                        KeyCode::Char(c) => app.enter_char(c),
-                        KeyCode::Backspace => app.delete_char(),
-                        KeyCode::Left => app.move_cursor_left(),
-                        KeyCode::Right => app.move_cursor_right(),
-                        KeyCode::Esc => {
-                            app.input_mode = InputMode::Normal;
-                            app.input.clear();
-                            app.cursor_position = 0;
-                        }
-                        _ => {}
-                    },
-                }
+                    }
+                    _ => {}
+                },
+                InputMode::Editing
+                | InputMode::VerifyingPassword
+                | InputMode::SettingNewPassword => match key.code {
+                    KeyCode::Enter => app.submit_input(),
+                    KeyCode::Char(c) => app.enter_char(c),
+                    KeyCode::Backspace => app.delete_char(),
+                    KeyCode::Left => app.move_cursor_left(),
+                    KeyCode::Right => app.move_cursor_right(),
+                    KeyCode::Esc => {
+                        app.input_mode = InputMode::Normal;
+                        app.input.clear();
+                        app.cursor_position = 0;
+                    }
+                    _ => {}
+                },
             }
+        }
     }
 }
 
@@ -255,10 +271,19 @@ fn ui(f: &mut Frame, app: &mut App) {
         .split(f.area());
 
     let title = Paragraph::new(Line::from(vec![
-        Span::styled(" ⚡ FRANKN ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " ⚡ FRANKN ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled("CONFIG_CORE ", Style::default().fg(Color::Magenta)),
     ]))
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Cyan)));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
     f.render_widget(title, chunks[0]);
 
     let items: Vec<ListItem> = app
@@ -268,13 +293,23 @@ fn ui(f: &mut Frame, app: &mut App) {
         .map(|(i, s)| {
             let val = match i {
                 0 => format!(": {}", app.config.host_name),
-                1 => format!(": {}", if app.config.is_public { "PUBLIC" } else { "PRIVATE" }),
+                1 => format!(
+                    ": {}",
+                    if app.config.is_public {
+                        "PUBLIC"
+                    } else {
+                        "PRIVATE"
+                    }
+                ),
                 2 => format!(": {}", app.config.signaling_url),
                 3 => ": ********".to_string(),
-                4 => format!(": {}", app.config.llm_model_dir.as_deref().unwrap_or("None")),
+                4 => format!(
+                    ": {}",
+                    app.config.llm_model_dir.as_deref().unwrap_or("None")
+                ),
                 _ => String::new(),
             };
-            
+
             let content = Line::from(vec![
                 Span::styled(s, Style::default().add_modifier(Modifier::BOLD)),
                 Span::styled(val, Style::default().fg(Color::DarkGray)),
@@ -300,20 +335,25 @@ fn ui(f: &mut Frame, app: &mut App) {
         match app.input_mode {
             InputMode::Normal => Line::from(" [j/k] Navigate  [Enter] Edit/Toggle  [Esc/q] Quit "),
             InputMode::Editing => Line::from(" [Enter] Submit  [Esc] Cancel "),
-            InputMode::VerifyingPassword => Line::from(" [Enter] Verify Current Passcode  [Esc] Cancel "),
+            InputMode::VerifyingPassword => {
+                Line::from(" [Enter] Verify Current Passcode  [Esc] Cancel ")
+            }
             InputMode::SettingNewPassword => Line::from(" [Enter] Set NEW Passcode  [Esc] Cancel "),
         }
     };
 
-    let help = Paragraph::new(footer_content)
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+    let help = Paragraph::new(footer_content).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
     f.render_widget(help, chunks[2]);
 
     match app.input_mode {
         InputMode::Editing | InputMode::VerifyingPassword | InputMode::SettingNewPassword => {
             let area = centered_rect(60, 20, f.area());
             f.render_widget(Clear, area);
-            
+
             let title = match app.input_mode {
                 InputMode::Editing => " Edit Value ",
                 InputMode::VerifyingPassword => " Enter Current Passcode ",
@@ -334,11 +374,8 @@ fn ui(f: &mut Frame, app: &mut App) {
                 .border_style(Style::default().fg(Color::Yellow));
             let input_para = Paragraph::new(input_display).block(input_block);
             f.render_widget(input_para, area);
-            
-            f.set_cursor_position((
-                area.x + app.cursor_position as u16 + 1,
-                area.y + 1,
-            ));
+
+            f.set_cursor_position((area.x + app.cursor_position as u16 + 1, area.y + 1));
         }
         _ => {}
     }

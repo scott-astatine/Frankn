@@ -1,8 +1,8 @@
+use crate::capabilities::registry::CapabilityDescriptor;
+use crate::transport::webrtc::connection::RTCConn;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::transport::webrtc::connection::RTCConn;
-use crate::capabilities::registry::CapabilityDescriptor;
 
 #[derive(Clone)]
 pub struct NodeInfo {
@@ -60,7 +60,8 @@ impl NodeRegistry {
     }
 
     pub fn collect_timed_out(&self, timeout: std::time::Duration) -> Vec<String> {
-        self.nodes.iter()
+        self.nodes
+            .iter()
             .filter(|(_, node)| node.last_seen.elapsed() > timeout)
             .map(|(id, _)| id.clone())
             .collect()
@@ -128,7 +129,7 @@ mod tests {
     #[test]
     fn test_capability_session_registry() {
         let mut registry = CapabilitySessionRegistry::new();
-        
+
         let session = CapabilitySession {
             session_id: "sess-01".to_string(),
             client_id: "client-01".to_string(),
@@ -141,13 +142,19 @@ mod tests {
         registry.register(session.clone());
 
         assert!(registry.get("sess-01").is_some());
-        assert_eq!(registry.get("sess-01").unwrap().status, CapabilitySessionStatus::Pending);
+        assert_eq!(
+            registry.get("sess-01").unwrap().status,
+            CapabilitySessionStatus::Pending
+        );
 
         // Update status
         if let Some(s) = registry.get_mut("sess-01") {
             s.status = CapabilitySessionStatus::Active;
         }
-        assert_eq!(registry.get("sess-01").unwrap().status, CapabilitySessionStatus::Active);
+        assert_eq!(
+            registry.get("sess-01").unwrap().status,
+            CapabilitySessionStatus::Active
+        );
 
         assert_eq!(registry.list().len(), 1);
 

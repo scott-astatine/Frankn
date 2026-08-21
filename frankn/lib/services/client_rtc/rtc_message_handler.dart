@@ -27,22 +27,28 @@ mixin RtcMessageHandler on RtcClientBase {
   int? _lastSuccessfulPongTime;
 
   void _handleChallenge(HostMsgChallenge msg) async {
-    log("Computing Auth Response...");
+    final client = this as RtcClient;
+    final elapsed = client.activeAttempt?.elapsedMs ?? "+0ms";
+    log("[AUTH] [$elapsed] Challenge received from host.");
+    
     final argon2Hash = await AuthService().computeArgon2Hash(
       currentPassword ?? "",
       msg.salt,
     );
     final response = AuthService().computeResponse(argon2Hash, msg.challenge);
+    log("[AUTH] [$elapsed] Sending auth response to host.");
     sendHostMessage(ClientMsgAuthResponse(response: response).toJson());
   }
 
   void _handleAuthSuccess(HostMsgAuthSuccess msg) {
+    final client = this as RtcClient;
+    final elapsed = client.activeAttempt?.elapsedMs ?? "+0ms";
     isAuthFailed = false;
     AuthService().setToken(msg.token);
     _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
-    (this as RtcClient).homeDir = msg.homeDir;
+    client.homeDir = msg.homeDir;
     updateHostState(HostConnectionState.authenticated);
-    log("AUTH SUCCESS. Session Token acquired. Home directory: ${msg.homeDir}");
+    log("[AUTH] [$elapsed] AUTH SUCCESS. Session Token acquired. Home directory: ${msg.homeDir}");
     _startBgPingTimer();
   }
 
@@ -486,6 +492,13 @@ mixin RtcMessageHandler on RtcClientBase {
         case HostMsgResponse():
           _handleHostResponse(msg);
         case HostMsgLlmToken():
+          genDcMsgController.add(msg);
+        case HostMsgCapabilitiesInventory():
+          (this as RtcClient).availableCapabilities = msg.capabilities;
+          genDcMsgController.add(msg);
+        case HostMsgHostSignal():
+          genDcMsgController.add(msg);
+        case HostMsgCapabilityActivationStatus():
           genDcMsgController.add(msg);
         case HostMsgTelemetry():
           final cpu = msg.cpuLoad.toStringAsFixed(1);

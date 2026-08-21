@@ -157,7 +157,10 @@ impl RTCConn {
         &self,
         stream_id: &str,
         track_id: &str,
-    ) -> Result<Arc<webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP>, Box<dyn std::error::Error>> {
+    ) -> Result<
+        Arc<webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP>,
+        Box<dyn std::error::Error>,
+    > {
         use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
         use webrtc::track::track_local::TrackLocal;
         use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -176,7 +179,8 @@ impl RTCConn {
             stream_id.to_string(),
         ));
 
-        let _rtp_sender = self.peer_connection
+        let _rtp_sender = self
+            .peer_connection
             .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
             .await?;
 
@@ -211,7 +215,10 @@ impl RTCConn {
         &self,
         label: &str,
     ) -> Result<Arc<RTCDataChannel>, Box<dyn std::error::Error>> {
-        let dc = self.peer_connection.create_data_channel(label, None).await?;
+        let dc = self
+            .peer_connection
+            .create_data_channel(label, None)
+            .await?;
         let dc_clone = Arc::clone(&dc);
         let dc_label = label.to_string();
         let data_channels = Arc::clone(&self.data_channels);
@@ -235,7 +242,6 @@ impl RTCConn {
             Err(format!("Data channel '{}' not found", label).into())
         }
     }
-
 
     pub async fn add_remote_candidate(
         &self,
@@ -266,10 +272,16 @@ impl RTCConn {
 
     pub async fn flush_candidates(&self) -> Result<(), webrtc::Error> {
         let mut pending = self.pending_candidates.lock().await;
-        log!("flush_candidates: Applying {} buffered candidates.", pending.len());
+        log!(
+            "flush_candidates: Applying {} buffered candidates.",
+            pending.len()
+        );
         for candidate in pending.drain(..) {
             if let Err(e) = self.peer_connection.add_ice_candidate(candidate).await {
-                log!("flush_candidates ERROR: Failed to apply remote ICE candidate: {}", e);
+                log!(
+                    "flush_candidates ERROR: Failed to apply remote ICE candidate: {}",
+                    e
+                );
             }
         }
         Ok(())

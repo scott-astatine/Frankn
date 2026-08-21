@@ -8,9 +8,13 @@ import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
+import 'package:frankn/services/auth_service.dart';
+import 'package:frankn/services/client_rtc/rtc.dart';
 
 class RtcThinClient {
   static final RtcThinClient _instance = RtcThinClient._internal();
+  late final CapabilitySessionManager capabilitySessionManager;
+
   final _hostStateController =
       StreamController<HostConnectionState>.broadcast();
   final _genDcMsgStreamC = StreamController<HostMessage>.broadcast();
@@ -71,7 +75,40 @@ class RtcThinClient {
   Future<void> Function()? onServiceRestartRequired;
   factory RtcThinClient() => _instance;
 
-  RtcThinClient._internal();
+  RtcThinClient._internal() {
+    capabilitySessionManager = CapabilitySessionManager(
+      onSendClientSignal: ({required sessionId, required signal}) async {
+        sendHostMessage({
+          'type': 'node_signal',
+          'session_id': sessionId,
+          'signal': signal,
+        });
+      },
+      onSendHostCmd: (action, payload) async {
+        final token = AuthService().sessionToken;
+        final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        if (action == 'activate') {
+          sendHostMessage({
+            'type': 'activate_capability',
+            'capability_id': payload['capability_id'],
+            'provider_id': payload['provider_id'],
+            'session_id': payload['session_id'],
+            'properties': payload['properties'] ?? payload['params'] ?? {},
+            'timestamp': nowSec,
+            'auth_token': token ?? '',
+          });
+        } else if (action == 'deactivate') {
+          sendHostMessage({
+            'type': 'deactivate_capability',
+            'capability_id': payload['capability_id'],
+            'session_id': payload['session_id'],
+            'timestamp': nowSec,
+            'auth_token': token ?? '',
+          });
+        }
+      },
+    );
+  }
   Stream<HostMsgLlmToken> get aiStream => _aiStreamController.stream;
 
   Stream<String> get authErrorStream => _authErrorController.stream;
@@ -233,6 +270,21 @@ class RtcThinClient {
           _aiStreamController.add(HostMsgLlmToken.fromJson(msg.payload));
         }
 
+        if (msg.payload['type'] == 'host_signal') {
+          log('[RTC_THIN] Dispatching host_signal for session [${msg.payload['session_id']}] to capabilitySessionManager');
+          capabilitySessionManager.handleHostSignal(
+            sessionId: msg.payload['session_id'],
+            signal: msg.payload['signal'],
+          );
+        } else if (msg.payload['type'] == 'capability_activation_status') {
+          log('[RTC_THIN] Dispatching activation_status for session [${msg.payload['session_id']}] (${msg.payload['status']}) to capabilitySessionManager');
+          capabilitySessionManager.handleActivationStatus(
+            sessionId: msg.payload['session_id'],
+            statusStr: msg.payload['status'],
+            error: msg.payload['error'],
+          );
+        }
+
         // BRIDGE: If this is a stream_end, also notify the transfer progress stream
         // so that viewers (Editor/Image) know to stop loading.
         if (msg.payload['type'] == 'download_end') {
@@ -299,6 +351,10 @@ class RtcThinClient {
           msg.payload['error'] ?? 'AUTHENTICATION_FAILED',
         );
       case (IsolateType.event, IsolateAction.authSuccess):
+        final token = msg.payload['token']?.toString();
+        if (token != null && token.isNotEmpty) {
+          AuthService().setToken(token);
+        }
         _authErrorController.add('SUCCESS');
     }
   }
@@ -313,6 +369,9 @@ class RtcThinClient {
 
   void sendDcMsg(DcMsg cmd) =>
       sendIntent(IsolateAction.sendDcMsg, cmd.toJson());
+
+  void sendHostMessage(Map<String, dynamic> msg) =>
+      sendIntent(IsolateAction.sendHostMsg, msg);
 
   void sendEvent(String action, [Map<String, dynamic> payload = const {}]) {
     if (!_isBackground) return;

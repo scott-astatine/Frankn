@@ -1,16 +1,18 @@
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
-use sha2::{Digest, Sha256};
 
-use crate::{HostMessage, transport::context::CommandContext, utils::Status};
-use super::framing::{parse_frame_header, TransferFrameHeader, FRAME_HEADER_SIZE, FLAG_FINAL, FLAG_ACK_REQUESTED};
-use super::state::{
-    TransferState, UploadSession, UPLOAD_SESSIONS, DOWNLOAD_TASKS,
-    write_state, part_path, state_path, cleanup_partial,
+use super::framing::{
+    FLAG_ACK_REQUESTED, FLAG_FINAL, FRAME_HEADER_SIZE, TransferFrameHeader, parse_frame_header,
 };
+use super::state::{
+    DOWNLOAD_TASKS, TransferState, UPLOAD_SESSIONS, UploadSession, cleanup_partial, part_path,
+    state_path, write_state,
+};
+use crate::{HostMessage, transport::context::CommandContext, utils::Status};
 
 pub async fn handle_transfer_init(
     ctx: &CommandContext,
@@ -90,19 +92,17 @@ pub async fn handle_transfer_init(
                     }
                 }
             }
-            Err(_) => {
-                match File::create(&part).await {
-                    Ok(f) => f,
-                    Err(e) => {
-                        return HostMessage::Response {
-                            id: ctx.id.clone(),
-                            status: Status::Error(format!("Failed to create file: {}", e)),
-                            data: None,
-                            timestamp: crate::utils::get_timestamp(),
-                        };
-                    }
+            Err(_) => match File::create(&part).await {
+                Ok(f) => f,
+                Err(e) => {
+                    return HostMessage::Response {
+                        id: ctx.id.clone(),
+                        status: Status::Error(format!("Failed to create file: {}", e)),
+                        data: None,
+                        timestamp: crate::utils::get_timestamp(),
+                    };
                 }
-            }
+            },
         }
     } else {
         match File::create(&part).await {
@@ -187,10 +187,7 @@ pub async fn handle_transfer_cancel(id: &str) -> HostMessage {
     }
 }
 
-pub async fn handle_transfer_chunk_raw(
-    data: &[u8],
-    ctx: &CommandContext,
-) {
+pub async fn handle_transfer_chunk_raw(data: &[u8], ctx: &CommandContext) {
     let Some(header) = parse_frame_header(data) else {
         crate::elog!(
             "FS: Invalid binary frame (len={}, magic={})",
@@ -327,7 +324,11 @@ pub async fn cleanup_client_uploads(client_id: &str) {
     for id in to_remove {
         if let Some(session_arc) = sessions.remove(&id) {
             let _session = session_arc.lock().await;
-            crate::log!("FS: Cleaned up orphaned upload session {} for client {}", id, client_id);
+            crate::log!(
+                "FS: Cleaned up orphaned upload session {} for client {}",
+                id,
+                client_id
+            );
         }
     }
 }

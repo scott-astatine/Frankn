@@ -3,15 +3,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-pub mod transfer;
 pub mod sync;
+pub mod transfer;
 
 pub static SANDBOX_HOME: OnceLock<bool> = OnceLock::new();
 
 /// Restricts path access to a specific base directory (sandbox root)
-pub fn check_sandbox(base_dir: &Path, user_path: &str, allow_parent: bool) -> Result<PathBuf, String> {
+pub fn check_sandbox(
+    base_dir: &Path,
+    user_path: &str,
+    allow_parent: bool,
+) -> Result<PathBuf, String> {
     let combined = base_dir.join(user_path);
-    
+
     // Check if the path exists to canonicalize. If not, find the first existing ancestor.
     let canonical = match combined.canonicalize() {
         Ok(p) => p,
@@ -37,11 +41,14 @@ pub fn check_sandbox(base_dir: &Path, user_path: &str, allow_parent: bool) -> Re
             }
         }
     };
-    
-    let base_canonical = base_dir.canonicalize()
+
+    let base_canonical = base_dir
+        .canonicalize()
         .map_err(|e| format!("Base sandbox error: {}", e))?;
-        
-    if canonical.starts_with(&base_canonical) || (allow_parent && base_canonical.starts_with(&canonical)) {
+
+    if canonical.starts_with(&base_canonical)
+        || (allow_parent && base_canonical.starts_with(&canonical))
+    {
         Ok(canonical)
     } else {
         Err("Access Denied: Path resides outside sandbox.".to_string())
@@ -57,7 +64,10 @@ pub fn check_sandbox_default(user_path: &str, allow_parent: bool) -> Result<Path
     } else {
         let path = if user_path.starts_with('~') {
             let home = dirs::home_dir().ok_or_else(|| "Home directory not found".to_string())?;
-            if user_path.len() > 1 && (user_path.chars().nth(1) == Some('/') || user_path.chars().nth(1) == Some(std::path::MAIN_SEPARATOR)) {
+            if user_path.len() > 1
+                && (user_path.chars().nth(1) == Some('/')
+                    || user_path.chars().nth(1) == Some(std::path::MAIN_SEPARATOR))
+            {
                 home.join(&user_path[2..])
             } else if user_path.len() > 1 {
                 home.join(&user_path[1..])
@@ -76,7 +86,12 @@ pub fn check_sandbox_default(user_path: &str, allow_parent: bool) -> Result<Path
 
 use crate::transport::context::CommandContext;
 
-pub async fn ls(ctx: &CommandContext, path: &str, sort_by: Option<String>, show_hidden: Option<bool>) {
+pub async fn ls(
+    ctx: &CommandContext,
+    path: &str,
+    sort_by: Option<String>,
+    show_hidden: Option<bool>,
+) {
     let sandbox_path = match check_sandbox_default(path, true) {
         Ok(p) => p,
         Err(e) => {
@@ -148,7 +163,12 @@ pub async fn ls(ctx: &CommandContext, path: &str, sort_by: Option<String>, show_
                 }
             });
 
-            let _ = ctx.reply(Status::Success, Some(serde_json::json!({ "entries": list }))).await;
+            let _ = ctx
+                .reply(
+                    Status::Success,
+                    Some(serde_json::json!({ "entries": list })),
+                )
+                .await;
         }
         Err(e) => {
             let _ = ctx.reply(Status::Error(e.to_string()), None).await;
@@ -212,7 +232,10 @@ mod tests {
 
         let resolved = check_sandbox(&sandbox, "new/nested/file.txt", false).unwrap();
 
-        assert_eq!(resolved, sandbox.canonicalize().unwrap().join("new/nested/file.txt"));
+        assert_eq!(
+            resolved,
+            sandbox.canonicalize().unwrap().join("new/nested/file.txt")
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -245,4 +268,3 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 }
-

@@ -1,16 +1,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio_tungstenite::tungstenite::Bytes;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use tokio_tungstenite::tungstenite::Bytes;
 
 use crate::auth::AuthManager;
 use crate::capabilities::inference::LlmManager;
 use crate::config::HostConfig;
 use crate::signaling::{SignalingClient, SignalingMessage};
-use crate::transport::protocol::{parse_dc_msg, ProtocolContext};
+use crate::transport::protocol::{ProtocolContext, parse_dc_msg};
 use crate::transport::webrtc::connection::{PeerMap, RTCConn};
 
 pub struct SessionManager {
@@ -178,7 +178,9 @@ impl SessionManager {
             crate::transport::webrtc::connection::PeerRole::Client
         };
         let rtc_conn = Arc::new(Mutex::new(
-            RTCConn::new(crate::transport::webrtc::connection::RtcRole::Answerer).await.map_err(|e| e.to_string())?,
+            RTCConn::new(crate::transport::webrtc::connection::RtcRole::Answerer)
+                .await
+                .map_err(|e| e.to_string())?,
         ));
 
         // Store the handshake session ID on the connection object
@@ -206,15 +208,23 @@ impl SessionManager {
                 {
                     let mut nr = self.node_registry.lock().await;
                     if nr.get(&client_id).is_some() {
-                        crate::log!("NODE: Node '{}' is reconnecting. Cleaning up old state.", client_id);
+                        crate::log!(
+                            "NODE: Node '{}' is reconnecting. Cleaning up old state.",
+                            client_id
+                        );
 
                         // Close all capability sessions belonging to this node
                         let mut cs = self.capability_sessions.lock().await;
-                        let sessions_to_close: Vec<_> = cs.list().into_iter()
+                        let sessions_to_close: Vec<_> = cs
+                            .list()
+                            .into_iter()
                             .filter(|s| s.node_id == client_id)
                             .collect();
                         for mut sess in sessions_to_close {
-                            crate::log!("NODE: Closing stale capability session '{}' for reconnecting node.", sess.session_id);
+                            crate::log!(
+                                "NODE: Closing stale capability session '{}' for reconnecting node.",
+                                sess.session_id
+                            );
                             sess.status = crate::capabilities::node::registry::CapabilitySessionStatus::Closed;
                             cs.register(sess);
                         }
@@ -328,12 +338,7 @@ impl SessionManager {
                             let l = channel_label.clone();
                             let c = cid.clone();
                             let pctx = Arc::clone(&proto_ctx);
-                            Box::pin(async move {
-                                parse_dc_msg(
-                                    &d, &pctx, &c, &l,
-                                )
-                                .await
-                            })
+                            Box::pin(async move { parse_dc_msg(&d, &pctx, &c, &l).await })
                         }));
                     }
                     _ => {}
@@ -435,7 +440,7 @@ impl SessionManager {
             let mut cs = self.capability_sessions.lock().await;
             let peer_map_lock = self.peer_map.lock().await;
             let node_registry_lock = self.node_registry.lock().await;
-            
+
             // Collect sessions to clean up
             let mut sessions_to_close = Vec::new();
             for sess in cs.list() {
@@ -445,7 +450,10 @@ impl SessionManager {
             }
 
             for mut sess in sessions_to_close {
-                crate::log!("CORE: Closing capability session '{}' due to peer disconnect.", sess.session_id);
+                crate::log!(
+                    "CORE: Closing capability session '{}' due to peer disconnect.",
+                    sess.session_id
+                );
                 sess.status = crate::capabilities::node::registry::CapabilitySessionStatus::Closed;
                 cs.register(sess.clone()); // Update status in registry
 
@@ -475,7 +483,9 @@ impl SessionManager {
                         };
                         if let Ok(json) = serde_json::to_string(&response) {
                             let conn = node_entry.rtc_conn.lock().await;
-                            let _ = conn.send_message("frankn_node_control", &Bytes::from(json)).await;
+                            let _ = conn
+                                .send_message("frankn_node_control", &Bytes::from(json))
+                                .await;
                         }
                     }
                 }

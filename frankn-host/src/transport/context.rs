@@ -1,10 +1,10 @@
+use crate::config::HostConfig;
+use crate::transport::protocol::messages::{HostMessage, Status};
+use crate::transport::webrtc::connection::PeerSession;
+use crate::utils::get_timestamp;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Bytes;
-use crate::config::HostConfig;
-use crate::transport::webrtc::connection::PeerSession;
-use crate::transport::protocol::messages::{HostMessage, Status};
-use crate::utils::get_timestamp;
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -34,7 +34,11 @@ impl CommandContext {
     }
 
     /// Send a final success/error reply for this command.
-    pub async fn reply(&self, status: Status, data: Option<serde_json::Value>) -> Result<(), String> {
+    pub async fn reply(
+        &self,
+        status: Status,
+        data: Option<serde_json::Value>,
+    ) -> Result<(), String> {
         let resp = HostMessage::Response {
             id: self.id.clone(),
             status,

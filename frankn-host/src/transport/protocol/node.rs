@@ -4,16 +4,16 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Bytes;
 
 use crate::auth::AuthManager;
-use crate::config::HostConfig;
 use crate::capabilities::node::registry::{
-    NodeRegistry, CapabilitySessionRegistry, CapabilitySession, CapabilitySessionStatus, NodeInfo,
+    CapabilitySession, CapabilitySessionRegistry, CapabilitySessionStatus, NodeInfo, NodeRegistry,
 };
 use crate::capabilities::registry::{
     CapabilityDescriptor, CapabilityInventory, CapabilityInventoryEntry, CapabilityProvider,
 };
+use crate::config::HostConfig;
 use crate::signaling::SignalingMessage;
-use crate::transport::webrtc::connection::{PeerMap, RTCConn};
 use crate::transport::protocol::{HostMessage, Status};
+use crate::transport::webrtc::connection::{PeerMap, RTCConn};
 use crate::utils::get_timestamp;
 
 /// Handle a NodeRegister message: verify the node is allowed, store it in the
@@ -63,7 +63,11 @@ pub async fn handle_register(
             let conn = rtc_conn.lock().await;
             let _ = conn.send_message(label, &Bytes::from(json)).await;
         }
-        crate::log!("NODE: Node '{}' ({}) successfully registered.", display_name, node_id);
+        crate::log!(
+            "NODE: Node '{}' ({}) successfully registered.",
+            display_name,
+            node_id
+        );
     } else {
         let response = HostMessage::NodeRegisterAck {
             status: Status::Error("Unauthorized Node ID.".into()),
@@ -73,15 +77,16 @@ pub async fn handle_register(
             let conn = rtc_conn.lock().await;
             let _ = conn.send_message(label, &Bytes::from(json)).await;
         }
-        crate::elog!("NODE: Node '{}' ({}) pairing failed: unauthorized.", display_name, node_id);
+        crate::elog!(
+            "NODE: Node '{}' ({}) pairing failed: unauthorized.",
+            display_name,
+            node_id
+        );
     }
 }
 
 /// Handle a NodeHeartbeat message: update the node's last_seen timestamp.
-pub async fn handle_heartbeat(
-    node_id: &str,
-    node_registry: &Arc<Mutex<NodeRegistry>>,
-) {
+pub async fn handle_heartbeat(node_id: &str, node_registry: &Arc<Mutex<NodeRegistry>>) {
     let mut nr = node_registry.lock().await;
     nr.update_heartbeat(node_id);
 }
@@ -110,8 +115,12 @@ pub async fn handle_signal(
         if is_node {
             // Node -> Host (forward to Client)
             if sess.node_id != sender_id {
-                crate::elog!("SECURITY: Node '{}' tried to signal session '{}' owned by Node '{}'",
-                    sender_id, session_id, sess.node_id);
+                crate::elog!(
+                    "SECURITY: Node '{}' tried to signal session '{}' owned by Node '{}'",
+                    sender_id,
+                    session_id,
+                    sess.node_id
+                );
                 return;
             }
 
@@ -121,6 +130,12 @@ pub async fn handle_signal(
             };
 
             if let Some(conn) = client_conn {
+                crate::log!(
+                    "[SIGNAL_RELAY] Forwarding signal from Node '{}' -> Client '{}' for session '{}'",
+                    sender_id,
+                    &sess.client_id,
+                    &session_id
+                );
                 let response = HostMessage::HostSignal {
                     client_id: sender_id.to_string(),
                     session_id,
@@ -131,12 +146,21 @@ pub async fn handle_signal(
                     let r_conn = sess_lock.conn.lock().await;
                     let _ = r_conn.send_message("frankn_cmd", &Bytes::from(json)).await;
                 }
+            } else {
+                crate::elog!(
+                    "[SIGNAL_RELAY] Failed to forward signal: Target Client '{}' not found in peer map",
+                    &sess.client_id
+                );
             }
         } else {
             // Client -> Host (forward to Node)
             if sess.client_id != sender_id {
-                crate::elog!("SECURITY: Client '{}' tried to signal session '{}' owned by Client '{}'",
-                    sender_id, session_id, sess.client_id);
+                crate::elog!(
+                    "SECURITY: Client '{}' tried to signal session '{}' owned by Client '{}'",
+                    sender_id,
+                    session_id,
+                    sess.client_id
+                );
                 return;
             }
 
@@ -146,6 +170,12 @@ pub async fn handle_signal(
             };
 
             if let Some(nc) = node_conn {
+                crate::log!(
+                    "[SIGNAL_RELAY] Forwarding signal from Client '{}' -> Node '{}' for session '{}'",
+                    sender_id,
+                    &sess.node_id,
+                    &session_id
+                );
                 let response = HostMessage::HostSignal {
                     client_id: sender_id.to_string(),
                     session_id,
@@ -153,12 +183,22 @@ pub async fn handle_signal(
                 };
                 if let Ok(json) = serde_json::to_string(&response) {
                     let conn = nc.lock().await;
-                    let _ = conn.send_message("frankn_node_control", &Bytes::from(json)).await;
+                    let _ = conn
+                        .send_message("frankn_node_control", &Bytes::from(json))
+                        .await;
                 }
+            } else {
+                crate::elog!(
+                    "[SIGNAL_RELAY] Failed to forward signal: Target Node '{}' not found in node registry",
+                    &sess.node_id
+                );
             }
         }
     } else {
-        crate::elog!("NODE: Signaling received for unknown session '{}'", session_id);
+        crate::elog!(
+            "NODE: Signaling received for unknown session '{}'",
+            session_id
+        );
     }
 }
 
@@ -172,8 +212,13 @@ pub async fn handle_activation_status(
     peer_map: &PeerMap,
     capability_sessions: &Arc<Mutex<CapabilitySessionRegistry>>,
 ) {
-    crate::log!("NODE: Activation status for capability '{}' in session '{}': {:?} (error: {:?})",
-        capability_id, session_id, status, error);
+    crate::log!(
+        "NODE: Activation status for capability '{}' in session '{}': {:?} (error: {:?})",
+        capability_id,
+        session_id,
+        status,
+        error
+    );
 
     let client_id = {
         let mut cs = capability_sessions.lock().await;
@@ -230,9 +275,11 @@ pub async fn handle_activate_capability(
             pid
         } else {
             let nr = node_registry.lock().await;
-            if let Some(node) = nr.list().iter().find(|n| {
-                n.capabilities.iter().any(|c| c.id == capability_id)
-            }) {
+            if let Some(node) = nr
+                .list()
+                .iter()
+                .find(|n| n.capabilities.iter().any(|c| c.id == capability_id))
+            {
                 node.node_id.clone()
             } else {
                 String::new()
@@ -281,7 +328,9 @@ pub async fn handle_activate_capability(
             };
             if let Ok(json) = serde_json::to_string(&msg) {
                 let conn = nc.lock().await;
-                let _ = conn.send_message("frankn_node_control", &Bytes::from(json)).await;
+                let _ = conn
+                    .send_message("frankn_node_control", &Bytes::from(json))
+                    .await;
             }
         } else {
             let response = HostMessage::CapabilityActivationStatus {
@@ -341,7 +390,9 @@ pub async fn handle_deactivate_capability(
                 };
                 if let Ok(json) = serde_json::to_string(&msg) {
                     let conn = nc.lock().await;
-                    let _ = conn.send_message("frankn_node_control", &Bytes::from(json)).await;
+                    let _ = conn
+                        .send_message("frankn_node_control", &Bytes::from(json))
+                        .await;
                 }
             }
         }

@@ -40,6 +40,12 @@ sealed class HostMessage {
         return HostMsgDownloadEnd.fromJson(json);
       case 'sync_snapshot':
         return HostMsgSyncSnapshot.fromJson(json);
+      case 'capabilities_inventory':
+        return HostMsgCapabilitiesInventory.fromJson(json);
+      case 'host_signal':
+        return HostMsgHostSignal.fromJson(json);
+      case 'capability_activation_status':
+        return HostMsgCapabilityActivationStatus.fromJson(json);
       default:
         return HostMsgUnknown(json);
     }
@@ -748,6 +754,164 @@ class HostMsgUnknown extends HostMessage {
 
   @override
   Map<String, dynamic> toJson() => raw;
+}
+
+class HostMsgCapabilitiesInventory extends HostMessage {
+  final List<Map<String, dynamic>> capabilities;
+  final int timestamp;
+
+  HostMsgCapabilitiesInventory({
+    required this.capabilities,
+    required this.timestamp,
+  }) : super('capabilities_inventory');
+
+  factory HostMsgCapabilitiesInventory.fromJson(Map<String, dynamic> json) {
+    return HostMsgCapabilitiesInventory(
+      capabilities: (json['capabilities'] as List?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [],
+      timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'capabilities': capabilities,
+        'timestamp': timestamp,
+      };
+}
+
+class HostMsgHostSignal extends HostMessage {
+  final String clientId;
+  final String sessionId;
+  final Map<String, dynamic> signal;
+
+  HostMsgHostSignal({
+    required this.clientId,
+    required this.sessionId,
+    required this.signal,
+  }) : super('host_signal');
+
+  factory HostMsgHostSignal.fromJson(Map<String, dynamic> json) {
+    return HostMsgHostSignal(
+      clientId: json['client_id']?.toString() ?? '',
+      sessionId: json['session_id']?.toString() ?? '',
+      signal: json['signal'] is Map
+          ? Map<String, dynamic>.from(json['signal'] as Map)
+          : {},
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'client_id': clientId,
+        'session_id': sessionId,
+        'signal': signal,
+      };
+}
+
+class HostMsgCapabilityActivationStatus extends HostMessage {
+  final String capabilityId;
+  final String sessionId;
+  final String status;
+  final String? error;
+  final int timestamp;
+
+  HostMsgCapabilityActivationStatus({
+    required this.capabilityId,
+    required this.sessionId,
+    required this.status,
+    this.error,
+    required this.timestamp,
+  }) : super('capability_activation_status');
+
+  factory HostMsgCapabilityActivationStatus.fromJson(Map<String, dynamic> json) {
+    return HostMsgCapabilityActivationStatus(
+      capabilityId: json['capability_id']?.toString() ?? '',
+      sessionId: json['session_id']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'Closed',
+      error: json['error']?.toString(),
+      timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'capability_id': capabilityId,
+        'session_id': sessionId,
+        'status': status,
+        if (error != null) 'error': error,
+        'timestamp': timestamp,
+      };
+}
+
+class ClientMsgActivateCapability {
+  final String capabilityId;
+  final String sessionId;
+  final String? providerId;
+  final Map<String, dynamic>? properties;
+  final String authToken;
+
+  ClientMsgActivateCapability({
+    required this.capabilityId,
+    required this.sessionId,
+    this.providerId,
+    this.properties,
+    required this.authToken,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'type': 'activate_capability',
+        'capability_id': capabilityId,
+        'session_id': sessionId,
+        if (providerId != null) 'provider_id': providerId,
+        'properties': properties ?? {},
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'auth_token': authToken,
+      };
+}
+
+class ClientMsgDeactivateCapability {
+  final String capabilityId;
+  final String sessionId;
+  final String authToken;
+
+  ClientMsgDeactivateCapability({
+    required this.capabilityId,
+    required this.sessionId,
+    required this.authToken,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'type': 'deactivate_capability',
+        'capability_id': capabilityId,
+        'session_id': sessionId,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'auth_token': authToken,
+      };
+}
+
+class ClientMsgNodeSignal {
+  final String clientId;
+  final String sessionId;
+  final Map<String, dynamic> signal;
+
+  ClientMsgNodeSignal({
+    required this.clientId,
+    required this.sessionId,
+    required this.signal,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'type': 'node_signal',
+        'client_id': clientId,
+        'session_id': sessionId,
+        'signal': signal,
+      };
 }
 
 /// Base class for all commands sent to the Host.

@@ -1,34 +1,60 @@
 use tokio::process::Command;
 
 pub async fn get_wifi_status() -> bool {
-    Command::new("nmcli").args(&["radio", "wifi"]).output().await
+    Command::new("nmcli")
+        .args(&["radio", "wifi"])
+        .output()
+        .await
         .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "enabled")
         .unwrap_or(false)
 }
 
 pub async fn get_bluetooth_status() -> bool {
-    Command::new("rfkill").args(&["list", "bluetooth"]).output().await
+    Command::new("rfkill")
+        .args(&["list", "bluetooth"])
+        .output()
+        .await
         .map(|o| !String::from_utf8_lossy(&o.stdout).contains("Soft blocked: yes"))
         .unwrap_or(false)
 }
 
 pub async fn toggle_wifi(state: bool) {
     let arg = if state { "on" } else { "off" };
-    let _ = Command::new("nmcli").args(&["radio", "wifi", arg]).output().await;
+    let _ = Command::new("nmcli")
+        .args(&["radio", "wifi", arg])
+        .output()
+        .await;
 }
 
 pub async fn toggle_bluetooth(state: bool) {
     let arg = if state { "unblock" } else { "block" };
-    let _ = Command::new("rfkill").args(&[arg, "bluetooth"]).output().await;
+    let _ = Command::new("rfkill")
+        .args(&[arg, "bluetooth"])
+        .output()
+        .await;
 }
 
 pub async fn rescan_wifi() {
-    let _ = Command::new("nmcli").args(&["dev", "wifi", "rescan"]).output().await;
+    let _ = Command::new("nmcli")
+        .args(&["dev", "wifi", "rescan"])
+        .output()
+        .await;
 }
 
 pub async fn list_wifi_networks() -> Vec<serde_json::Value> {
     let mut networks = Vec::new();
-    if let Ok(output) = Command::new("nmcli").args(&["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list"]).output().await {
+    if let Ok(output) = Command::new("nmcli")
+        .args(&[
+            "-t",
+            "-f",
+            "IN-USE,SSID,SIGNAL,SECURITY",
+            "dev",
+            "wifi",
+            "list",
+        ])
+        .output()
+        .await
+    {
         let out_str = String::from_utf8_lossy(&output.stdout);
         for line in out_str.lines() {
             let parts: Vec<&str> = line.split(':').collect();
@@ -56,7 +82,10 @@ pub async fn connect_wifi(ssid: &str, password: Option<&str>) -> bool {
 }
 
 pub async fn scan_bluetooth() {
-    let _ = Command::new("bluetoothctl").args(&["--timeout", "10", "scan", "on"]).output().await;
+    let _ = Command::new("bluetoothctl")
+        .args(&["--timeout", "10", "scan", "on"])
+        .output()
+        .await;
 }
 
 pub async fn list_bluetooth_devices() -> Vec<serde_json::Value> {
@@ -69,8 +98,12 @@ pub async fn list_bluetooth_devices() -> Vec<serde_json::Value> {
                 if parts.len() == 3 {
                     let mac = parts[1];
                     let name = parts[2];
-                    
-                    let connected = if let Ok(info) = Command::new("bluetoothctl").args(&["info", mac]).output().await {
+
+                    let connected = if let Ok(info) = Command::new("bluetoothctl")
+                        .args(&["info", mac])
+                        .output()
+                        .await
+                    {
                         String::from_utf8_lossy(&info.stdout).contains("Connected: yes")
                     } else {
                         false
@@ -89,7 +122,13 @@ pub async fn list_bluetooth_devices() -> Vec<serde_json::Value> {
 }
 
 pub async fn connect_bluetooth(mac: &str) -> bool {
-    let _ = Command::new("bluetoothctl").args(&["pair", mac]).output().await;
-    let output = Command::new("bluetoothctl").args(&["connect", mac]).output().await;
+    let _ = Command::new("bluetoothctl")
+        .args(&["pair", mac])
+        .output()
+        .await;
+    let output = Command::new("bluetoothctl")
+        .args(&["connect", mac])
+        .output()
+        .await;
     output.map(|o| o.status.success()).unwrap_or(false)
 }

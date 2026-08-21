@@ -45,37 +45,44 @@ pub async fn start_ssh_tunnel(ctx: &CommandContext) {
                 tokio::spawn(async move {
                     handle_ssh_channel(dc, stop_rx).await;
                 });
-                let _ = ctx.reply(
-                    Status::Success,
-                    Some(serde_json::json!({ "message": "SSH reachable. Bridge active." })),
-                ).await;
+                let _ = ctx
+                    .reply(
+                        Status::Success,
+                        Some(serde_json::json!({ "message": "SSH reachable. Bridge active." })),
+                    )
+                    .await;
             }
             Err(e) => {
                 elog!("[SSH] Local connection failed: {}", e);
-                let _ = ctx.reply(
-                    Status::Error(format!("Local SSH unreachable: {}", e)),
-                    None,
-                ).await;
+                let _ = ctx
+                    .reply(Status::Error(format!("Local SSH unreachable: {}", e)), None)
+                    .await;
             }
         }
     } else {
         elog!("[SSH] Data channel 'frankn_ssh' never appeared.");
-        let _ = ctx.reply(
-            Status::Error("Uplink 'frankn_ssh' missing. Re-open terminal.".to_string()),
-            None,
-        ).await;
+        let _ = ctx
+            .reply(
+                Status::Error("Uplink 'frankn_ssh' missing. Re-open terminal.".to_string()),
+                None,
+            )
+            .await;
     }
 }
 
 pub async fn stop_ssh_tunnel(ctx: &CommandContext) {
     stop_ssh_tunnel_internal(&ctx.session).await;
-    let _ = ctx.reply(
-        Status::Success,
-        Some(serde_json::json!({ "message": "Bridge terminated." })),
-    ).await;
+    let _ = ctx
+        .reply(
+            Status::Success,
+            Some(serde_json::json!({ "message": "Bridge terminated." })),
+        )
+        .await;
 }
 
-async fn stop_ssh_tunnel_internal(session: &Arc<Mutex<crate::transport::webrtc::connection::PeerSession>>) {
+async fn stop_ssh_tunnel_internal(
+    session: &Arc<Mutex<crate::transport::webrtc::connection::PeerSession>>,
+) {
     let bridge_stop = {
         let sess = session.lock().await;
         let mut stop_lock = sess.ssh_bridge_stop.lock().await;

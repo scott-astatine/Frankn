@@ -1,13 +1,13 @@
+use sha2::{Digest, Sha256};
+use std::io::SeekFrom;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::io::SeekFrom;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use sha2::{Digest, Sha256};
 
-use crate::{HostMessage, transport::context::CommandContext, utils::Status};
-use super::framing::{FRAME_HEADER_SIZE, FRAME_MAGIC, FLAG_FINAL};
+use super::framing::{FLAG_FINAL, FRAME_HEADER_SIZE, FRAME_MAGIC};
 use super::state::DOWNLOAD_TASKS;
+use crate::{HostMessage, transport::context::CommandContext, utils::Status};
 
 pub async fn handle_download_init(
     ctx: CommandContext,
@@ -91,12 +91,7 @@ pub async fn handle_download_init(
     let ctx_clone = ctx.clone();
 
     tokio::spawn(async move {
-        let _ = stream_download(
-            f,
-            ctx_clone,
-            cancel_flag_clone,
-        )
-        .await;
+        let _ = stream_download(f, ctx_clone, cancel_flag_clone).await;
     });
 
     DOWNLOAD_TASKS

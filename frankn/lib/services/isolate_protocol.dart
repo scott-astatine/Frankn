@@ -38,6 +38,7 @@ class IsolateAction {
   static const connectHost = "connect_host";
   static const disconnectHost = "disconnect_host";
   static const sendDcMsg = "send_dc_msg";
+  static const sendHostMsg = "send_host_msg";
   static const sendInput = "send_input";
   static const downloadInit = "download_init";
   static const authenticate = "authenticate";
@@ -77,4 +78,6 @@ class IsolateAction {
   static const sshOutput = "ssh_output";
   static const authFailed = "auth_failed";
   static const authSuccess = "auth_success";
+  static const hostSignal = "host_signal";
+  static const capabilityActivationStatus = "capability_activation_status";
 }

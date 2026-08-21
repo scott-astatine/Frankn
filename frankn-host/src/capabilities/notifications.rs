@@ -58,14 +58,14 @@ pub async fn start_notification_listener(peer_map: PeerMap) {
                                 std::collections::HashMap<&str, zvariant::Value>,
                                 i32,
                             )>() {
-                                    // Forward to all clients
-                                    _send_notification_to_client(
-                                        pm.clone(),
-                                        app_name,
-                                        title,
-                                        body_text,
-                                    )
-                                    .await;
+                                // Forward to all clients
+                                _send_notification_to_client(
+                                    pm.clone(),
+                                    app_name,
+                                    title,
+                                    body_text,
+                                )
+                                .await;
                             }
                         }
                     }
@@ -95,7 +95,9 @@ pub async fn _send_notification_to_client(
             log!("Sending notification to client {}", client_id);
             let sess = conn.lock().await;
             let r_conn = sess.conn.lock().await;
-            let _ = r_conn.send_message("frankn_cmd", &Bytes::from(json.clone())).await;
+            let _ = r_conn
+                .send_message("frankn_cmd", &Bytes::from(json.clone()))
+                .await;
         }
     }
 }

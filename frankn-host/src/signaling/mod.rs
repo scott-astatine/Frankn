@@ -19,39 +19,33 @@ pub enum PeerType {
 pub enum SignalingMessage {
     #[serde(rename = "auth_challenge")]
     AuthChallenge {
-        challenge: String,         // Base64URL encoded CSPRNG challenge
+        challenge: String, // Base64URL encoded CSPRNG challenge
     },
 
     #[serde(rename = "register")]
     Register {
         protocol_version: u8,
-        peer_id: String,           // Base64URL encoded Hash(public_key)
+        peer_id: String, // Base64URL encoded Hash(public_key)
         peer_type: PeerType,
         display_name: String,
         is_public: bool,
-        public_key: String,        // Hex encoded Ed25519 public key
-        signature: String,         // Hex signature of the challenge
+        public_key: String, // Hex encoded Ed25519 public key
+        signature: String,  // Hex signature of the challenge
         timestamp: u64,
     },
 
     #[serde(rename = "register_success")]
     RegisterSuccess {
         peer_id: String,
-        session_id: String,        // Ephemeral session ID
+        session_id: String, // Ephemeral session ID
         timestamp: u64,
     },
 
     #[serde(rename = "register_failure")]
-    RegisterFailure {
-        error: String,
-        timestamp: u64,
-    },
+    RegisterFailure { error: String, timestamp: u64 },
 
     #[serde(rename = "session_replaced")]
-    SessionReplaced {
-        reason: String,
-        timestamp: u64,
-    },
+    SessionReplaced { reason: String, timestamp: u64 },
 
     #[serde(rename = "subscribe_hosts")]
     SubscribeHosts {
@@ -80,44 +74,61 @@ pub enum SignalingMessage {
 
     #[serde(rename = "offer")]
     Offer {
+        #[serde(default)]
         from: String,
+        #[serde(default)]
         to: String,
         sdp: String,
+        #[serde(default)]
         session_id: String,
+        #[serde(default)]
         sequence: u64,
+        #[serde(default)]
         signature: String,
+        #[serde(default)]
         timestamp: u64,
     },
 
     #[serde(rename = "answer")]
     Answer {
+        #[serde(default)]
         from: String,
+        #[serde(default)]
         to: String,
         sdp: String,
+        #[serde(default)]
         session_id: String,
+        #[serde(default)]
         sequence: u64,
+        #[serde(default)]
         signature: String,
+        #[serde(default)]
         timestamp: u64,
     },
 
     #[serde(rename = "ice_candidate")]
     IceCandidate {
+        #[serde(default)]
         from: String,
+        #[serde(default)]
         to: String,
         candidate: String,
+        #[serde(default)]
         sdp_mid: Option<String>,
+        #[serde(default)]
         sdp_m_line_index: Option<u16>,
+        #[serde(default)]
         session_id: String,
+        #[serde(default)]
         sequence: u64,
+        #[serde(default)]
         signature: String,
+        #[serde(default)]
         timestamp: u64,
     },
 
     #[serde(rename = "error")]
-    Error {
-        message: String,
-        timestamp: u64,
-    },
+    Error { message: String, timestamp: u64 },
 }
 
 pub struct SignalingClient {
@@ -159,7 +170,8 @@ impl SignalingClient {
 
         // 2. Decode challenge and sign
         use base64::Engine;
-        let challenge_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&challenge)?;
+        let challenge_bytes =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&challenge)?;
 
         use ed25519_dalek::Signer;
         let signature = signing_key.sign(&challenge_bytes);
@@ -287,52 +299,58 @@ impl SignalingClient {
         timestamp: u64,
     ) -> Result<String, Box<dyn std::error::Error>> {
         let mut buf = [0u8; 160];
-        
+
         // Domain Separator (14 bytes)
         buf[0..14].copy_from_slice(b"FRANKN-SIG-V1\0");
-        
+
         // Version (1 byte)
         buf[14] = 0x01;
-        
+
         // Message Type ID (1 byte)
         buf[15] = msg_type;
-        
+
         // Session ID (32 bytes)
         use base64::Engine;
-        let session_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&self.session_id)?;
+        let session_bytes =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&self.session_id)?;
         if session_bytes.len() != 32 {
             return Err("Invalid session_id length: expected 32 bytes".into());
         }
         buf[16..48].copy_from_slice(&session_bytes);
-        
+
         // Sequence (8 bytes BE)
         buf[48..56].copy_from_slice(&sequence.to_be_bytes());
-        
+
         // Timestamp (8 bytes BE ms)
         buf[56..64].copy_from_slice(&timestamp.to_be_bytes());
-        
+
         // From Peer ID (32 bytes)
         let from_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&self.peer_id)?;
         if from_bytes.len() != 32 {
             return Err("Invalid from_peer_id length: expected 32 bytes".into());
         }
         buf[64..96].copy_from_slice(&from_bytes);
-        
+
         // To Peer ID (32 bytes)
         let to_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(to_peer_id_str)?;
         if to_bytes.len() != 32 {
-            return Err(format!("Invalid target peer ID '{}': expected 32 bytes after base64 decode, got {}", to_peer_id_str, to_bytes.len()).into());
+            return Err(format!(
+                "Invalid target peer ID '{}': expected 32 bytes after base64 decode, got {}",
+                to_peer_id_str,
+                to_bytes.len()
+            )
+            .into());
         }
         buf[96..128].copy_from_slice(&to_bytes);
-        
+
         // Payload Hash (32 bytes)
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let payload_hash = Sha256::digest(payload_str.as_bytes());
         buf[128..160].copy_from_slice(&payload_hash);
-        
+
         use ed25519_dalek::Signer;
         let signature = self.signing_key.sign(&buf);
-        
+
         Ok(hex::encode(signature.to_bytes()))
     }
 

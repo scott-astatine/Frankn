@@ -5,9 +5,11 @@ import 'package:frankn/screens/file_browser_screen.dart';
 import 'package:frankn/screens/process_manager_screen.dart';
 import 'package:frankn/screens/ssh_screen.dart';
 import 'package:frankn/screens/syslog_screen.dart';
+import 'package:frankn/screens/camera_screen.dart';
 import 'package:frankn/screens/trackpad_screen.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/services/client_rtc/rtc.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/widgets/animated_op_btn.dart';
 import 'package:frankn/widgets/dohee_chat/model_selector_dialog.dart';
@@ -105,6 +107,20 @@ class QuickFunction extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => SyslogScreen(client: client)),
+          );
+        }),
+        _opBtn('Camera', Icons.videocam_outlined, Colors.cyanAccent, () {
+          final providerId = RtcClient().findProviderForCapability('camera') ??
+              "atOOBm48UeOjsGMi8NnfNRs2WtULsBoom9yq6u33Jbw";
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CameraScreen(
+                nodeName: "Camera Node",
+                nodeId: providerId,
+                capabilityId: "camera",
+              ),
+            ),
           );
         }),
       ],

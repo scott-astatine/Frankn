@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::ops::Deref;
-use tokio::sync::Mutex;
 use std::sync::LazyLock;
 use tokio::process::Command;
+use tokio::sync::Mutex;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{Connection, names::BusName, proxy};
 

@@ -6,14 +6,19 @@ use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 
 use crate::config::HostConfig;
-use crate::transport::webrtc::connection::{RTCConn, RtcRole};
-use crate::signaling::{SignalingClient, SignalingMessage, PeerType};
+use crate::signaling::{PeerType, SignalingClient, SignalingMessage};
 use crate::transport::protocol::{ClientMessage, HostMessage, Status};
+use crate::transport::webrtc::connection::{RTCConn, RtcRole};
 use crate::utils::get_timestamp;
+
+pub struct NodeActiveCapabilitySession {
+    pub conn: Arc<Mutex<RTCConn>>,
+    pub stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
+}
 
 pub struct NodeRuntime {
     config: Arc<HostConfig>,
-    active_sessions: Arc<Mutex<std::collections::HashMap<String, Arc<Mutex<RTCConn>>>>>,
+    active_sessions: Arc<Mutex<std::collections::HashMap<String, NodeActiveCapabilitySession>>>,
 }
 
 impl NodeRuntime {
@@ -27,7 +32,7 @@ impl NodeRuntime {
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
         crate::log!("Neural Link Node Server starting...");
         crate::log!("ID: {}", self.config.host_id);
-        
+
         let node_cfg = match self.config.node.as_ref() {
             Some(cfg) => cfg,
             None => {
@@ -65,7 +70,9 @@ impl NodeRuntime {
             };
 
             let signaling_client = Arc::new(signaling_client);
-            crate::log!("NODE: Connected to signaling server as Client. Registering WebRTC control link...");
+            crate::log!(
+                "NODE: Connected to signaling server as Client. Registering WebRTC control link..."
+            );
 
             // Create client RTC connection
             let rtc_conn = match RTCConn::new(RtcRole::Answerer).await {
@@ -94,7 +101,7 @@ impl NodeRuntime {
             let node_id_clone = self.config.host_id.clone();
             let display_name_clone = self.config.host_name.clone();
             let capabilities_raw = node_cfg.capabilities.clone();
-            
+
             // Build capability descriptors
             let mut capabilities = Vec::new();
             for cap in capabilities_raw {
@@ -159,7 +166,7 @@ impl NodeRuntime {
                         }
                     }));
                 })
-            }));            // Message handler
+            })); // Message handler
             let rtc_conn_msg = Arc::clone(&rtc_conn);
             let active_sessions_clone = Arc::clone(&self.active_sessions);
             let sig_client_clone = Arc::clone(&signaling_client);
@@ -185,7 +192,6 @@ impl NodeRuntime {
                             Ok(HostMessage::NodeActivateCapability { capability_id, session_id, client_id, .. }) => {
                                 crate::log!("NODE: Received activation command for '{}' (session: '{}', client: '{}')",
                                     &capability_id, &session_id, &client_id);
-                                
                                 let active_sessions_inner = Arc::clone(&active_sessions);
                                 let rtc_ctrl = Arc::clone(&rtc);
                                 let cap_id = capability_id.clone();
@@ -204,7 +210,10 @@ impl NodeRuntime {
                                     };
 
                                     // Store it
-                                    active_sessions_inner.lock().await.insert(sess_id.clone(), Arc::clone(&node_cap_conn));
+                                    active_sessions_inner.lock().await.insert(sess_id.clone(), NodeActiveCapabilitySession {
+                                        conn: Arc::clone(&node_cap_conn),
+                                        stop_tx: None,
+                                    });
 
                                     // Set up peer connection state change callback to handle failure/disconnection/close
                                     {
@@ -213,7 +222,7 @@ impl NodeRuntime {
                                         let active_sessions_inner_c = Arc::clone(&active_sessions_inner);
                                         let sess_id_inner = sess_id.clone();
                                         let cap_id_inner = cap_id.clone();
-                                        
+
                                         nc.on_peer_connection_state_change(move |state| {
                                             use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
                                             match state {
@@ -222,22 +231,25 @@ impl NodeRuntime {
                                                 RTCPeerConnectionState::Closed => {
                                                     crate::log!("NODE: Capability session '{}' connection state changed to {:?}. Cleaning up.",
                                                         sess_id_inner, state);
-                                                    
+
                                                     let active_sessions_inner_2 = Arc::clone(&active_sessions_inner_c);
                                                     let rtc_ctrl_inner_2 = Arc::clone(&rtc_ctrl_inner);
                                                     let sess_id_inner_2 = sess_id_inner.clone();
                                                     let cap_id_inner_2 = cap_id_inner.clone();
-                                                    
+
                                                     tokio::spawn(async move {
-                                                        let old_conn = {
+                                                        let old_sess = {
                                                             let mut map = active_sessions_inner_2.lock().await;
                                                             map.remove(&sess_id_inner_2)
                                                         };
-                                                        if let Some(c) = old_conn {
-                                                            let conn_lock = c.lock().await;
+                                                        if let Some(s) = old_sess {
+                                                            if let Some(tx) = s.stop_tx {
+                                                                let _ = tx.send(());
+                                                            }
+                                                            let conn_lock = s.conn.lock().await;
                                                             let _ = conn_lock.close().await;
                                                         }
-                                                        
+
                                                         let status_msg = ClientMessage::NodeActivationStatus {
                                                             capability_id: cap_id_inner_2,
                                                             session_id: sess_id_inner_2,
@@ -344,26 +356,97 @@ impl NodeRuntime {
                                     }
 
                                     // Add the direct VP8 video track to the capability connection!
+                                    crate::log!("[NODE_CAPABILITY] Adding VP8 video track to capability session '{}'...", &sess_id);
                                     let video_track = match node_cap_conn.lock().await.add_video_track("video-stream", "mock-camera").await {
                                         Ok(track) => Some(track),
                                         Err(e) => {
-                                            crate::elog!("NODE: Failed to add video track: {e}");
+                                            crate::elog!("[NODE_CAPABILITY] Failed to add video track to session '{}': {e}", &sess_id);
                                             None
                                         }
                                     };
 
                                     if let Some(track) = video_track {
-                                        let runner = crate::capabilities::camera::CameraRunner::new(track, None);
+                                        crate::log!("[NODE_CAPABILITY] Starting CameraRunner for session '{}'...", &sess_id);
+                                        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel();
+                                        {
+                                            let mut map = active_sessions_inner.lock().await;
+                                            if let Some(sess_entry) = map.get_mut(&sess_id) {
+                                                sess_entry.stop_tx = Some(stop_tx);
+                                            }
+                                        }
+                                        let runner = crate::capabilities::camera::CameraRunner::new(track, None, sess_id.clone(), stop_rx);
                                         runner.start().await;
                                     }
 
+                                    // Generate SDP Offer for the client
+                                    crate::log!("[NODE_CAPABILITY] Generating SDP Offer for session '{}'...", &sess_id);
+                                    let offer_desc = match node_cap_conn.lock()
+                                        .await
+                                        .peer_connection
+                                        .create_offer(None)
+                                    .await {
+                                        Ok(offer) => offer,
+                                        Err(e) => {
+                                            crate::elog!("[NODE_CAPABILITY] Failed to generate SDP offer for session '{}': {e}", &sess_id);
+                                            return;
+                                        }
+                                    };
+
+                                    if let Err(e) = node_cap_conn.lock().await.peer_connection.set_local_description(offer_desc.clone()).await {
+                                        crate::elog!("[NODE_CAPABILITY] Failed to set local description for session '{}': {e}", &sess_id);
+                                        return;
+                                    }
+
+                                    let sdp_offer = offer_desc.sdp;
+
+                                    use std::sync::atomic::Ordering;
+                                    let sequence = sig_client_inner.sequence.fetch_add(1, Ordering::SeqCst);
+                                    let timestamp = std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_millis() as u64;
+
+                                    let signature = match sig_client_inner.sign_envelope(
+                                        0x01, // Offer msg_type
+                                        &cli_id,
+                                        &sdp_offer,
+                                        sequence,
+                                        timestamp,
+                                    ) {
+                                        Ok(sig) => sig,
+                                        Err(e) => {
+                                            crate::elog!("[NODE_CAPABILITY] Failed to sign SDP offer: {e}");
+                                            return;
+                                        }
+                                    };
+
+                                    let offer_signal = ClientMessage::NodeSignal {
+                                        client_id: cli_id.clone(),
+                                        session_id: sess_id.clone(),
+                                        signal: crate::signaling::SignalingMessage::Offer {
+                                            from: sig_client_inner.peer_id.clone(),
+                                            to: cli_id.clone(),
+                                            sdp: sdp_offer,
+                                            session_id: sess_id.clone(),
+                                            sequence,
+                                            signature,
+                                            timestamp,
+                                        },
+                                    };
+
+                                    if let Ok(json) = serde_json::to_string(&offer_signal) {
+                                        crate::log!("[NODE_CAPABILITY] Sending NodeSignal::Offer to client '{}' for session '{}'", &cli_id, &sess_id);
+                                        let conn = rtc_ctrl.lock().await;
+                                        let _ = conn.send_message("frankn_node_control", &Bytes::from(json)).await;
+                                    }
+
                                     // Respond with positive status
-                                     let status_msg = ClientMessage::NodeActivationStatus {
-                                         capability_id: cap_id,
-                                         session_id: sess_id,
-                                         status: crate::capabilities::node::registry::CapabilitySessionStatus::Active,
-                                         error: None,
-                                     };
+                                    let status_msg = ClientMessage::NodeActivationStatus {
+                                        capability_id: cap_id,
+                                        session_id: sess_id,
+                                        status: crate::capabilities::node::registry::CapabilitySessionStatus::Active,
+                                        error: None,
+                                    };
                                     if let Ok(json) = serde_json::to_string(&status_msg) {
                                         let conn = rtc_ctrl.lock().await;
                                         let _ = conn.send_message("frankn_node_control", &Bytes::from(json)).await;
@@ -378,12 +461,15 @@ impl NodeRuntime {
                                 let cap_id = capability_id.clone();
                                 let sess_id = session_id.clone();
                                 tokio::spawn(async move {
-                                    let conn_opt = {
+                                    let sess_opt = {
                                         let mut map = active_sessions_inner.lock().await;
                                         map.remove(&sess_id)
                                     };
-                                    if let Some(nc) = conn_opt {
-                                        let conn = nc.lock().await;
+                                    if let Some(s) = sess_opt {
+                                        if let Some(tx) = s.stop_tx {
+                                            let _ = tx.send(());
+                                        }
+                                        let conn = s.conn.lock().await;
                                         let _ = conn.close().await;
                                     }
                                      let status_msg = ClientMessage::NodeActivationStatus {
@@ -409,7 +495,7 @@ impl NodeRuntime {
                                 tokio::spawn(async move {
                                     let conn_opt = {
                                         let map = active_sessions_inner.lock().await;
-                                        map.get(&sess_id).cloned()
+                                        map.get(&sess_id).map(|s| Arc::clone(&s.conn))
                                     };
                                     if let Some(nc) = conn_opt {
                                         match signal {
@@ -470,6 +556,21 @@ impl NodeRuntime {
                                                     }
                                                 }
                                             }
+                                            crate::signaling::SignalingMessage::Answer { sdp, .. } => {
+                                                let c = nc.lock().await;
+                                                match webrtc::peer_connection::sdp::session_description::RTCSessionDescription::answer(sdp) {
+                                                    Ok(desc) => {
+                                                        if let Err(e) = c.set_remote_description(desc).await {
+                                                            crate::elog!("NODE: Failed to set remote description (Answer): {e}");
+                                                        } else {
+                                                            crate::log!("NODE: Successfully set remote description (Answer) for session '{}'", &sess_id);
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        crate::elog!("NODE: Invalid SDP answer for session '{}': {e}", &sess_id);
+                                                    }
+                                                }
+                                            }
                                             crate::signaling::SignalingMessage::IceCandidate { candidate, sdp_mid, sdp_m_line_index, .. } => {
                                                 let c = nc.lock().await;
                                                 let _ = c.add_remote_candidate(candidate, sdp_mid, sdp_m_line_index).await;
@@ -489,7 +590,11 @@ impl NodeRuntime {
                 let conn = rtc_conn.lock().await;
                 match conn.peer_connection.create_offer(None).await {
                     Ok(offer) => {
-                        if let Err(e) = conn.peer_connection.set_local_description(offer.clone()).await {
+                        if let Err(e) = conn
+                            .peer_connection
+                            .set_local_description(offer.clone())
+                            .await
+                        {
                             crate::elog!("NODE: Failed to set local description: {e}");
                             None
                         } else {
@@ -553,7 +658,9 @@ impl NodeRuntime {
                 let conn = rtc_conn_recv.lock().await;
                 let tx_c = tx_close.clone();
                 conn.on_peer_connection_state_change(move |state| {
-                    if state == RTCPeerConnectionState::Closed || state == RTCPeerConnectionState::Failed {
+                    if state == RTCPeerConnectionState::Closed
+                        || state == RTCPeerConnectionState::Failed
+                    {
                         let _ = tx_c.try_send(());
                     }
                 });
@@ -565,20 +672,32 @@ impl NodeRuntime {
                     match msg {
                         SignalingMessage::Answer { sdp, from, .. } => {
                             if from == host_peer_id_clone {
-                                crate::log!("NODE: Received Answer from Host. Setting remote description...");
+                                crate::log!(
+                                    "NODE: Received Answer from Host. Setting remote description..."
+                                );
                                 let desc = webrtc::peer_connection::sdp::session_description::RTCSessionDescription::answer(sdp).unwrap();
                                 let conn = rtc_conn_recv.lock().await;
-                                if let Err(e) = conn.peer_connection.set_remote_description(desc).await {
+                                if let Err(e) =
+                                    conn.peer_connection.set_remote_description(desc).await
+                                {
                                     crate::elog!("NODE: Failed to set remote description: {e}");
                                 } else {
                                     let _ = conn.flush_candidates().await;
                                 }
                             }
                         }
-                        SignalingMessage::IceCandidate { candidate, sdp_mid, sdp_m_line_index, from, .. } => {
+                        SignalingMessage::IceCandidate {
+                            candidate,
+                            sdp_mid,
+                            sdp_m_line_index,
+                            from,
+                            ..
+                        } => {
                             if from == host_peer_id_clone {
                                 let conn = rtc_conn_recv.lock().await;
-                                let _ = conn.add_remote_candidate(candidate, sdp_mid, sdp_m_line_index).await;
+                                let _ = conn
+                                    .add_remote_candidate(candidate, sdp_mid, sdp_m_line_index)
+                                    .await;
                             }
                         }
                         _ => {}

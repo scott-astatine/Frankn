@@ -1,10 +1,10 @@
+use crate::capabilities::input::InputMsg;
+use uinput::event::Event;
 use uinput::event::controller::Controller::Mouse;
 use uinput::event::controller::Mouse as MouseBtn;
 use uinput::event::relative::Position;
 use uinput::event::relative::Relative;
 use uinput::event::relative::Wheel;
-use uinput::event::Event;
-use crate::capabilities::input::InputMsg;
 
 pub struct InputManager {
     mouse: uinput::Device,
@@ -61,7 +61,9 @@ impl InputManager {
                 let _ = self.mouse.synchronize();
             }
             InputMsg::KeyPress { key_code, down } => {
-                let _ = self.keyboard.write(1, key_code as i32, if down { 1 } else { 0 });
+                let _ = self
+                    .keyboard
+                    .write(1, key_code as i32, if down { 1 } else { 0 });
                 let _ = self.keyboard.synchronize();
             }
             InputMsg::TypeText { text } => {
@@ -128,10 +130,14 @@ impl InputManager {
         };
 
         if let Some((code, shift)) = mapping {
-            if shift { let _ = self.keyboard.write(1, 42, 1); }
+            if shift {
+                let _ = self.keyboard.write(1, 42, 1);
+            }
             let _ = self.keyboard.write(1, code, 1);
             let _ = self.keyboard.write(1, code, 0);
-            if shift { let _ = self.keyboard.write(1, 42, 0); }
+            if shift {
+                let _ = self.keyboard.write(1, 42, 0);
+            }
             let _ = self.keyboard.synchronize();
         }
     }

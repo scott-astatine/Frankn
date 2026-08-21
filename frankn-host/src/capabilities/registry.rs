@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CapabilityDescriptor {
@@ -70,10 +70,7 @@ impl CapabilityRegistry {
             id: "process".to_string(),
             name: "Process Manager".to_string(),
             version: "1.0.0".to_string(),
-            actions: vec![
-                "list_processes".to_string(),
-                "kill".to_string(),
-            ],
+            actions: vec!["list_processes".to_string(), "kill".to_string()],
             properties: HashMap::new(),
             events: Vec::new(),
             schemas: HashMap::new(),
@@ -131,10 +128,7 @@ impl CapabilityRegistry {
             id: "ssh".to_string(),
             name: "SSH Terminal".to_string(),
             version: "1.0.0".to_string(),
-            actions: vec![
-                "start_ssh".to_string(),
-                "stop_ssh".to_string(),
-            ],
+            actions: vec!["start_ssh".to_string(), "stop_ssh".to_string()],
             properties: HashMap::new(),
             events: Vec::new(),
             schemas: HashMap::new(),
@@ -192,9 +186,7 @@ impl CapabilityRegistry {
             id: "sync".to_string(),
             name: "Folder Sync".to_string(),
             version: "1.0.0".to_string(),
-            actions: vec![
-                "sync_request".to_string(),
-            ],
+            actions: vec!["sync_request".to_string()],
             properties: HashMap::new(),
             events: Vec::new(),
             schemas: HashMap::new(),
@@ -249,16 +241,14 @@ impl CapabilityInventory {
     }
 
     pub fn register(&mut self, entry: CapabilityInventoryEntry) {
-        self.entries.retain(|e| {
-            !(e.descriptor.id == entry.descriptor.id && e.provider == entry.provider)
-        });
+        self.entries
+            .retain(|e| !(e.descriptor.id == entry.descriptor.id && e.provider == entry.provider));
         self.entries.push(entry);
     }
 
     pub fn unregister_by_provider(&mut self, kind: &str, provider_id: &str) {
-        self.entries.retain(|e| {
-            !(e.provider.kind == kind && e.provider.provider_id == provider_id)
-        });
+        self.entries
+            .retain(|e| !(e.provider.kind == kind && e.provider.provider_id == provider_id));
     }
 
     pub fn list(&self) -> Vec<CapabilityInventoryEntry> {
@@ -273,7 +263,7 @@ mod tests {
     #[test]
     fn test_capability_inventory_duplication_and_provider() {
         let mut inventory = CapabilityInventory::new();
-        
+
         let descriptor = CapabilityDescriptor {
             id: "camera".to_string(),
             name: "Camera".to_string(),

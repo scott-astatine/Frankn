@@ -116,11 +116,14 @@ impl HostRuntime {
                     // Close all capability sessions belonging to this node
                     {
                         let mut cs = cs_liveness.lock().await;
-                        let sessions_to_close: Vec<_> = cs.list().into_iter()
+                        let sessions_to_close: Vec<_> = cs
+                            .list()
+                            .into_iter()
                             .filter(|s| s.node_id == node_id)
                             .collect();
                         for mut sess in sessions_to_close {
-                            sess.status = capabilities::node::registry::CapabilitySessionStatus::Closed;
+                            sess.status =
+                                capabilities::node::registry::CapabilitySessionStatus::Closed;
                             cs.register(sess);
                         }
                     }

@@ -42,7 +42,10 @@ fn test_session(
 }
 
 /// Build a CapabilityInventoryEntry for a node provider.
-fn test_inventory_entry(descriptor: CapabilityDescriptor, node_id: &str) -> CapabilityInventoryEntry {
+fn test_inventory_entry(
+    descriptor: CapabilityDescriptor,
+    node_id: &str,
+) -> CapabilityInventoryEntry {
     CapabilityInventoryEntry {
         descriptor,
         provider: CapabilityProvider {
@@ -60,10 +63,7 @@ fn test_inventory_entry(descriptor: CapabilityDescriptor, node_id: &str) -> Capa
 /// F1: A node whose ID is present in allowed_nodes is accepted.
 #[test]
 fn f1_allowed_node_is_accepted() {
-    let allowed_nodes: Vec<String> = vec![
-        "node-01".to_string(),
-        "node-02".to_string(),
-    ];
+    let allowed_nodes: Vec<String> = vec!["node-01".to_string(), "node-02".to_string()];
 
     assert!(
         allowed_nodes.contains(&"node-01".to_string()),
@@ -78,10 +78,7 @@ fn f1_allowed_node_is_accepted() {
 /// F1: A node whose ID is NOT in allowed_nodes is rejected.
 #[test]
 fn f1_disallowed_node_is_rejected() {
-    let allowed_nodes: Vec<String> = vec![
-        "node-01".to_string(),
-        "node-02".to_string(),
-    ];
+    let allowed_nodes: Vec<String> = vec!["node-01".to_string(), "node-02".to_string()];
 
     assert!(
         !allowed_nodes.contains(&"node-99".to_string()),
@@ -151,10 +148,16 @@ fn f2_session_registry_lifecycle() {
     let sess = test_session("sess-01", "client-01", "camera", "node-01");
     csr.register(sess);
 
-    assert!(csr.get("sess-01").is_some(), "session should be retrievable after register");
+    assert!(
+        csr.get("sess-01").is_some(),
+        "session should be retrievable after register"
+    );
 
     csr.remove("sess-01");
-    assert!(csr.get("sess-01").is_none(), "session should be gone after remove");
+    assert!(
+        csr.get("sess-01").is_none(),
+        "session should be gone after remove"
+    );
 }
 
 // ===========================================================================
@@ -270,7 +273,10 @@ fn f6_node_disconnect_cleanup() {
         .filter(|s| s.node_id == node_id)
         .cloned()
         .collect();
-    assert!(remaining.is_empty(), "no sessions for node-01 should remain");
+    assert!(
+        remaining.is_empty(),
+        "no sessions for node-01 should remain"
+    );
     assert_eq!(csr.list().len(), 1, "unrelated session should survive");
 
     // --- Capability inventory ---
@@ -296,7 +302,10 @@ fn f6_node_disconnect_cleanup() {
         .filter(|e| e.provider.provider_id == node_id)
         .cloned()
         .collect();
-    assert!(inv_remaining.is_empty(), "no inventory entries for node-01 should remain");
+    assert!(
+        inv_remaining.is_empty(),
+        "no inventory entries for node-01 should remain"
+    );
     assert_eq!(ci.list().len(), 1, "node-02 inventory entry should survive");
 }
 
@@ -426,8 +435,14 @@ fn f8_node_reconnect_idempotency() {
     );
 
     // Old sessions must not be retrievable
-    assert!(csr.get("old-s1").is_none(), "old session old-s1 must be gone");
-    assert!(csr.get("old-s2").is_none(), "old session old-s2 must be gone");
+    assert!(
+        csr.get("old-s1").is_none(),
+        "old session old-s1 must be gone"
+    );
+    assert!(
+        csr.get("old-s2").is_none(),
+        "old session old-s2 must be gone"
+    );
 
     // New session is authoritative
     let new = csr.get("new-s1").expect("new session must exist");

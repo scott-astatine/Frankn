@@ -1,10 +1,10 @@
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::atomic::AtomicBool;
 use tokio::fs::File;
 use tokio::sync::Mutex;
-use sha2::Sha256;
 
 /// Partial transfer state persisted alongside the `.part` file.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

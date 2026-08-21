@@ -2,18 +2,27 @@ use crate::transport::context::CommandContext;
 use crate::utils::Status;
 
 pub async fn ping(ctx: &CommandContext) {
-    let _ = ctx.reply(Status::Success, Some(serde_json::json!({ "response": "Pong" }))).await;
+    let _ = ctx
+        .reply(
+            Status::Success,
+            Some(serde_json::json!({ "response": "Pong" })),
+        )
+        .await;
 }
 
 pub async fn shutdown(ctx: &CommandContext, _args: &String) {
     #[cfg(target_os = "linux")]
     let result = crate::platform::linux::systemctl::shutdown().await;
     #[cfg(target_os = "windows")]
-    let result = Command::new("shutdown").args(["/s", "/t", "0"]).output().await;
+    let result = Command::new("shutdown")
+        .args(["/s", "/t", "0"])
+        .output()
+        .await;
     #[cfg(target_os = "macos")]
     let result = Command::new("sudo")
         .args(["shutdown", "-h", "now"])
-        .output().await;
+        .output()
+        .await;
 
     handle_res(ctx, result).await;
 }
@@ -22,11 +31,15 @@ pub async fn reboot(ctx: &CommandContext) {
     #[cfg(target_os = "linux")]
     let result = crate::platform::linux::systemctl::reboot().await;
     #[cfg(target_os = "windows")]
-    let result = Command::new("shutdown").args(["/r", "/t", "0"]).output().await;
+    let result = Command::new("shutdown")
+        .args(["/r", "/t", "0"])
+        .output()
+        .await;
     #[cfg(target_os = "macos")]
     let result = Command::new("sudo")
         .args(["shutdown", "-r", "now"])
-        .output().await;
+        .output()
+        .await;
 
     handle_res(ctx, result).await;
 }
@@ -41,12 +54,16 @@ pub async fn lock_screen(ctx: &CommandContext) {
     {
         let result = Command::new("rundll32.exe")
             .args(["user32.dll,LockWorkStation"])
-            .output().await;
+            .output()
+            .await;
         handle_res(ctx, result).await;
     }
     #[cfg(target_os = "macos")]
     {
-        let result = Command::new("pmset").args(["displaysleepnow"]).output().await;
+        let result = Command::new("pmset")
+            .args(["displaysleepnow"])
+            .output()
+            .await;
         handle_res(ctx, result).await;
     }
 }
@@ -73,20 +90,24 @@ pub async fn system_log(
 ) {
     #[cfg(target_os = "linux")]
     {
-        let result = crate::platform::linux::systemctl::get_system_log(unit, lines, priority, since, grep).await;
+        let result =
+            crate::platform::linux::systemctl::get_system_log(unit, lines, priority, since, grep)
+                .await;
         match result {
             Ok(output) => {
-                let _ = ctx.reply(
-                    if output.status.success() {
-                        Status::Success
-                    } else {
-                        Status::Error("Command failed".to_string())
-                    },
-                    Some(serde_json::json!({
-                        "stdout": String::from_utf8_lossy(&output.stdout),
-                        "stderr": String::from_utf8_lossy(&output.stderr)
-                    })),
-                ).await;
+                let _ = ctx
+                    .reply(
+                        if output.status.success() {
+                            Status::Success
+                        } else {
+                            Status::Error("Command failed".to_string())
+                        },
+                        Some(serde_json::json!({
+                            "stdout": String::from_utf8_lossy(&output.stdout),
+                            "stderr": String::from_utf8_lossy(&output.stderr)
+                        })),
+                    )
+                    .await;
             }
             Err(e) => {
                 let _ = ctx.reply(Status::Error(e.to_string()), None).await;
@@ -95,36 +116,42 @@ pub async fn system_log(
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = ctx.reply(
-            Status::Error("SystemLog only implemented for Linux".to_string()),
-            None,
-        ).await;
+        let _ = ctx
+            .reply(
+                Status::Error("SystemLog only implemented for Linux".to_string()),
+                None,
+            )
+            .await;
     }
 }
 
 async fn handle_res(ctx: &CommandContext, result: std::io::Result<std::process::Output>) {
     match result {
         Ok(output) => {
-            let _ = ctx.reply(
-                if output.status.success() {
-                    Status::Success
-                } else {
-                    Status::Error(format!(
-                        "Action failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    ))
-                },
-                Some(serde_json::json!({
-                    "stdout": String::from_utf8_lossy(&output.stdout),
-                    "stderr": String::from_utf8_lossy(&output.stderr)
-                })),
-            ).await;
+            let _ = ctx
+                .reply(
+                    if output.status.success() {
+                        Status::Success
+                    } else {
+                        Status::Error(format!(
+                            "Action failed: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        ))
+                    },
+                    Some(serde_json::json!({
+                        "stdout": String::from_utf8_lossy(&output.stdout),
+                        "stderr": String::from_utf8_lossy(&output.stderr)
+                    })),
+                )
+                .await;
         }
         Err(e) => {
-            let _ = ctx.reply(
-                Status::Error(format!("Failed to execute process: {}", e)),
-                None,
-            ).await;
+            let _ = ctx
+                .reply(
+                    Status::Error(format!("Failed to execute process: {}", e)),
+                    None,
+                )
+                .await;
         }
     }
 }
@@ -138,10 +165,12 @@ async fn handle_spawn_res(ctx: &CommandContext, result: std::io::Result<tokio::p
             ).await;
         }
         Err(e) => {
-            let _ = ctx.reply(
-                Status::Error(format!("Failed to spawn process: {}", e)),
-                None,
-            ).await;
+            let _ = ctx
+                .reply(
+                    Status::Error(format!("Failed to spawn process: {}", e)),
+                    None,
+                )
+                .await;
         }
     }
 }

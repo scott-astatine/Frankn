@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::router::DcMsg;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Status {
@@ -69,6 +69,7 @@ pub enum ClientMessage {
 
     #[serde(rename = "node_signal")]
     NodeSignal {
+        #[serde(default)]
         client_id: String,
         session_id: String,
         signal: crate::signaling::SignalingMessage,
@@ -87,6 +88,7 @@ pub enum ClientMessage {
         capability_id: String,
         session_id: String,
         provider_id: Option<String>,
+        #[serde(default)]
         properties: std::collections::HashMap<String, serde_json::Value>,
         timestamp: u64,
         auth_token: String,
@@ -244,10 +246,7 @@ pub enum HostMessage {
 
     // --- Host ↔ Node Control Messages ---
     #[serde(rename = "node_register_ack")]
-    NodeRegisterAck {
-        status: Status,
-        timestamp: u64,
-    },
+    NodeRegisterAck { status: Status, timestamp: u64 },
 
     #[serde(rename = "node_activate_capability")]
     NodeActivateCapability {

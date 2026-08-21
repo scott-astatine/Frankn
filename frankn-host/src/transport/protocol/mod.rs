@@ -1,18 +1,18 @@
 pub mod messages;
-pub mod router;
 pub mod node;
+pub mod router;
 
 pub use messages::{ClientMessage, HostMessage, Status};
 
+use crate::auth::AuthManager;
+use crate::capabilities::inference::LlmManager;
+use crate::config::HostConfig;
+use crate::transport::context::CommandContext;
+use crate::transport::webrtc::connection::PeerMap;
+use crate::utils::get_timestamp;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Bytes;
-use crate::auth::AuthManager;
-use crate::config::HostConfig;
-use crate::capabilities::inference::LlmManager;
-use crate::transport::webrtc::connection::PeerMap;
-use crate::utils::get_timestamp;
-use crate::transport::context::CommandContext;
 
 /// Shared state passed to all protocol message handlers.
 pub struct ProtocolContext {
@@ -22,16 +22,12 @@ pub struct ProtocolContext {
     pub config: Arc<HostConfig>,
     pub node_registry: Arc<Mutex<crate::capabilities::node::registry::NodeRegistry>>,
     pub capability_inventory: Arc<Mutex<crate::capabilities::registry::CapabilityInventory>>,
-    pub capability_sessions: Arc<Mutex<crate::capabilities::node::registry::CapabilitySessionRegistry>>,
+    pub capability_sessions:
+        Arc<Mutex<crate::capabilities::node::registry::CapabilitySessionRegistry>>,
 }
 
 /// Decode a text data channel message and route it to the appropriate capability handler.
-pub async fn parse_dc_msg(
-    data: &Vec<u8>,
-    ctx: &ProtocolContext,
-    client_id: &str,
-    label: &str,
-) {
+pub async fn parse_dc_msg(data: &Vec<u8>, ctx: &ProtocolContext, client_id: &str, label: &str) {
     let session = {
         let map = ctx.peer_map.lock().await;
         match map.get(client_id) {
@@ -96,7 +92,9 @@ pub async fn parse_dc_msg(
                     challenge_lock.take()
                 };
                 if let Some(expected) = expected_challenge {
-                    if let Some(token) = ctx.auth_manager.verify_response(&expected, &response).await {
+                    if let Some(token) =
+                        ctx.auth_manager.verify_response(&expected, &response).await
+                    {
                         crate::log!("AUTH: Success for client {}.", client_id);
                         {
                             let sess = session.lock().await;
@@ -181,7 +179,8 @@ pub async fn parse_dc_msg(
                     Arc::clone(&ctx.config),
                     Arc::clone(&session),
                 );
-                let resp = crate::capabilities::fs::transfer::handle_transfer_cancel(&cmd_ctx.id).await;
+                let resp =
+                    crate::capabilities::fs::transfer::handle_transfer_cancel(&cmd_ctx.id).await;
                 let _ = cmd_ctx.stream(resp).await;
             }
 
@@ -226,7 +225,8 @@ pub async fn parse_dc_msg(
                         Arc::clone(&ctx.llm_manager),
                         Arc::clone(&ctx.config),
                     )
-                    .await {
+                    .await
+                    {
                         if let Ok(json) = serde_json::to_string(&response) {
                             let conn = rtc_conn.lock().await;
                             let _ = conn.send_message(label, &Bytes::from(json)).await;
@@ -247,47 +247,100 @@ pub async fn parse_dc_msg(
             }
 
             // --- Node ↔ Host Control Messages ---
-            ClientMessage::NodeRegister { node_id, display_name, capabilities, .. } => {
+            ClientMessage::NodeRegister {
+                node_id,
+                display_name,
+                capabilities,
+                ..
+            } => {
                 node::handle_register(
-                    &node_id, &display_name, &capabilities,
-                    &rtc_conn, label, &ctx.config, &ctx.node_registry, &ctx.capability_inventory,
-                ).await;
+                    &node_id,
+                    &display_name,
+                    &capabilities,
+                    &rtc_conn,
+                    label,
+                    &ctx.config,
+                    &ctx.node_registry,
+                    &ctx.capability_inventory,
+                )
+                .await;
             }
 
             ClientMessage::NodeHeartbeat { node_id, .. } => {
                 node::handle_heartbeat(&node_id, &ctx.node_registry).await;
             }
 
-            ClientMessage::NodeSignal { session_id, signal, .. } => {
+            ClientMessage::NodeSignal {
+                session_id, signal, ..
+            } => {
                 node::handle_signal(
-                    client_id, session_id, signal,
-                    &ctx.peer_map, &ctx.node_registry, &ctx.capability_sessions,
-                ).await;
+                    client_id,
+                    session_id,
+                    signal,
+                    &ctx.peer_map,
+                    &ctx.node_registry,
+                    &ctx.capability_sessions,
+                )
+                .await;
             }
 
-            ClientMessage::NodeActivationStatus { capability_id, session_id, status, error, .. } => {
+            ClientMessage::NodeActivationStatus {
+                capability_id,
+                session_id,
+                status,
+                error,
+                ..
+            } => {
                 node::handle_activation_status(
-                    capability_id, session_id, status, error,
-                    &ctx.peer_map, &ctx.capability_sessions,
-                ).await;
+                    capability_id,
+                    session_id,
+                    status,
+                    error,
+                    &ctx.peer_map,
+                    &ctx.capability_sessions,
+                )
+                .await;
             }
 
             ClientMessage::ActivateCapability {
-                capability_id, session_id, provider_id, properties, auth_token, ..
+                capability_id,
+                session_id,
+                provider_id,
+                properties,
+                auth_token,
+                ..
             } => {
                 node::handle_activate_capability(
-                    client_id, capability_id, session_id, provider_id, properties, &auth_token,
-                    &rtc_conn, label, &ctx.auth_manager, &ctx.node_registry, &ctx.capability_sessions,
-                ).await;
+                    client_id,
+                    capability_id,
+                    session_id,
+                    provider_id,
+                    properties,
+                    &auth_token,
+                    &rtc_conn,
+                    label,
+                    &ctx.auth_manager,
+                    &ctx.node_registry,
+                    &ctx.capability_sessions,
+                )
+                .await;
             }
 
             ClientMessage::DeactivateCapability {
-                capability_id, session_id, auth_token, ..
+                capability_id,
+                session_id,
+                auth_token,
+                ..
             } => {
                 node::handle_deactivate_capability(
-                    capability_id, session_id, &auth_token,
-                    &ctx.auth_manager, &ctx.node_registry, &ctx.capability_sessions,
-                ).await;
+                    capability_id,
+                    session_id,
+                    &auth_token,
+                    &ctx.auth_manager,
+                    &ctx.node_registry,
+                    &ctx.capability_sessions,
+                )
+                .await;
             }
         },
         Err(e) => {

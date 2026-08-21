@@ -1,13 +1,13 @@
 use clap::{Parser, Subcommand};
 
-mod utils;
 mod app;
-mod capabilities;
-mod platform;
 mod auth;
+mod capabilities;
 mod config;
+mod platform;
 mod signaling;
 mod transport;
+mod utils;
 
 // Compatibility re-exports for child modules
 pub use transport::protocol::messages::{ClientMessage, HostMessage, Status};
@@ -82,10 +82,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for cam in &cameras {
                     println!("\nDevice Path : {}", cam.device_path);
                     println!("  Name        : {}", cam.name);
-                    println!("  Functional  : {}", if cam.is_functional { "YES" } else { "NO" });
-                    println!("  Type        : {}", if cam.is_dummy { "Virtual/Loopback" } else { "Physical Hardware" });
-                    println!("  Formats     : {}", if cam.formats.is_empty() { "None/Unknown".into() } else { cam.formats.join(", ") });
-                    println!("  Resolutions : {}", if cam.resolutions.is_empty() { "None/Unknown".into() } else { cam.resolutions.join(", ") });
+                    println!(
+                        "  Functional  : {}",
+                        if cam.is_functional { "YES" } else { "NO" }
+                    );
+                    println!(
+                        "  Type        : {}",
+                        if cam.is_dummy {
+                            "Virtual/Loopback"
+                        } else {
+                            "Physical Hardware"
+                        }
+                    );
+                    println!(
+                        "  Formats     : {}",
+                        if cam.formats.is_empty() {
+                            "None/Unknown".into()
+                        } else {
+                            cam.formats.join(", ")
+                        }
+                    );
+                    println!(
+                        "  Resolutions : {}",
+                        if cam.resolutions.is_empty() {
+                            "None/Unknown".into()
+                        } else {
+                            cam.resolutions.join(", ")
+                        }
+                    );
                 }
 
                 if let Some(best) = capabilities::camera::get_best_camera_device().await {
@@ -94,17 +118,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(())
         }
-        None => {
-            match config.mode {
-                config::RuntimeMode::Host => {
-                    let runtime = app::HostRuntime::new(config);
-                    runtime.run().await
-                }
-                config::RuntimeMode::Node => {
-                    let runtime = app::NodeRuntime::new(config);
-                    runtime.run().await
-                }
+        None => match config.mode {
+            config::RuntimeMode::Host => {
+                let runtime = app::HostRuntime::new(config);
+                runtime.run().await
             }
-        }
+            config::RuntimeMode::Node => {
+                let runtime = app::NodeRuntime::new(config);
+                runtime.run().await
+            }
+        },
     }
 }

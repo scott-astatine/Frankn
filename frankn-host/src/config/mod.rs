@@ -4,10 +4,10 @@ use dialoguer::{Confirm, Input, Password};
 use rand::{Rng, distr::Alphanumeric};
 pub mod tui;
 
+use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::fs;
-use ed25519_dalek::SigningKey;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -46,7 +46,7 @@ pub struct HostConfig {
     pub sync_pairs: Vec<SyncPair>,
     #[serde(default)]
     pub sandbox_home: bool,
-    
+
     // Node-Specific Configuration
     #[serde(default)]
     pub node: Option<NodeConfig>,
@@ -89,16 +89,18 @@ impl HostConfig {
                         config.custom_config_path = custom_path;
                         // Transparently upgrade old Argon2 PHC formats to the secure double-hashed SHA-256 verifier
                         if config.password_hash.starts_with("$argon2id$") {
-                            crate::log!("UPGRADE: Old Argon2 password hash format detected. Upgrading to secure SHA-256 verifier hash...");
+                            crate::log!(
+                                "UPGRADE: Old Argon2 password hash format detected. Upgrading to secure SHA-256 verifier hash..."
+                            );
                             let old_hash = config.password_hash.clone();
                             // Extract salt from old hash
                             let salt = old_hash.split('$').nth(4).unwrap_or("").to_string();
-                            
+
                             use sha2::Digest;
                             let mut hasher = sha2::Sha256::new();
                             hasher.update(old_hash.as_bytes());
                             let new_hash = format!("{:x}", hasher.finalize());
-                            
+
                             config.password_hash = new_hash;
                             config.salt = salt;
                             // Save config to persist upgraded format
@@ -177,12 +179,16 @@ impl HostConfig {
                 .interact_text()
                 .expect("Failed to get signaling URL");
 
-             let llm_model_dir: String = Input::new()
+            let llm_model_dir: String = Input::new()
                 .with_prompt("Neural Model Directory (e.g., /home/user/Models) [Optional]")
                 .default(String::new())
                 .interact_text()
                 .expect("Failed to get model dir");
-            let llm_model_dir = if llm_model_dir.trim().is_empty() { None } else { Some(llm_model_dir.trim().to_string()) };
+            let llm_model_dir = if llm_model_dir.trim().is_empty() {
+                None
+            } else {
+                Some(llm_model_dir.trim().to_string())
+            };
 
             let sandbox_home = Confirm::new()
                 .with_prompt("Restrict file operations to Home directory (sandbox)?")
@@ -228,13 +234,17 @@ impl HostConfig {
     }
 
     pub async fn save(&self) {
-        let file_path = self.custom_config_path.clone().unwrap_or_else(Self::config_file);
-        
+        let file_path = self
+            .custom_config_path
+            .clone()
+            .unwrap_or_else(Self::config_file);
+
         if let Some(dir) = file_path.parent()
             && !dir.exists()
-                && let Err(e) = fs::create_dir_all(dir).await {
-                    elog!("Failed to create config directory: {}", e);
-                }
+            && let Err(e) = fs::create_dir_all(dir).await
+        {
+            elog!("Failed to create config directory: {}", e);
+        }
 
         match toml::to_string_pretty(self) {
             Ok(content) => {
@@ -264,7 +274,7 @@ impl HostConfig {
         let path = self.identity_file();
         if !path.exists() {
             log!("IDENTITY: No identity file found. Generating new Ed25519 keypair...");
-            
+
             let dir = path.parent().unwrap();
             if !dir.exists() {
                 std::fs::create_dir_all(&dir)?;
@@ -301,10 +311,13 @@ impl HostConfig {
                 .filter(|line| !line.starts_with("-----"))
                 .collect::<Vec<_>>()
                 .concat();
-            
+
             use base64::Engine;
             let bytes = base64::engine::general_purpose::STANDARD.decode(b64.trim())?;
-            let raw: [u8; 32] = bytes.as_slice().try_into().map_err(|_| "Invalid Ed25519 private key length")?;
+            let raw: [u8; 32] = bytes
+                .as_slice()
+                .try_into()
+                .map_err(|_| "Invalid Ed25519 private key length")?;
             let signing_key = SigningKey::from_bytes(&raw);
             Ok(signing_key)
         }

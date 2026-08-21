@@ -1,13 +1,13 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use super::{ChatMessage, ChatSession, LlmManager};
 use crate::HostMessage;
 use crate::transport::context::CommandContext;
 use crate::utils::Status;
 use crate::utils::get_timestamp;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
-use super::{LlmManager, ChatMessage, ChatSession};
+use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::Mutex;
 
 impl LlmManager {
     pub async fn start_server(
@@ -21,7 +21,10 @@ impl LlmManager {
             .unwrap_or_else(|| "gemma2:9b".to_string());
 
         if self.use_in_process_engine {
-            crate::log!("Spawning isolated Dohee worker subprocess for {}", model_path);
+            crate::log!(
+                "Spawning isolated Dohee worker subprocess for {}",
+                model_path
+            );
             let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
             let child = tokio::process::Command::new(exe_path)
                 .args(&["dohee-worker", "--model", model_path])
@@ -62,7 +65,10 @@ pub async fn run_dohee_worker(model_path: &str) {
     let engine = match dohee_engine::DoheeEngine::load(model_path, engine_cfg.clone()) {
         Ok(eng) => eng,
         Err(e) => {
-            crate::log!("Worker: GPU model load failed: {}. Retrying with CPU-only (gpu_layers: 0)...", e);
+            crate::log!(
+                "Worker: GPU model load failed: {}. Retrying with CPU-only (gpu_layers: 0)...",
+                e
+            );
             engine_cfg.gpu_layers = 0;
             match dohee_engine::DoheeEngine::load(model_path, engine_cfg) {
                 Ok(eng) => eng,
@@ -70,7 +76,9 @@ pub async fn run_dohee_worker(model_path: &str) {
                     let err_msg = serde_json::json!({
                         "event": "error",
                         "data": format!("Failed to load model on both GPU and CPU: {}", err)
-                    }).to_string() + "\n";
+                    })
+                    .to_string()
+                        + "\n";
                     let mut stdout = tokio::io::stdout();
                     let _ = stdout.write_all(err_msg.as_bytes()).await;
                     let _ = stdout.flush().await;
@@ -95,7 +103,10 @@ pub async fn run_dohee_worker(model_path: &str) {
             None => continue,
         };
 
-        let temp = req.get("temperature").and_then(|t| t.as_f64()).unwrap_or(0.2) as f32;
+        let temp = req
+            .get("temperature")
+            .and_then(|t| t.as_f64())
+            .unwrap_or(0.2) as f32;
         let seed = req.get("seed").and_then(|s| s.as_u64()).unwrap_or(1234) as u32;
 
         let session_cfg = dohee_engine::SessionConfig {
@@ -106,10 +117,9 @@ pub async fn run_dohee_worker(model_path: &str) {
 
         if let Ok(handle) = engine.create_session(session_cfg) {
             let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
-            let _ = handle.cmd_tx.send(dohee_engine::SessionCommand::RunTurn {
-                prompt,
-                event_tx,
-            });
+            let _ = handle
+                .cmd_tx
+                .send(dohee_engine::SessionCommand::RunTurn { prompt, event_tx });
 
             while let Some(evt) = event_rx.recv().await {
                 match evt {
@@ -117,7 +127,9 @@ pub async fn run_dohee_worker(model_path: &str) {
                         let msg = serde_json::json!({
                             "event": "token",
                             "data": tok
-                        }).to_string() + "\n";
+                        })
+                        .to_string()
+                            + "\n";
                         let _ = stdout.write_all(msg.as_bytes()).await;
                         let _ = stdout.flush().await;
                     }
@@ -130,7 +142,9 @@ pub async fn run_dohee_worker(model_path: &str) {
                                 let msg = serde_json::json!({
                                     "event": "error",
                                     "data": e
-                                }).to_string() + "\n";
+                                })
+                                .to_string()
+                                    + "\n";
                                 let _ = stdout.write_all(msg.as_bytes()).await;
                                 let _ = stdout.flush().await;
                                 "Error"
@@ -139,7 +153,9 @@ pub async fn run_dohee_worker(model_path: &str) {
                         let msg = serde_json::json!({
                             "event": "finished",
                             "reason": reason_str
-                        }).to_string() + "\n";
+                        })
+                        .to_string()
+                            + "\n";
                         let _ = stdout.write_all(msg.as_bytes()).await;
                         let _ = stdout.flush().await;
                         break;
@@ -148,7 +164,9 @@ pub async fn run_dohee_worker(model_path: &str) {
                         let msg = serde_json::json!({
                             "event": "error",
                             "data": e
-                        }).to_string() + "\n";
+                        })
+                        .to_string()
+                            + "\n";
                         let _ = stdout.write_all(msg.as_bytes()).await;
                         let _ = stdout.flush().await;
                         break;
@@ -161,7 +179,9 @@ pub async fn run_dohee_worker(model_path: &str) {
             let msg = serde_json::json!({
                 "event": "error",
                 "data": "Failed to create session"
-            }).to_string() + "\n";
+            })
+            .to_string()
+                + "\n";
             let _ = stdout.write_all(msg.as_bytes()).await;
             let _ = stdout.flush().await;
         }
@@ -207,14 +227,20 @@ pub async fn chat_stream_detached(
                     idx += 1;
                     tools_desc.push_str(&format!("{}. read_file: {{\"path\": \"/path\"}}\n", idx));
                     idx += 1;
-                    tools_desc.push_str(&format!("{}. write_file: {{\"path\": \"/path\", \"content\": \"...\"}}\n", idx));
+                    tools_desc.push_str(&format!(
+                        "{}. write_file: {{\"path\": \"/path\", \"content\": \"...\"}}\n",
+                        idx
+                    ));
                     idx += 1;
                 }
             }
 
             if let Some(cap) = registry.get("system") {
                 if cap.health == "healthy" {
-                    tools_desc.push_str(&format!("{}. run_command: {{\"command\": \"command string\"}}\n", idx));
+                    tools_desc.push_str(&format!(
+                        "{}. run_command: {{\"command\": \"command string\"}}\n",
+                        idx
+                    ));
                 }
             }
 
@@ -281,22 +307,32 @@ pub async fn chat_stream_detached(
             let cmd_str = cmd.to_string() + "\n";
             if let Err(e) = stdin.write_all(cmd_str.as_bytes()).await {
                 crate::elog!("Failed to write to worker stdin: {}", e);
-                let status_msg = format!("\n\n❌ [Host Error: Failed to write to worker process: {}]\n\n", e);
-                let _ = ctx.stream(HostMessage::LlmToken {
-                    token: status_msg,
-                    is_final: false,
-                    timestamp: get_timestamp(),
-                }).await;
+                let status_msg = format!(
+                    "\n\n❌ [Host Error: Failed to write to worker process: {}]\n\n",
+                    e
+                );
+                let _ = ctx
+                    .stream(HostMessage::LlmToken {
+                        token: status_msg,
+                        is_final: false,
+                        timestamp: get_timestamp(),
+                    })
+                    .await;
                 break;
             }
             if let Err(e) = stdin.flush().await {
                 crate::elog!("Failed to flush worker stdin: {}", e);
-                let status_msg = format!("\n\n❌ [Host Error: Failed to flush worker process: {}]\n\n", e);
-                let _ = ctx.stream(HostMessage::LlmToken {
-                    token: status_msg,
-                    is_final: false,
-                    timestamp: get_timestamp(),
-                }).await;
+                let status_msg = format!(
+                    "\n\n❌ [Host Error: Failed to flush worker process: {}]\n\n",
+                    e
+                );
+                let _ = ctx
+                    .stream(HostMessage::LlmToken {
+                        token: status_msg,
+                        is_final: false,
+                        timestamp: get_timestamp(),
+                    })
+                    .await;
                 break;
             }
 
@@ -310,7 +346,10 @@ pub async fn chat_stream_detached(
                     Err(_) => continue,
                 };
 
-                let event_type = event_val.get("event").and_then(|e| e.as_str()).unwrap_or("");
+                let event_type = event_val
+                    .get("event")
+                    .and_then(|e| e.as_str())
+                    .unwrap_or("");
                 match event_type {
                     "token" => {
                         if let Some(tok) = event_val.get("data").and_then(|d| d.as_str()) {
@@ -324,21 +363,29 @@ pub async fn chat_stream_detached(
                         }
                     }
                     "finished" => {
-                        let reason = event_val.get("reason").and_then(|r| r.as_str()).unwrap_or("");
+                        let reason = event_val
+                            .get("reason")
+                            .and_then(|r| r.as_str())
+                            .unwrap_or("");
                         if reason == "Cancelled" {
                             turn_cancelled = true;
                         }
                         break;
                     }
                     "error" => {
-                        let err_data = event_val.get("data").and_then(|d| d.as_str()).unwrap_or("Unknown error");
+                        let err_data = event_val
+                            .get("data")
+                            .and_then(|d| d.as_str())
+                            .unwrap_or("Unknown error");
                         crate::elog!("Worker reported error: {}", err_data);
                         let status_msg = format!("\n\n❌ [Dohee Engine Error: {}]\n\n", err_data);
-                        let _ = ctx.stream(HostMessage::LlmToken {
-                            token: status_msg,
-                            is_final: false,
-                            timestamp: get_timestamp(),
-                        }).await;
+                        let _ = ctx
+                            .stream(HostMessage::LlmToken {
+                                token: status_msg,
+                                is_final: false,
+                                timestamp: get_timestamp(),
+                            })
+                            .await;
                         turn_error = true;
                         break;
                     }
@@ -355,15 +402,22 @@ pub async fn chat_stream_detached(
                 content: assistant_content.clone(),
             });
 
-            if let Some(tool) = crate::capabilities::inference_tools::parse_tool_call(&assistant_content) {
+            if let Some(tool) =
+                crate::capabilities::inference_tools::parse_tool_call(&assistant_content)
+            {
                 crate::log!("LLM (Worker Process): Extracted tool call '{}'", tool.name);
 
-                let status_msg = format!("\n\n⚙️ [Dohee Engine: Executing tool `{}`...]\n\n", tool.name);
-                let _ = ctx.stream(HostMessage::LlmToken {
-                    token: status_msg,
-                    is_final: false,
-                    timestamp: get_timestamp(),
-                }).await;
+                let status_msg = format!(
+                    "\n\n⚙️ [Dohee Engine: Executing tool `{}`...]\n\n",
+                    tool.name
+                );
+                let _ = ctx
+                    .stream(HostMessage::LlmToken {
+                        token: status_msg,
+                        is_final: false,
+                        timestamp: get_timestamp(),
+                    })
+                    .await;
 
                 let rtc_conn = {
                     let s = ctx.session.lock().await;
@@ -393,11 +447,13 @@ pub async fn chat_stream_detached(
                     "\n\n⚙️ [Dohee Engine: Tool `{}` observation ({}):\n```\n{}\n```]\n\n",
                     tool.name, status_icon, observation_content
                 );
-                let _ = ctx.stream(HostMessage::LlmToken {
-                    token: observation_msg,
-                    is_final: false,
-                    timestamp: get_timestamp(),
-                }).await;
+                let _ = ctx
+                    .stream(HostMessage::LlmToken {
+                        token: observation_msg,
+                        is_final: false,
+                        timestamp: get_timestamp(),
+                    })
+                    .await;
 
                 req_messages.push(ChatMessage {
                     role: "user".to_string(),
@@ -507,7 +563,9 @@ pub async fn chat_stream_detached(
             content: assistant_content.clone(),
         });
 
-        if let Some(tool) = crate::capabilities::inference_tools::parse_tool_call(&assistant_content) {
+        if let Some(tool) =
+            crate::capabilities::inference_tools::parse_tool_call(&assistant_content)
+        {
             crate::log!("LLM: Extracted tool call '{}'", tool.name);
 
             let rtc_conn = {
@@ -538,14 +596,13 @@ pub async fn chat_stream_detached(
                 "\n\n⚙️ [Harness: Tool `{}` observation ({}):\n```\n{}\n```]\n\n",
                 tool.name, status_icon, observation_content
             );
-            let _ = ctx.stream(
-                HostMessage::LlmToken {
+            let _ = ctx
+                .stream(HostMessage::LlmToken {
                     token: observation_msg,
                     is_final: false,
                     timestamp: get_timestamp(),
-                }
-            )
-            .await;
+                })
+                .await;
 
             req_messages.push(ChatMessage {
                 role: "user".to_string(),
@@ -585,10 +642,16 @@ fn format_chat_prompt(messages: &[ChatMessage]) -> String {
                 prompt.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n", msg.content));
             }
             "assistant" => {
-                prompt.push_str(&format!("<|im_start|>assistant\n{}<|im_end|>\n", msg.content));
+                prompt.push_str(&format!(
+                    "<|im_start|>assistant\n{}<|im_end|>\n",
+                    msg.content
+                ));
             }
             _ => {
-                prompt.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", msg.role, msg.content));
+                prompt.push_str(&format!(
+                    "<|im_start|>{}\n{}<|im_end|>\n",
+                    msg.role, msg.content
+                ));
             }
         }
     }
