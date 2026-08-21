@@ -338,9 +338,9 @@ class FranknTaskHandler extends TaskHandler {
         RtcClient().authenticate(msg.payload['password']);
         break;
       case IsolateAction.sshInput:
-        if (RtcClient().sshDC?.state ==
-            RTCDataChannelState.RTCDataChannelOpen) {
-          RtcClient().sshDC!.send(
+        final sshDC = RtcClient().currentHost?.sshDC;
+        if (sshDC?.state == RTCDataChannelState.RTCDataChannelOpen) {
+          sshDC!.send(
             RTCDataChannelMessage.fromBinary(base64Decode(msg.payload['data'])),
           );
         }

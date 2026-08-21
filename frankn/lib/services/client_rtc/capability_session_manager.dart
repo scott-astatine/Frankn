@@ -106,6 +106,11 @@ class CapabilitySessionManager extends ChangeNotifier {
     String? providerId,
     Map<String, dynamic>? properties,
   }) async {
+    final client = RtcClient();
+    if (client.currentHostState != HostConnectionState.authenticated) {
+      throw StateError('Cannot activate capability session [$sessionId]: Host is not authenticated (${client.currentHostState.name}).');
+    }
+
     RtcThinClient().log('[CAPABILITY_MGR] Requesting capability session [$sessionId]: capability=$capabilityId, provider=$providerId');
     final session = createSession(
       sessionId: sessionId,

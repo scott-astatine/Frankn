@@ -25,53 +25,14 @@ mixin RtcSignaling on RtcClientBase {
   /// 5. Registers client with device information
   ///
   /// The connection is kept alive automatically and will reconnect on failures.
-  Future<crypto_pkg.SimpleKeyPair> _getOrCreateIdentityKey() async {
-    final client = this as RtcClient;
-    if (client.clientKeyPair != null) {
-      return client.clientKeyPair!;
-    }
 
-    const storage = FlutterSecureStorage();
-    final savedSeedBase64 = await storage.read(key: 'frankn_client_identity_seed');
-
-    final algorithm = crypto_pkg.Ed25519();
-    if (savedSeedBase64 != null) {
-      try {
-        final seedBytes = base64Decode(savedSeedBase64);
-        final keyPair = await algorithm.newKeyPairFromSeed(seedBytes);
-        client.clientKeyPair = keyPair;
-        return keyPair;
-      } catch (e) {
-        log("ERROR: Stored identity seed was corrupted, generating new identity... $e");
-      }
-    }
-
-    log("IDENTITY: Generating new persistent cryptographic client identity...");
-    final keyPair = await algorithm.newKeyPair();
-    final keyPairData = await keyPair.extract();
-    final seedBytes = keyPairData.bytes;
-
-    await storage.write(
-      key: 'frankn_client_identity_seed',
-      value: base64Encode(seedBytes),
-    );
-
-    client.clientKeyPair = keyPair;
-    return keyPair;
-  }
 
   Future<void> _handleAuthChallenge(String challengeStr) async {
     try {
-      final keyPair = await _getOrCreateIdentityKey();
-      final publicKey = await keyPair.extractPublicKey();
-      final publicKeyBytes = publicKey.bytes;
-      final publicKeyHex = hex.encode(publicKeyBytes);
-
-      final rawPeerId = sha256.convert(publicKeyBytes).bytes;
-      final derivedPeerId = base64Url.encode(rawPeerId).replaceAll('=', '');
-      
-      final client = this as RtcClient;
-      client.selfId = derivedPeerId;
+      final identity = AuthService().identityManager;
+      final keyPair = await identity.getOrCreateIdentityKey();
+      final derivedPeerId = identity.selfId!;
+      final publicKeyHex = identity.publicKeyHex!;
 
       String normalizeBase64Url(String input) {
         String output = input.replaceAll('-', '+').replaceAll('_', '/');
@@ -132,9 +93,10 @@ mixin RtcSignaling on RtcClientBase {
   @override
   Future<bool> waitForSignalingReady({Duration timeout = const Duration(seconds: 10)}) async {
     final client = this as RtcClient;
+    final identity = AuthService().identityManager;
     if (client.sigState == SignalConnectionState.connected &&
-        client.sessionId != null &&
-        client.clientKeyPair != null) {
+        identity.sessionId != null &&
+        identity.keyPair != null) {
       return true;
     }
 
@@ -149,8 +111,8 @@ mixin RtcSignaling on RtcClientBase {
 
     sub = client.connectionStateStream.listen((state) {
       if (state == SignalConnectionState.connected &&
-          client.sessionId != null &&
-          client.clientKeyPair != null) {
+          identity.sessionId != null &&
+          identity.keyPair != null) {
         timer.cancel();
         sub.cancel();
         if (!completer.isCompleted) {
@@ -174,26 +136,19 @@ mixin RtcSignaling on RtcClientBase {
     log("Initializing Neural Link to ${SettingsService().signalingUrl}...");
 
     try {
-      signalingChannel = IOWebSocketChannel.connect(
-        Uri.parse(SettingsService().signalingUrl),
-        pingInterval: const Duration(seconds: 10),
-      );
-
-      // Set up WebSocket message handling
-      signalingChannel!.stream.listen(
+      client.transport.messageStream.listen(
         (message) {
-          _handleSignalingMessage(jsonDecode(message));
+          if (message is String) {
+            _handleSignalingMessage(jsonDecode(message));
+          }
         },
         onError: (e) {
           log("Signaling Error: $e");
           _handleDisconnection();
         },
-        onDone: () {
-          log("Signaling Disconnected (Server Closed).");
-          _handleDisconnection();
-        },
       );
 
+      await client.transport.connect(SettingsService().signalingUrl);
       _reconnectDelaySeconds = 2; // Reset reconnect delay on successful connection
     } catch (e) {
       log("Fatal Connection Error: $e");
@@ -208,7 +163,7 @@ mixin RtcSignaling on RtcClientBase {
   /// Uses 'disconnected' state so the connectToSignaling guard allows reconnection.
   void _handleDisconnection() {
     final client = this as RtcClient;
-    signalingChannel?.sink.close();
+    client.transport.disconnect();
     client.reconnectTimer?.cancel();
 
     // Clear online hosts and notify UI
@@ -324,9 +279,8 @@ mixin RtcSignaling on RtcClientBase {
 
       case SignalingMessage.RegisterSuccess:
         log("Identity Verified. Access Granted!");
-        final client = this as RtcClient;
-        client.sessionId = data['session_id'];
-        client.sequence = 1;
+        AuthService().identityManager.sessionId = data['session_id'];
+        (this as RtcClient).outbox.reset();
         _updateSigState(SignalConnectionState.connected);
         requestHostList();
         subscribeToSavedHosts();
@@ -384,14 +338,16 @@ mixin RtcSignaling on RtcClientBase {
         final msgSessionId = data['session_id'] as String;
         activeAttempt.hostSessionId = msgSessionId;
 
+        // Immediately transition to iceConnecting to cancel signaling stage timeout while setRemoteDescription runs
+        _transitionTo(HostConnectionState.iceConnecting, "Received SDP Answer");
+
         // Set the remote SDP answer to complete WebRTC handshake
         try {
           log("[RTC] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] setRemoteDescription started");
-          await hostPeerConnection!.setRemoteDescription(
+          await activeAttempt.peerConnection.setRemoteDescription(
             RTCSessionDescription(data['sdp'], 'answer'),
           );
           log("[RTC] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] setRemoteDescription completed");
-          _transitionTo(HostConnectionState.iceConnecting, "Received SDP Answer");
         } catch (e) {
           log("CORE ERROR: Failed to set remote description: $e");
         }
@@ -429,7 +385,7 @@ mixin RtcSignaling on RtcClientBase {
             data['sdp_mid'],
             data['sdp_m_line_index'],
           );
-          await hostPeerConnection!.addCandidate(candidate);
+          await activeAttempt.peerConnection.addCandidate(candidate);
         } catch (e) {
           log("CORE ERROR: Failed to add ICE candidate: $e");
         }

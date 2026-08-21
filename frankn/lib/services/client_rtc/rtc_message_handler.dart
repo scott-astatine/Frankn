@@ -28,27 +28,57 @@ mixin RtcMessageHandler on RtcClientBase {
 
   void _handleChallenge(HostMsgChallenge msg) async {
     final client = this as RtcClient;
-    final elapsed = client.activeAttempt?.elapsedMs ?? "+0ms";
-    log("[AUTH] [$elapsed] Challenge received from host.");
-    
+    final activeAttempt = client.activeAttempt;
+    if (activeAttempt == null || activeAttempt.isDisposed) {
+      log("[AUTH] Ignored challenge: No active connection attempt.");
+      return;
+    }
+
+    final elapsed = activeAttempt.elapsedMs;
+    log("[AUTH] [G${activeAttempt.generationId}] [$elapsed] Challenge received from host.");
+
+    activeAttempt.authAttempt.challenge = AuthChallenge(
+      challenge: msg.challenge,
+      salt: msg.salt,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    );
+    activeAttempt.authAttempt.updateState(AuthState.derivingCredential);
+
     final argon2Hash = await AuthService().computeArgon2Hash(
       currentPassword ?? "",
       msg.salt,
     );
+
+    if (client.activeAttempt != activeAttempt || activeAttempt.isDisposed) {
+      log("[AUTH] Ignored derived Argon2 result: Connection attempt changed during computation.");
+      return;
+    }
+
     final response = AuthService().computeResponse(argon2Hash, msg.challenge);
-    log("[AUTH] [$elapsed] Sending auth response to host.");
+    activeAttempt.authAttempt.response = AuthResponse(response);
+    activeAttempt.authAttempt.updateState(AuthState.sendingResponse);
+
+    log("[AUTH] [G${activeAttempt.generationId}] [$elapsed] Sending auth response to host.");
     sendHostMessage(ClientMsgAuthResponse(response: response).toJson());
   }
 
   void _handleAuthSuccess(HostMsgAuthSuccess msg) {
     final client = this as RtcClient;
-    final elapsed = client.activeAttempt?.elapsedMs ?? "+0ms";
+    final activeAttempt = client.activeAttempt;
+    if (activeAttempt == null || activeAttempt.isDisposed) {
+      log("[AUTH] Ignored auth_success: No active connection attempt.");
+      return;
+    }
+
+    final elapsed = activeAttempt.elapsedMs;
     isAuthFailed = false;
     AuthService().setToken(msg.token);
+    activeAttempt.authAttempt.updateState(AuthState.authenticated);
+
     _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
     client.homeDir = msg.homeDir;
     updateHostState(HostConnectionState.authenticated);
-    log("[AUTH] [$elapsed] AUTH SUCCESS. Session Token acquired. Home directory: ${msg.homeDir}");
+    log("[AUTH] [G${activeAttempt.generationId}] [$elapsed] AUTH SUCCESS. Session Token acquired. Home directory: ${msg.homeDir}");
     _startBgPingTimer();
   }
 
@@ -422,7 +452,7 @@ mixin RtcMessageHandler on RtcClientBase {
 
         // 4. Initiate download
         sendToChannel(
-          fsDC,
+          (this as RtcClient).currentHost?.fsDC,
           jsonEncode(
             ClientMsgDownloadInit(
               id: uuid,

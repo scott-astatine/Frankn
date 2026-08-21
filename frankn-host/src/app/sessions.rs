@@ -199,50 +199,53 @@ impl SessionManager {
         ));
 
         // Manage sessions
-        {
+        let existing_session = {
             let mut map = self.peer_map.lock().await;
-            if let Some(existing) = map.remove(&client_id) {
-                crate::log!("UPLINK: Replacing active session for {}.", client_id);
-
-                // If the reconnecting peer is a known Node, clean up its old state
-                {
-                    let mut nr = self.node_registry.lock().await;
-                    if nr.get(&client_id).is_some() {
-                        crate::log!(
-                            "NODE: Node '{}' is reconnecting. Cleaning up old state.",
-                            client_id
-                        );
-
-                        // Close all capability sessions belonging to this node
-                        let mut cs = self.capability_sessions.lock().await;
-                        let sessions_to_close: Vec<_> = cs
-                            .list()
-                            .into_iter()
-                            .filter(|s| s.node_id == client_id)
-                            .collect();
-                        for mut sess in sessions_to_close {
-                            crate::log!(
-                                "NODE: Closing stale capability session '{}' for reconnecting node.",
-                                sess.session_id
-                            );
-                            sess.status = crate::capabilities::node::registry::CapabilitySessionStatus::Closed;
-                            cs.register(sess);
-                        }
-
-                        // Remove old provider entries from capability inventory
-                        let mut ci = self.capability_inventory.lock().await;
-                        ci.unregister_by_provider("node", &client_id);
-
-                        // Unregister the old node entry
-                        nr.unregister(&client_id);
-                    }
-                }
-
-                let sess = existing.lock().await;
-                let _ = sess.close().await;
-            }
+            let existing = map.remove(&client_id);
             map.insert(client_id.clone(), Arc::clone(&session));
             crate::log!("UPLINK: Session established for {}.", client_id);
+            existing
+        };
+
+        if let Some(existing) = existing_session {
+            crate::log!("UPLINK: Replacing active session for {}.", client_id);
+
+            // If the reconnecting peer is a known Node, clean up its old state
+            {
+                let mut nr = self.node_registry.lock().await;
+                if nr.get(&client_id).is_some() {
+                    crate::log!(
+                        "NODE: Node '{}' is reconnecting. Cleaning up old state.",
+                        client_id
+                    );
+
+                    // Close all capability sessions belonging to this node
+                    let mut cs = self.capability_sessions.lock().await;
+                    let sessions_to_close: Vec<_> = cs
+                        .list()
+                        .into_iter()
+                        .filter(|s| s.node_id == client_id)
+                        .collect();
+                    for mut sess in sessions_to_close {
+                        crate::log!(
+                            "NODE: Closing stale capability session '{}' for reconnecting node.",
+                            sess.session_id
+                        );
+                        sess.status = crate::capabilities::node::registry::CapabilitySessionStatus::Closed;
+                        cs.register(sess);
+                    }
+
+                    // Remove old provider entries from capability inventory
+                    let mut ci = self.capability_inventory.lock().await;
+                    ci.unregister_by_provider("node", &client_id);
+
+                    // Unregister the old node entry
+                    nr.unregister(&client_id);
+                }
+            }
+
+            let sess = existing.lock().await;
+            let _ = sess.close().await;
         }
 
         // Send ICE to Client
@@ -409,11 +412,7 @@ impl SessionManager {
         {
             let mut map = self.peer_map.lock().await;
             if let Some(current) = map.get(&client_id) {
-                let current_conn = {
-                    let s = current.lock().await;
-                    Arc::clone(&s.conn)
-                };
-                if Arc::ptr_eq(&current_conn, &rtc_conn) {
+                if Arc::ptr_eq(current, &session) {
                     map.remove(&client_id);
                 }
             }

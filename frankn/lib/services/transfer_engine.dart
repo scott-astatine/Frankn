@@ -135,12 +135,13 @@ class TransferEngine {
           throw Exception("TRANSFER_CANCELLED");
         }
 
-        if (client.fsDC?.state != RTCDataChannelState.RTCDataChannelOpen) {
+        final fsDC = client.currentHost?.fsDC;
+        if (fsDC?.state != RTCDataChannelState.RTCDataChannelOpen) {
           throw Exception("FS channel closed during upload $id");
         }
 
         // Backpressure: wait if buffered amount is too high
-        if ((client.fsDC?.bufferedAmount ?? 0) > bufferThreshold) {
+        if ((fsDC?.bufferedAmount ?? 0) > bufferThreshold) {
           await Future.delayed(const Duration(milliseconds: 10));
           continue;
         }
@@ -161,7 +162,7 @@ class TransferEngine {
           data: chunk,
         );
 
-        client.fsDC!.send(RTCDataChannelMessage.fromBinary(frame));
+        fsDC!.send(RTCDataChannelMessage.fromBinary(frame));
 
         offset += toRead;
         seq++;

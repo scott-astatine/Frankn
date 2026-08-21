@@ -44,8 +44,7 @@ mixin RtcConnection on RtcClientBase {
     if (nextState == current) return;
 
     // Transition validation checks
-    if (current == HostConnectionState.disconnecting &&
-        nextState != HostConnectionState.disconnected) {
+    if (!HostConnectionStateValidation.isValidTransition(current, nextState)) {
       log(
         "[FSM] Ignored invalid state transition: $current -> $nextState ($reason)",
       );
@@ -244,13 +243,14 @@ mixin RtcConnection on RtcClientBase {
 
     final client = this as RtcClient;
 
+    final identity = client.identityManager;
     // Enforce Signaling Readiness Barrier: Do NOT create WebRTC PeerConnection or gather ICE candidates
     // until the signaling WebSocket is connected, Ed25519 identity key is loaded, and session_id is registered.
     if (client.sigState != SignalConnectionState.connected ||
-        client.sessionId == null ||
-        client.clientKeyPair == null) {
+        identity.sessionId == null ||
+        identity.keyPair == null) {
       log(
-        "Signaling layer not ready (State: ${client.sigState}, Session: ${client.sessionId}). Awaiting registration barrier...",
+        "Signaling layer not ready (State: ${client.sigState}, Session: ${identity.sessionId}). Awaiting registration barrier...",
       );
       if (client.sigState == SignalConnectionState.disconnected) {
         connectToSignaling();
@@ -281,6 +281,10 @@ mixin RtcConnection on RtcClientBase {
     try {
       // Ensure any previous connection is completely cleaned up
       await _clearHostConnections();
+      final host = client.hostManager.getOrCreateHost(
+        hostId,
+        hostName: hostName,
+      );
       _transitionTo(HostConnectionState.connecting, "Initiating WebRTC setup");
 
       // WebRTC configuration with redundant STUN servers for NAT traversal
@@ -301,33 +305,35 @@ mixin RtcConnection on RtcClientBase {
         'bundlePolicy': 'max-bundle',
       };
 
-      hostPeerConnection = await createPeerConnection(config);
+      final pc = await createPeerConnection(config);
+      host.peerConnection = pc;
 
       // Instantiate the active attempt object cleanly (RAII pattern)
       final attempt = RtcConnectionAttempt(
         generationId: attemptGen,
         sessionUuid: sessionUuid,
-        signalingSocket: signalingChannel!,
-        peerConnection: hostPeerConnection!,
+        signalingSocket: client.transport.channel!,
+        peerConnection: pc,
       );
       client.activeAttempt = attempt;
+      host.activeAttempt = attempt;
 
       log(
         "[RTC] [G$attemptGen] [${attempt.elapsedMs}] PeerConnection created.",
       );
 
       // Create data channels in STRICT order with fixed IDs for Host compatibility
-      genDC = await hostPeerConnection!.createDataChannel(
+      host.genDC = await pc.createDataChannel(
         'frankn_cmd',
         RTCDataChannelInit()..id = 1,
       );
-      _setupChannelHandlers(genDC!);
+      _setupChannelHandlers(host.genDC!);
 
-      sshDC = await hostPeerConnection!.createDataChannel(
+      host.sshDC = await pc.createDataChannel(
         'frankn_ssh',
         RTCDataChannelInit()..id = 2,
       );
-      sshDC!.onMessage = (msg) {
+      host.sshDC!.onMessage = (msg) {
         if (attemptGen != client.connectionGeneration) return;
         final data = msg.isBinary ? msg.binary : utf8.encode(msg.text);
         final bytes = Uint8List.fromList(data);
@@ -337,32 +343,32 @@ mixin RtcConnection on RtcClientBase {
         sshDataController.add(bytes);
       };
 
-      fsDC = await hostPeerConnection!.createDataChannel(
+      host.fsDC = await pc.createDataChannel(
         'frankn_fs',
         RTCDataChannelInit()..id = 3,
       );
-      _setupChannelHandlers(fsDC!);
+      _setupChannelHandlers(host.fsDC!);
 
-      mediaDC = await hostPeerConnection!.createDataChannel(
+      host.mediaDC = await pc.createDataChannel(
         'frankn_media',
         RTCDataChannelInit()..id = 4,
       );
-      _setupChannelHandlers(mediaDC!);
+      _setupChannelHandlers(host.mediaDC!);
 
-      aiDC = await hostPeerConnection!.createDataChannel(
+      host.aiDC = await pc.createDataChannel(
         'dohee_x',
         RTCDataChannelInit()..id = 5,
       );
-      _setupChannelHandlers(aiDC!);
+      _setupChannelHandlers(host.aiDC!);
 
-      inputDC = await hostPeerConnection!.createDataChannel(
+      host.inputDC = await pc.createDataChannel(
         'frankn_input',
         RTCDataChannelInit()..id = 6,
       );
-      _setupChannelHandlers(inputDC!);
+      _setupChannelHandlers(host.inputDC!);
 
       // Monitor main command channel state for connection progress
-      genDC!.onDataChannelState = (dcState) {
+      host.genDC!.onDataChannelState = (dcState) {
         if (attemptGen != client.connectionGeneration) return;
         log(
           "[RTC] [G$attemptGen] [${attempt.elapsedMs}] DC State [frankn_cmd]: $dcState",
@@ -401,7 +407,7 @@ mixin RtcConnection on RtcClientBase {
       };
 
       // Monitor overall peer connection state
-      hostPeerConnection!.onConnectionState = (ps) {
+      pc.onConnectionState = (ps) {
         if (attemptGen != client.connectionGeneration) return;
         log("[RTC] [G$attemptGen] [${attempt.elapsedMs}] PC State: $ps");
         switch (ps) {
@@ -427,38 +433,29 @@ mixin RtcConnection on RtcClientBase {
         }
       };
 
-      // Forward ICE candidates to signaling server for NAT traversal
-      hostPeerConnection!.onIceCandidate = (candidate) {
+      int firstCandMs = 0;
+      int lastCandMs = 0;
+
+      // PHASE 0 EXPERIMENT: Isolated ICE candidate callback (Zero logging, zero signing, zero outbox)
+      pc.onIceCandidate = (candidate) {
         if (attemptGen != client.connectionGeneration) return;
+        if (candidate.candidate == null) return;
         attempt.candidateCount++;
-        final parts = candidate.candidate?.split(' ') ?? [];
-        final proto = parts.length > 2 ? parts[2] : 'udp';
-        final candTypeIndex = parts.indexOf('typ');
-        final candType =
-            (candTypeIndex != -1 && parts.length > candTypeIndex + 1)
-                ? parts[candTypeIndex + 1]
-                : 'host';
-        log(
-          "[ICE] [G$attemptGen] [${attempt.elapsedMs}] Local candidate #${attempt.candidateCount} ($proto/$candType)",
-        );
-        _sendDataPlaneToSignaling(SignalingMessage.IceCandidate, {
-          'to': hostId,
-          'candidate': candidate.candidate,
-          'sdp_mid': candidate.sdpMid,
-          'sdp_m_line_index': candidate.sdpMLineIndex,
-        });
+        final now = attempt.stopwatch.elapsedMilliseconds;
+        if (attempt.candidateCount == 1) firstCandMs = now;
+        lastCandMs = now;
       };
 
-      hostPeerConnection!.onIceGatheringState = (state) {
+      pc.onIceGatheringState = (state) {
         if (attemptGen != client.connectionGeneration) return;
         log(
-          "[ICE] [G$attemptGen] [${attempt.elapsedMs}] Gathering state: $state",
+          "[ICE_EXP] [G$attemptGen] [${attempt.elapsedMs}] Gathering state: $state | Candidates gathered so far: ${attempt.candidateCount} (First: ${firstCandMs}ms, Last: ${lastCandMs}ms)",
         );
       };
 
       log("[RTC] [G$attemptGen] [${attempt.elapsedMs}] createOffer started");
       // Create and send SDP offer to initiate connection
-      final offer = await hostPeerConnection!.createOffer({
+      final offer = await pc.createOffer({
         'mandatory': {
           'OfferToReceiveAudio': false,
           'OfferToReceiveVideo': false,
@@ -470,7 +467,7 @@ mixin RtcConnection on RtcClientBase {
       log(
         "[RTC] [G$attemptGen] [${attempt.elapsedMs}] setLocalDescription started",
       );
-      await hostPeerConnection!.setLocalDescription(offer);
+      await pc.setLocalDescription(offer);
       log(
         "[RTC] [G$attemptGen] [${attempt.elapsedMs}] setLocalDescription completed",
       );
@@ -518,6 +515,11 @@ mixin RtcConnection on RtcClientBase {
     // Invalidate session token to prevent stale transmission
     AuthService().clearToken();
 
+    // Clean up host manager entry
+    if (currentHostId != null) {
+      client.hostManager.clearConnections(currentHostId!);
+    }
+
     // Ensure active file transfer streams and maps are closed and purged
     if (this is RtcMessageHandler) {
       (this as RtcMessageHandler).clearActiveTransfers();
@@ -533,13 +535,6 @@ mixin RtcConnection on RtcClientBase {
     client.activeAttempt?.dispose();
     client.activeAttempt = null;
 
-    genDC = null;
-    fsDC = null;
-    mediaDC = null;
-    sshDC = null;
-    aiDC = null;
-    inputDC = null;
-    hostPeerConnection = null;
     // Reset SSH buffering state
     _sshEarlyBuffer.clear();
     _sshHandlerActive = false;

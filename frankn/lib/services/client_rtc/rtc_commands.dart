@@ -38,18 +38,14 @@ mixin RtcCommands on RtcClientBase {
 
   @override
   void sendInputMsg(Map<String, dynamic> msg) {
+    final client = this as RtcClient;
     final token = AuthService().sessionToken;
     if (token == null) return;
 
-    // For input we don't necessarily need the whole DcMsg envelope,
-    // but looking at Rust backend, it expects raw `InputMsg` JSON directly on `frankn_input` channel.
     final jsonMsg = jsonEncode(msg);
-    sendToChannel(inputDC, jsonMsg, "INPUT");
+    sendToChannel(client.currentHost?.inputDC, jsonMsg, "INPUT");
   }
 
-  /// Sends a raw binary chunk of file data with the resume-aware frame format.
-  ///
-  /// Frame: [0x01][36-byte ID][8-byte offset][4-byte seq][1-byte flags][data]
   void sendUploadChunkRaw({
     required String id,
     required Uint8List data,
@@ -57,6 +53,8 @@ mixin RtcCommands on RtcClientBase {
     required int seq,
     required int flags,
   }) {
+    final client = this as RtcClient;
+    final fsDC = client.currentHost?.fsDC;
     if (fsDC?.state != RTCDataChannelState.RTCDataChannelOpen) return;
 
     final idBytes = utf8.encode(id);
@@ -82,7 +80,7 @@ mixin RtcCommands on RtcClientBase {
     // Data
     frame.setRange(50, 50 + data.length, data);
 
-    fsDC!.send(RTCDataChannelMessage.fromBinary(frame));
+    fsDC?.send(RTCDataChannelMessage.fromBinary(frame));
   }
 
   /// Initialize a resume-aware upload transfer.
@@ -93,8 +91,9 @@ mixin RtcCommands on RtcClientBase {
     String? hash,
     int resumeOffset = 0,
   }) {
+    final client = this as RtcClient;
     sendToChannel(
-      fsDC,
+      client.currentHost?.fsDC,
       jsonEncode(
         ClientMsgTransferInit(
           id: id,
@@ -110,8 +109,9 @@ mixin RtcCommands on RtcClientBase {
 
   /// Cancel a transfer.
   void sendTransferCancel(String id) {
+    final client = this as RtcClient;
     sendToChannel(
-      fsDC,
+      client.currentHost?.fsDC,
       jsonEncode(ClientMsgTransferCancel(id: id).toJson()),
       "FS",
     );
@@ -123,8 +123,9 @@ mixin RtcCommands on RtcClientBase {
     required String path,
     int resumeOffset = 0,
   }) {
+    final client = this as RtcClient;
     sendToChannel(
-      fsDC,
+      client.currentHost?.fsDC,
       jsonEncode(
         ClientMsgDownloadInit(
           id: id,
@@ -136,20 +137,9 @@ mixin RtcCommands on RtcClientBase {
     );
   }
 
-  /// Sends a data channel command to the host with authentication.
-  ///
-  /// This is the main command dispatch method that:
-  /// 1. Validates authentication (session token required)
-  /// 2. Generates unique message ID for tracking
-  /// 3. Routes to appropriate WebRTC channel based on command type
-  /// 4. Includes timestamp for security and ordering
-  ///
-  /// Command routing:
-  /// - File operations → fsChannel (frankn_fs)
-  /// - Media operations → mediaChannel (frankn_media)
-  /// - All others → dataChannel (frankn_cmd)
   @override
   void sendDcMsg(DcMsg command) {
+    final client = this as RtcClient;
     final token = AuthService().sessionToken;
     if (token == null) {
       log("Command Error: Not authenticated.");
@@ -166,10 +156,11 @@ mixin RtcCommands on RtcClientBase {
 
     final jsonMsg = jsonEncode(clientMsg.toJson());
 
+    final host = client.currentHost;
     switch (command) {
       // File system operations routed to dedicated FS channel
       case DcMsgLs() || DcMsgDeleteFile() || DcMsgMkdir() || DcMsgSyncRequest():
-        sendToChannel(fsDC, jsonMsg, "FS");
+        sendToChannel(host?.fsDC, jsonMsg, "FS");
         break;
 
       // Media control operations routed to dedicated media channel
@@ -184,7 +175,7 @@ mixin RtcCommands on RtcClientBase {
           DcMsgListPlayers() ||
           DcMsgGetAudioDevices() ||
           DcMsgSetDefaultAudioDevice():
-        sendToChannel(mediaDC, jsonMsg, "MEDIA");
+        sendToChannel(host?.mediaDC, jsonMsg, "MEDIA");
         break;
 
       case DcMsgLlmStart() ||
@@ -194,12 +185,12 @@ mixin RtcCommands on RtcClientBase {
           DcMsgLlmLoadChat() ||
           DcMsgLlmDeleteChat() ||
           DcMsgLlmListChats():
-        sendToChannel(aiDC, jsonMsg, "AI");
+        sendToChannel(host?.aiDC, jsonMsg, "AI");
         break;
 
       // All other commands use the general command channel
       default:
-        sendToChannel(genDC, jsonMsg, "CMD");
+        sendToChannel(host?.genDC, jsonMsg, "CMD");
         break;
     }
   }
