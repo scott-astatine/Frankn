@@ -118,7 +118,6 @@ class FranknTaskHandler extends TaskHandler {
             payload: {'error': 'AUTHENTICATION_REJECTED'},
           );
           _broadcastToMain(err);
-          RtcThinClient().handleMsg(err);
         } else if (state == HostConnectionState.failed) {
           final err = IsolateMsg(
             type: IsolateType.event,
@@ -126,7 +125,6 @@ class FranknTaskHandler extends TaskHandler {
             payload: {'error': 'CONNECTION_FAILED'},
           );
           _broadcastToMain(err);
-          RtcThinClient().handleMsg(err);
         }
 
         if (state == HostConnectionState.authenticated) {
@@ -136,7 +134,6 @@ class FranknTaskHandler extends TaskHandler {
             payload: {'token': AuthService().sessionToken ?? ''},
           );
           _broadcastToMain(ok);
-          RtcThinClient().handleMsg(ok);
 
           // VERIFIER: Trigger sync status check for all pairs on successful authentication
           Future.delayed(const Duration(seconds: 2), () async {
@@ -149,7 +146,6 @@ class FranknTaskHandler extends TaskHandler {
         }
 
         _broadcastToMain(msg);
-        RtcThinClient().handleMsg(msg);
       });
 
       RtcClient().genDcMsgStream.listen((msg) {
@@ -159,7 +155,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: msg.toJson(),
         );
         _broadcastToMain(isolateMsg);
-        RtcThinClient().handleMsg(isolateMsg);
       });
 
       RtcClient().connectionStateStream.listen((state) {
@@ -169,7 +164,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: {'state': state.index},
         );
         _broadcastToMain(msg);
-        RtcThinClient().handleMsg(msg);
       });
 
       RtcClient().peerStatusStream.listen((data) {
@@ -179,7 +173,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: data,
         );
         _broadcastToMain(msg);
-        RtcThinClient().handleMsg(msg);
       });
 
       RtcClient().hostListStream.listen((hosts) {
@@ -189,7 +182,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: {'hosts': hosts},
         );
         _broadcastToMain(msg);
-        RtcThinClient().handleMsg(msg);
       });
 
       RtcClient().logStream.listen((logMsg) {
@@ -199,7 +191,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: {'msg': logMsg},
         );
         _broadcastToMain(msg);
-        RtcThinClient().handleMsg(msg);
       });
 
       RtcClient().notificationStream.listen((msg) {
@@ -209,7 +200,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: msg.toJson(),
         );
         _broadcastToMain(isolateMsg);
-        RtcThinClient().handleMsg(isolateMsg);
       });
 
       RtcClient().sshDataStream.listen((data) {
@@ -219,7 +209,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: {'data': base64Encode(data)},
         );
         _broadcastToMain(msg);
-        RtcThinClient().handleMsg(msg);
       });
 
       RtcClient().syncSnapshotStream.listen((msg) {
@@ -229,7 +218,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: msg.toJson(),
         );
         _broadcastToMain(isolateMsg);
-        RtcThinClient().handleMsg(isolateMsg);
       });
 
       RtcClient().transferProgressStream.listen((event) {
@@ -239,7 +227,6 @@ class FranknTaskHandler extends TaskHandler {
           payload: event.toJson(),
         );
         _broadcastToMain(msg);
-        RtcThinClient().handleMsg(msg);
       });
 
       // Initiate signaling connection and await full registration before signaling readiness to UI Isolate
@@ -513,7 +500,6 @@ class FranknTaskHandler extends TaskHandler {
             ).toJson(),
           );
           _broadcastToMain(okMsg);
-          RtcThinClient().handleMsg(okMsg);
 
           if (showNotif) {
             NotificationService().dismiss(id.hashCode.abs() % 100000);
@@ -546,7 +532,6 @@ class FranknTaskHandler extends TaskHandler {
             ).toJson(),
           );
           _broadcastToMain(failMsg);
-          RtcThinClient().handleMsg(failMsg);
 
           if (showNotif) {
             NotificationService().dismiss(id.hashCode.abs() % 100000);

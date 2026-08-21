@@ -76,6 +76,11 @@ class CapabilitySessionManager extends ChangeNotifier {
     RtcThinClient().log('[CAPABILITY_MGR] CapabilityActivationStatus [$sessionId]: status=$statusStr${error != null ? ", error=$error" : ""}');
     final session = _sessions[sessionId];
     if (session == null) {
+      final normStatus = statusStr.toLowerCase();
+      if (normStatus == 'closed' || normStatus == 'deactivated') {
+        RtcThinClient().log('[CAPABILITY_MGR] Stale terminal status [$sessionId] ($statusStr) ignored.');
+        return;
+      }
       RtcThinClient().log('[CAPABILITY_MGR] Warning: Activation status received for unknown session [$sessionId]');
       return;
     }
