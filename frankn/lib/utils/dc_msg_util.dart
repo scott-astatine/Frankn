@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:frankn/services/capabilities/capability.dart';
 
 /// Base class for all messages received from the Host.
 /// Mirrors the `HostMessage` enum in Rust.
@@ -41,6 +42,7 @@ sealed class HostMessage {
       case 'sync_snapshot':
         return HostMsgSyncSnapshot.fromJson(json);
       case 'capabilities_inventory':
+        print("Capabilities received: ${json.keys}");
         return HostMsgCapabilitiesInventory.fromJson(json);
       case 'host_signal':
         return HostMsgHostSignal.fromJson(json);
@@ -104,12 +106,9 @@ class HostMsgAuthSuccess extends HostMessage {
   }
 
   @override
-  Map<String, dynamic> toJson() => super.toJson()
-    ..addAll({
-      'token': token,
-      'home_dir': homeDir,
-      'timestamp': timestamp,
-    });
+  Map<String, dynamic> toJson() =>
+      super.toJson()
+        ..addAll({'token': token, 'home_dir': homeDir, 'timestamp': timestamp});
 }
 
 class HostMsgAuthFailed extends HostMessage {
@@ -757,30 +756,39 @@ class HostMsgUnknown extends HostMessage {
 }
 
 class HostMsgCapabilitiesInventory extends HostMessage {
+  final List<CapabilityInventoryEntry> entries;
   final List<Map<String, dynamic>> capabilities;
   final int timestamp;
 
   HostMsgCapabilitiesInventory({
+    required this.entries,
     required this.capabilities,
     required this.timestamp,
   }) : super('capabilities_inventory');
 
   factory HostMsgCapabilitiesInventory.fromJson(Map<String, dynamic> json) {
+    final rawCaps =
+        (json['capabilities'] as List?)
+            ?.map((e) => Map<String, dynamic>.from(e as Map))
+            .toList() ??
+        [];
+    final typedEntries = rawCaps
+        .map((e) => CapabilityInventoryEntry.fromJson(e))
+        .toList();
+
     return HostMsgCapabilitiesInventory(
-      capabilities: (json['capabilities'] as List?)
-              ?.map((e) => Map<String, dynamic>.from(e as Map))
-              .toList() ??
-          [],
+      entries: typedEntries,
+      capabilities: rawCaps,
       timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
     );
   }
 
   @override
   Map<String, dynamic> toJson() => {
-        'type': type,
-        'capabilities': capabilities,
-        'timestamp': timestamp,
-      };
+    'type': type,
+    'capabilities': capabilities,
+    'timestamp': timestamp,
+  };
 }
 
 class HostMsgHostSignal extends HostMessage {
@@ -806,11 +814,11 @@ class HostMsgHostSignal extends HostMessage {
 
   @override
   Map<String, dynamic> toJson() => {
-        'type': type,
-        'client_id': clientId,
-        'session_id': sessionId,
-        'signal': signal,
-      };
+    'type': type,
+    'client_id': clientId,
+    'session_id': sessionId,
+    'signal': signal,
+  };
 }
 
 class HostMsgCapabilityActivationStatus extends HostMessage {
@@ -828,7 +836,9 @@ class HostMsgCapabilityActivationStatus extends HostMessage {
     required this.timestamp,
   }) : super('capability_activation_status');
 
-  factory HostMsgCapabilityActivationStatus.fromJson(Map<String, dynamic> json) {
+  factory HostMsgCapabilityActivationStatus.fromJson(
+    Map<String, dynamic> json,
+  ) {
     return HostMsgCapabilityActivationStatus(
       capabilityId: json['capability_id']?.toString() ?? '',
       sessionId: json['session_id']?.toString() ?? '',
@@ -840,13 +850,13 @@ class HostMsgCapabilityActivationStatus extends HostMessage {
 
   @override
   Map<String, dynamic> toJson() => {
-        'type': type,
-        'capability_id': capabilityId,
-        'session_id': sessionId,
-        'status': status,
-        if (error != null) 'error': error,
-        'timestamp': timestamp,
-      };
+    'type': type,
+    'capability_id': capabilityId,
+    'session_id': sessionId,
+    'status': status,
+    if (error != null) 'error': error,
+    'timestamp': timestamp,
+  };
 }
 
 class ClientMsgActivateCapability {
@@ -865,14 +875,14 @@ class ClientMsgActivateCapability {
   });
 
   Map<String, dynamic> toJson() => {
-        'type': 'activate_capability',
-        'capability_id': capabilityId,
-        'session_id': sessionId,
-        if (providerId != null) 'provider_id': providerId,
-        'properties': properties ?? {},
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'auth_token': authToken,
-      };
+    'type': 'activate_capability',
+    'capability_id': capabilityId,
+    'session_id': sessionId,
+    if (providerId != null) 'provider_id': providerId,
+    'properties': properties ?? {},
+    'timestamp': DateTime.now().millisecondsSinceEpoch,
+    'auth_token': authToken,
+  };
 }
 
 class ClientMsgDeactivateCapability {
@@ -887,12 +897,12 @@ class ClientMsgDeactivateCapability {
   });
 
   Map<String, dynamic> toJson() => {
-        'type': 'deactivate_capability',
-        'capability_id': capabilityId,
-        'session_id': sessionId,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'auth_token': authToken,
-      };
+    'type': 'deactivate_capability',
+    'capability_id': capabilityId,
+    'session_id': sessionId,
+    'timestamp': DateTime.now().millisecondsSinceEpoch,
+    'auth_token': authToken,
+  };
 }
 
 class ClientMsgNodeSignal {
@@ -907,11 +917,11 @@ class ClientMsgNodeSignal {
   });
 
   Map<String, dynamic> toJson() => {
-        'type': 'node_signal',
-        'client_id': clientId,
-        'session_id': sessionId,
-        'signal': signal,
-      };
+    'type': 'node_signal',
+    'client_id': clientId,
+    'session_id': sessionId,
+    'signal': signal,
+  };
 }
 
 /// Base class for all commands sent to the Host.
@@ -1207,8 +1217,13 @@ class DcMsgSystemLog extends DcMsg {
   final String? priority;
   final String? since;
   final String? grep;
-  const DcMsgSystemLog({this.unit, this.lines, this.priority, this.since, this.grep})
-      : super('system_log');
+  const DcMsgSystemLog({
+    this.unit,
+    this.lines,
+    this.priority,
+    this.since,
+    this.grep,
+  }) : super('system_log');
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
@@ -1447,12 +1462,11 @@ class DcMsgSyncRequest extends DcMsg {
 class DcMsgToolApprovalResponse extends DcMsg {
   final String approvalId;
   final bool approved;
-  const DcMsgToolApprovalResponse({required this.approvalId, required this.approved})
-    : super('tool_approval_response');
+  const DcMsgToolApprovalResponse({
+    required this.approvalId,
+    required this.approved,
+  }) : super('tool_approval_response');
   @override
-  Map<String, dynamic> toJson() => super.toJson()
-    ..addAll({
-      'approval_id': approvalId,
-      'approved': approved,
-    });
+  Map<String, dynamic> toJson() =>
+      super.toJson()..addAll({'approval_id': approvalId, 'approved': approved});
 }

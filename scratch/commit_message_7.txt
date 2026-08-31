@@ -1,0 +1,14 @@
+refactor(capabilities): implement provider-aware capability architecture & fix UI inventory hydration
+
+- Host (`frankn-host`):
+  - Serialize complete `CapabilityInventoryEntry` objects (`descriptor`, `provider`, `availability`) in `HostMessage::CapabilitiesInventory`.
+  - Add `broadcast_capability_inventory` to push dynamic inventory updates over `frankn_cmd` on Node connect/disconnect.
+  - Fix ICE candidate sequence outbox locking & session replacement behavior.
+
+- Client (`frankn`):
+  - Add typed capability domain models (`CapabilityDescriptor`, `CapabilityProvider`, `CapabilityInventoryEntry`, `CapabilityAvailability`, `CapabilityInventory`, `CapabilitySession`).
+  - Update `HostMsgCapabilitiesInventory` to parse typed inventory entries.
+  - Make `CapabilitySessionManager` inventory-aware with pre-flight checks (Auth, descriptor existence, provider advertising, availability).
+  - Hydrate UI-isolate `CapabilityInventory` inside `RtcThinClient._handleIsolateData` on receiving `HostMsgCapabilitiesInventory`.
+  - Refactor `CameraScreen` to consume `CameraCapabilityController`, support dynamic multi-provider selection dropdown, and react to inventory changes.
+  - Clean up legacy `AuthService` barrel export in favor of canonical `services/auth/auth_service.dart`.

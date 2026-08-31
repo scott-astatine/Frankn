@@ -8,7 +8,7 @@ import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
-import 'package:frankn/services/auth_service.dart';
+import 'package:frankn/services/auth/auth_service.dart';
 import 'package:frankn/services/client_rtc/rtc.dart';
 
 class RtcThinClient {
@@ -223,6 +223,9 @@ class RtcThinClient {
         sendIntent(IsolateAction.syncState);
       case (IsolateType.event, IsolateAction.commandResponse):
         final hostMsg = HostMessage.fromJson(msg.payload);
+        if (hostMsg is HostMsgCapabilitiesInventory) {
+          RtcClient().capabilityInventory.updateFromList(hostMsg.capabilities);
+        }
         _genDcMsgStreamC.add(hostMsg);
 
         // Handle UI isolate media sync to prevent background isolate crashes

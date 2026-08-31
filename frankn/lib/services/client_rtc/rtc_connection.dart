@@ -333,6 +333,7 @@ mixin RtcConnection on RtcClientBase {
         'frankn_ssh',
         RTCDataChannelInit()..id = 2,
       );
+      _setupChannelHandlers(host.sshDC!);
       host.sshDC!.onMessage = (msg) {
         if (attemptGen != client.connectionGeneration) return;
         final data = msg.isBinary ? msg.binary : utf8.encode(msg.text);
@@ -368,8 +369,10 @@ mixin RtcConnection on RtcClientBase {
       _setupChannelHandlers(host.inputDC!);
 
       // Monitor main command channel state for connection progress
+      final existingGenDCHandler = host.genDC!.onDataChannelState;
       host.genDC!.onDataChannelState = (dcState) {
         if (attemptGen != client.connectionGeneration) return;
+        existingGenDCHandler?.call(dcState);
         log(
           "[RTC] [G$attemptGen] [${attempt.elapsedMs}] DC State [frankn_cmd]: $dcState",
         );
@@ -409,7 +412,7 @@ mixin RtcConnection on RtcClientBase {
       // Monitor overall peer connection state
       pc.onConnectionState = (ps) {
         if (attemptGen != client.connectionGeneration) return;
-        log("[RTC] [G$attemptGen] [${attempt.elapsedMs}] PC State: $ps");
+        log("[RTC] [G$attemptGen] [${attempt.elapsedMs}] PC Connection State: $ps");
         switch (ps) {
           case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
             _transitionTo(
@@ -435,6 +438,11 @@ mixin RtcConnection on RtcClientBase {
           default:
             break;
         }
+      };
+
+      pc.onIceConnectionState = (ics) {
+        if (attemptGen != client.connectionGeneration) return;
+        log("[RTC_DIAG] [G$attemptGen] [${attempt.elapsedMs}] ICE Connection State: $ics");
       };
 
       int firstCandMs = 0;
@@ -496,6 +504,12 @@ mixin RtcConnection on RtcClientBase {
   void _setupChannelHandlers(RTCDataChannel channel) {
     final client = this as RtcClient;
     final attemptGen = client.connectionGeneration;
+    channel.onDataChannelState = (dcState) {
+      if (attemptGen != client.connectionGeneration) return;
+      log(
+        "[DC_DIAG] [G$attemptGen] [${client.activeAttempt?.elapsedMs ?? '+0ms'}] DataChannel [${channel.label} (id: ${channel.id})] State: $dcState",
+      );
+    };
     channel.onMessage = (msg) {
       if (attemptGen != client.connectionGeneration) return;
       handleHostMessage(msg.isBinary ? msg.binary : msg.text);

@@ -12,7 +12,7 @@ import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 import 'package:frankn/services/settings_service.dart';
-import 'package:frankn/services/auth_service.dart';
+import 'package:frankn/services/auth/auth_service.dart';
 import 'package:frankn/services/sync_service.dart';
 import 'package:frankn/services/transfer_engine.dart';
 import 'package:frankn/utils/dc_msg_util.dart';

@@ -1,4 +1,4 @@
-> **Capabilities over applications.**  
+> **Capabilities over applications.**
 > **Runtime before products.**  
 > **Local before cloud.**  
 

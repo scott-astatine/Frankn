@@ -35,8 +35,9 @@ import 'package:cryptography/cryptography.dart' as crypto_pkg;
 
 import 'package:frankn/main.dart';
 import 'package:frankn/utils/utils.dart';
+import 'package:frankn/services/capabilities/capability.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
-import 'package:frankn/services/auth_service.dart';
+import 'package:frankn/services/auth/auth_service.dart';
 import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/settings_service.dart';
@@ -271,18 +272,20 @@ class RtcClient extends RtcClientBase
   @override
   String? homeDir;
 
-  List<Map<String, dynamic>> availableCapabilities = [];
+  final CapabilityInventory capabilityInventory = CapabilityInventory();
+
+  List<Map<String, dynamic>> get availableCapabilities =>
+      capabilityInventory.entries.map((e) => e.toJson()).toList();
 
   String? findProviderForCapability(String capabilityId) {
-    for (final cap in availableCapabilities) {
-      final descriptor = cap['descriptor'] as Map?;
-      final provider = cap['provider'] as Map?;
-      if (descriptor?['id'] == capabilityId &&
-          provider?['provider_id'] != null) {
-        return provider!['provider_id'].toString();
-      }
+    final available = capabilityInventory.byCapability(capabilityId).where(
+          (e) => e.availability == CapabilityAvailability.available,
+        );
+    if (available.isNotEmpty) {
+      return available.first.provider.providerId;
     }
-    return null;
+    final all = capabilityInventory.byCapability(capabilityId);
+    return all.isNotEmpty ? all.first.provider.providerId : null;
   }
 
   // ========== RECONNECTION LOGIC ==========

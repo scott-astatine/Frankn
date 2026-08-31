@@ -5,6 +5,12 @@ import 'auth_crypto.dart';
 import 'auth_state.dart';
 import 'identity_manager.dart';
 
+export 'auth_cache.dart';
+export 'auth_credentials.dart';
+export 'auth_crypto.dart';
+export 'auth_state.dart';
+export 'identity_manager.dart';
+
 /// Facade orchestrating authentication infrastructure, identity management,
 /// Argon2id computation, and verifier caching for Frankn.
 class AuthService {

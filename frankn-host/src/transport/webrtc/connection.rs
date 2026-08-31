@@ -143,6 +143,16 @@ impl RTCConn {
 
         let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
+        peer_connection.on_peer_connection_state_change(Box::new(move |s| {
+            crate::log!("[HOST_RTC_DIAG] Host PeerConnection State: {}", s);
+            Box::pin(async move {})
+        }));
+
+        peer_connection.on_ice_connection_state_change(Box::new(move |s| {
+            crate::log!("[HOST_RTC_DIAG] Host ICE Connection State: {}", s);
+            Box::pin(async move {})
+        }));
+
         Ok(Self {
             peer_connection,
             data_channels: Arc::new(Mutex::new(HashMap::new())),
@@ -194,7 +204,11 @@ impl RTCConn {
         let data_channels = Arc::clone(&self.data_channels);
         self.peer_connection
             .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
-                println!("New DataChannel: {} {}", d.label(), d.id());
+                crate::log!(
+                    "[HOST_DC_DIAG] Host received DataChannel open: label={} id={}",
+                    d.label(),
+                    d.id()
+                );
                 let d_label = d.label().to_owned();
                 let d_clone = Arc::clone(&d);
 
@@ -259,7 +273,6 @@ impl RTCConn {
         let state = self.remote_desc_state.lock().await;
         match *state {
             RemoteDescriptionState::Waiting => {
-                log!("add_remote_candidate: Remote description not set yet. Buffering candidate.");
                 let mut pending = self.pending_candidates.lock().await;
                 pending.push(candidate_init);
                 Ok(())

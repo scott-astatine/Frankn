@@ -122,7 +122,7 @@ pub enum HostMessage {
 
     #[serde(rename = "capabilities_inventory")]
     CapabilitiesInventory {
-        capabilities: Vec<crate::capabilities::registry::CapabilityDescriptor>,
+        capabilities: Vec<crate::capabilities::registry::CapabilityInventoryEntry>,
         timestamp: u64,
     },
 

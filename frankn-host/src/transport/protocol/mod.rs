@@ -68,8 +68,11 @@ pub async fn parse_dc_msg(data: &Vec<u8>, ctx: &ProtocolContext, client_id: &str
     match serde_json::from_str::<ClientMessage>(&text) {
         Ok(msg) => match msg {
             ClientMessage::AuthRequest => {
-                crate::log!("CHALLENGE: Generating for client...");
+                let rx_start = std::time::Instant::now();
+                crate::log!("[HOST_AUTH_DIAG] auth_request RX from client {}.", client_id);
+                let gen_start = std::time::Instant::now();
                 let challenge = ctx.auth_manager.generate_challenge();
+                let gen_micros = gen_start.elapsed().as_micros();
                 {
                     let sess = session.lock().await;
                     let mut current_challenge = sess.current_challenge.lock().await;
@@ -82,10 +85,19 @@ pub async fn parse_dc_msg(data: &Vec<u8>, ctx: &ProtocolContext, client_id: &str
                 };
                 if let Ok(json) = serde_json::to_string(&response) {
                     let conn = rtc_conn.lock().await;
+                    let tx_start = std::time::Instant::now();
                     let _ = conn.send_message(label, &Bytes::from(json)).await;
+                    crate::log!(
+                        "[HOST_AUTH_DIAG] challenge TX sent to DataChannel (challenge gen: {} µs, send_message: {} µs, total: {} ms)",
+                        gen_micros,
+                        tx_start.elapsed().as_micros(),
+                        rx_start.elapsed().as_millis()
+                    );
                 }
             }
             ClientMessage::AuthResponse { response, .. } => {
+                let rx_start = std::time::Instant::now();
+                crate::log!("[HOST_AUTH_DIAG] auth_response RX from client {}.", client_id);
                 let expected_challenge = {
                     let sess = session.lock().await;
                     let mut challenge_lock = sess.current_challenge.lock().await;
@@ -111,7 +123,9 @@ pub async fn parse_dc_msg(data: &Vec<u8>, ctx: &ProtocolContext, client_id: &str
                         };
                         if let Ok(json) = serde_json::to_string(&res) {
                             let conn = rtc_conn.lock().await;
+                            let tx_start = std::time::Instant::now();
                             let _ = conn.send_message(label, &Bytes::from(json)).await;
+                            crate::log!("[HOST_AUTH_DIAG] auth_success TX sent to DataChannel (total host pipeline: {} ms, send_message: {} µs)", rx_start.elapsed().as_millis(), tx_start.elapsed().as_micros());
                         }
 
                         // Send capability manifest inventory immediately after pairing
@@ -119,7 +133,7 @@ pub async fn parse_dc_msg(data: &Vec<u8>, ctx: &ProtocolContext, client_id: &str
                         {
                             let ci = ctx.capability_inventory.lock().await;
                             for entry in ci.list() {
-                                caps.push(entry.descriptor);
+                                caps.push(entry);
                             }
                         }
                         let inventory = HostMessage::CapabilitiesInventory {
@@ -262,6 +276,7 @@ pub async fn parse_dc_msg(data: &Vec<u8>, ctx: &ProtocolContext, client_id: &str
                     &ctx.config,
                     &ctx.node_registry,
                     &ctx.capability_inventory,
+                    &ctx.peer_map,
                 )
                 .await;
             }
@@ -356,5 +371,33 @@ pub async fn parse_binary_msg(data: &Vec<u8>, ctx: &CommandContext) {
         && data[0] == 0x01
     {
         crate::capabilities::fs::transfer::handle_transfer_chunk_raw(data, ctx).await;
+    }
+}
+
+pub async fn broadcast_capability_inventory(
+    peer_map: &PeerMap,
+    capability_inventory: &Arc<Mutex<crate::capabilities::registry::CapabilityInventory>>,
+) {
+    let mut entries = Vec::new();
+    {
+        let ci = capability_inventory.lock().await;
+        for entry in ci.list() {
+            entries.push(entry);
+        }
+    }
+    let inventory = HostMessage::CapabilitiesInventory {
+        capabilities: entries,
+        timestamp: get_timestamp(),
+    };
+    if let Ok(json) = serde_json::to_string(&inventory) {
+        let peers = peer_map.lock().await;
+        for (_, session) in peers.iter() {
+            let s = session.lock().await;
+            let is_auth = *s.authenticated.lock().await;
+            if is_auth {
+                let conn = s.conn.lock().await;
+                let _ = conn.send_message("frankn_cmd", &Bytes::from(json.clone())).await;
+            }
+        }
     }
 }

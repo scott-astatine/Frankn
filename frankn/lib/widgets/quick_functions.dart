@@ -110,14 +110,15 @@ class QuickFunction extends StatelessWidget {
           );
         }),
         _opBtn('Camera', Icons.videocam_outlined, Colors.cyanAccent, () {
-          final providerId = RtcClient().findProviderForCapability('camera') ??
-              "atOOBm48UeOjsGMi8NnfNRs2WtULsBoom9yq6u33Jbw";
+          final cameraEntries = RtcClient().capabilityInventory.byCapability('camera');
+          final initialProviderId = cameraEntries.firstOrNull?.provider.providerId;
+          final initialNodeName = cameraEntries.firstOrNull?.provider.displayName;
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => CameraScreen(
-                nodeName: "Camera Node",
-                nodeId: providerId,
+                nodeName: initialNodeName,
+                nodeId: initialProviderId,
                 capabilityId: "camera",
               ),
             ),

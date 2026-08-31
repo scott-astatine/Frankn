@@ -87,6 +87,9 @@ class SignalingOutbox {
             ? (item.payload['sdp'] as String? ?? '')
             : (item.payload['candidate'] as String? ?? '');
 
+        final signSw = Stopwatch()..start();
+        log('[OUTBOX_DIAG] Envelope signing started for ${item.type} (seq: ${item.sequence})...');
+
         final signatureHex = await identityManager.signEnvelope(
           msgType: msgTypeInt,
           toPeerId: item.toPeerId,
@@ -95,6 +98,8 @@ class SignalingOutbox {
           timestamp: item.timestamp,
           activeSessionId: sessionId,
         );
+
+        log('[OUTBOX_DIAG] Envelope signing completed in +${signSw.elapsedMilliseconds}ms for ${item.type} (seq: ${item.sequence})');
 
         final encodedMsg = SignalingProtocol.encodeDataPlaneMessage(
           type: item.type,
@@ -107,7 +112,9 @@ class SignalingOutbox {
           payload: item.payload,
         );
 
+        final sendSw = Stopwatch()..start();
         final success = transport.send(encodedMsg);
+        log('[OUTBOX_DIAG] WebSocket transport.send finished in +${sendSw.elapsedMilliseconds}ms for ${item.type} (success: $success)');
         if (success && item.type == SignalingMessageType.offer) {
           log('[SIG] SDP Offer transmitted to WebSocket sink.');
         }

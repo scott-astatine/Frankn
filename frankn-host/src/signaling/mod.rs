@@ -136,6 +136,7 @@ pub struct SignalingClient {
     pub session_id: String,
     pub signing_key: ed25519_dalek::SigningKey,
     pub sequence: std::sync::atomic::AtomicU64,
+    pub outbox_lock: Arc<tokio::sync::Mutex<()>>,
     sender: Arc<RwLock<Option<UnboundedSender<SignalingMessage>>>>,
 }
 
@@ -283,6 +284,7 @@ impl SignalingClient {
             session_id,
             signing_key,
             sequence: std::sync::atomic::AtomicU64::new(1),
+            outbox_lock: Arc::new(tokio::sync::Mutex::new(())),
             sender,
         };
 
@@ -374,6 +376,7 @@ impl SignalingClient {
         to: &str,
         sdp: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let _guard = self.outbox_lock.lock().await;
         use std::sync::atomic::Ordering;
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
         let timestamp = std::time::SystemTime::now()
@@ -401,6 +404,7 @@ impl SignalingClient {
         to: &str,
         sdp: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let _guard = self.outbox_lock.lock().await;
         use std::sync::atomic::Ordering;
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
         let timestamp = std::time::SystemTime::now()
@@ -430,6 +434,7 @@ impl SignalingClient {
         sdp_mid: Option<String>,
         sdp_m_line_index: Option<u16>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let _guard = self.outbox_lock.lock().await;
         use std::sync::atomic::Ordering;
         let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
         let timestamp = std::time::SystemTime::now()

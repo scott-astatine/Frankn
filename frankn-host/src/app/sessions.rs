@@ -231,7 +231,8 @@ impl SessionManager {
                             "NODE: Closing stale capability session '{}' for reconnecting node.",
                             sess.session_id
                         );
-                        sess.status = crate::capabilities::node::registry::CapabilitySessionStatus::Closed;
+                        sess.status =
+                            crate::capabilities::node::registry::CapabilitySessionStatus::Closed;
                         cs.register(sess);
                     }
 
@@ -350,6 +351,12 @@ impl SessionManager {
             .await;
         }
 
+        let offer_rx_time = std::time::Instant::now();
+        crate::log!(
+            "[HOST_SIG_DIAG] Received SDP Offer from client '{}'. Creating SDP Answer...",
+            client_id
+        );
+
         let handshake_res = async {
             let offer = RTCSessionDescription::offer(sdp_offer).map_err(|e| e.to_string())?;
             let answer = {
@@ -360,10 +367,19 @@ impl SessionManager {
                 conn.create_answer().await.map_err(|e| e.to_string())?
             };
 
+            let tx_answer_time = std::time::Instant::now();
             signaling_client
-                .send_answer(&client_id, answer.sdp)
+                .send_answer(&client_id, answer.sdp.clone())
                 .await
                 .map_err(|e| e.to_string())?;
+
+            crate::log!(
+                "[HOST_SIG_DIAG] Host SDP Answer generated & sent to signaling server for client '{}' (Answer generation: {} µs / {} ms, total host pipeline: {} ms)",
+                client_id,
+                tx_answer_time.duration_since(offer_rx_time).as_micros(),
+                tx_answer_time.duration_since(offer_rx_time).as_millis(),
+                offer_rx_time.elapsed().as_millis()
+            );
             Ok::<(), String>(())
         }
         .await;
@@ -429,8 +445,15 @@ impl SessionManager {
                 nr.unregister(&client_id);
                 crate::log!("NODE: Node '{}' disconnected.", client_id);
 
-                let mut ci = self.capability_inventory.lock().await;
-                ci.unregister_by_provider("node", &client_id);
+                {
+                    let mut ci = self.capability_inventory.lock().await;
+                    ci.unregister_by_provider("node", &client_id);
+                }
+                crate::transport::protocol::broadcast_capability_inventory(
+                    &self.peer_map,
+                    &self.capability_inventory,
+                )
+                .await;
             }
         }
 

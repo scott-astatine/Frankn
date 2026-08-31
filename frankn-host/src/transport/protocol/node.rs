@@ -27,6 +27,7 @@ pub async fn handle_register(
     config: &Arc<HostConfig>,
     node_registry: &Arc<Mutex<NodeRegistry>>,
     capability_inventory: &Arc<Mutex<CapabilityInventory>>,
+    peer_map: &PeerMap,
 ) {
     let is_allowed = config.allowed_nodes.contains(&node_id.to_string());
     if is_allowed {
@@ -55,6 +56,7 @@ pub async fn handle_register(
                 });
             }
         }
+        super::broadcast_capability_inventory(peer_map, capability_inventory).await;
         let response = HostMessage::NodeRegisterAck {
             status: Status::Success,
             timestamp: get_timestamp(),

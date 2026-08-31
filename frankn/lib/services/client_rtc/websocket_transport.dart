@@ -49,6 +49,8 @@ class WebSocketTransport {
 
       _subscription = _channel!.stream.listen(
         (message) {
+          final len = message is String ? message.length : 0;
+          log('[TRANSPORT_DIAG] WebSocket RX raw payload ($len chars)');
           _messageController.add(message);
         },
         onError: (error) {

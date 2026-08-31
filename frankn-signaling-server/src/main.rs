@@ -128,6 +128,13 @@ async fn verify_data_plane_message(
     if let Some(conn) = peers_map.get(from_peer_id_str) {
         let last_seq = conn.last_sequence.load(std::sync::atomic::Ordering::SeqCst);
         if sequence <= last_seq {
+            log!(
+                "[SIG_SERVER_DIAG] Sequence regression or replay rejected: incoming seq={} <= last_seq={} (peer: {}, session: {})",
+                sequence,
+                last_seq,
+                from_peer_id_str,
+                session_id_str
+            );
             return Err("Sequence regression or replay detected".to_string());
         }
         conn.last_sequence.store(sequence, std::sync::atomic::Ordering::SeqCst);
@@ -296,6 +303,8 @@ async fn handle_signaling_message(
             signature,
             timestamp,
         } => {
+            let start = std::time::Instant::now();
+            log!("[SIG_SERVER_DIAG] Offer RX from {} to {}. Verifying envelope signature...", from, to);
             verify_data_plane_message(
                 0x01,
                 &from,
@@ -311,11 +320,11 @@ async fn handle_signaling_message(
 
             let peers_map = peers.read().await;
             if let Some(target_conn) = peers_map.get(&to) {
-                send_signaling_msg(
+                let send_res = send_signaling_msg(
                     &target_conn.sender,
                     SignalingMessage::Offer {
-                        from,
-                        to,
+                        from: from.clone(),
+                        to: to.clone(),
                         sdp,
                         session_id,
                         sequence,
@@ -324,7 +333,9 @@ async fn handle_signaling_message(
                     },
                 )
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string());
+                log!("[SIG_SERVER_DIAG] Offer signature verified & relayed to {} (server pipeline: {} µs / {} ms)", to, start.elapsed().as_micros(), start.elapsed().as_millis());
+                send_res
             } else {
                 Err("Target not found".to_string())
             }
@@ -339,6 +350,8 @@ async fn handle_signaling_message(
             signature,
             timestamp,
         } => {
+            let start = std::time::Instant::now();
+            log!("[SIG_SERVER_DIAG] Answer RX from {} to {}. Verifying envelope signature...", from, to);
             verify_data_plane_message(
                 0x02,
                 &from,
@@ -354,11 +367,11 @@ async fn handle_signaling_message(
 
             let peers_map = peers.read().await;
             if let Some(target_conn) = peers_map.get(&to) {
-                send_signaling_msg(
+                let send_res = send_signaling_msg(
                     &target_conn.sender,
                     SignalingMessage::Answer {
-                        from,
-                        to,
+                        from: from.clone(),
+                        to: to.clone(),
                         sdp,
                         session_id,
                         sequence,
@@ -367,7 +380,9 @@ async fn handle_signaling_message(
                     },
                 )
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string());
+                log!("[SIG_SERVER_DIAG] Answer signature verified & relayed to {} (server pipeline: {} µs / {} ms)", to, start.elapsed().as_micros(), start.elapsed().as_millis());
+                send_res
             } else {
                 Err("Target not found".to_string())
             }

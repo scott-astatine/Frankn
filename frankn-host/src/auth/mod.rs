@@ -92,6 +92,7 @@ impl AuthManager {
     /// Verifies the challenge response.
     /// The client is expected to send: Argon2Hash
     pub async fn verify_response(&self, _challenge: &str, response: &str) -> Option<String> {
+        let sw = std::time::Instant::now();
         use subtle::ConstantTimeEq;
 
         let mut hasher = Sha256::new();
@@ -101,9 +102,12 @@ impl AuthManager {
         let expected_bytes = self.password_hash.as_bytes();
         let response_bytes = hashed_response.as_bytes();
 
-        if expected_bytes.len() == response_bytes.len()
-            && expected_bytes.ct_eq(response_bytes).unwrap_u8() == 1
-        {
+        let is_valid = expected_bytes.len() == response_bytes.len()
+            && expected_bytes.ct_eq(response_bytes).unwrap_u8() == 1;
+
+        crate::log!("[HOST_AUTH_DIAG] Password verification took {} µs ({} ms)", sw.elapsed().as_micros(), sw.elapsed().as_millis());
+
+        if is_valid {
             let token: String = rand::rng()
                 .sample_iter(&Alphanumeric)
                 .take(64)

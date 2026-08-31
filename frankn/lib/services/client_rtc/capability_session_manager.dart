@@ -113,20 +113,57 @@ class CapabilitySessionManager extends ChangeNotifier {
   }) async {
     final client = RtcThinClient();
     if (client.currentHostState != HostConnectionState.authenticated) {
-      throw StateError('Cannot activate capability session [$sessionId]: Host is not authenticated (${client.currentHostState.name}).');
+      throw StateError(
+          'Cannot activate capability session [$sessionId]: Host is not authenticated (${client.currentHostState.name}).');
     }
 
-    RtcThinClient().log('[CAPABILITY_MGR] Requesting capability session [$sessionId]: capability=$capabilityId, provider=$providerId');
+    final inventory = RtcClient().capabilityInventory;
+
+    // 1. Verify capability exists in inventory
+    final capEntries = inventory.byCapability(capabilityId);
+    if (capEntries.isEmpty) {
+      throw StateError(
+          'Capability [$capabilityId] is not present in Host capability inventory.');
+    }
+
+    // 2. Resolve provider or pick default available provider
+    final targetProviderId = providerId ??
+        capEntries
+            .firstWhere(
+              (e) => e.availability == CapabilityAvailability.available,
+              orElse: () => capEntries.first,
+            )
+            .provider
+            .providerId;
+
+    // 3. Verify target provider exists and advertises capability
+    final entry = inventory.find(capabilityId, targetProviderId);
+    if (entry == null) {
+      throw StateError(
+          'Provider [$targetProviderId] does not advertise capability [$capabilityId].');
+    }
+
+    // 4. Verify provider availability state
+    if (entry.availability == CapabilityAvailability.offline) {
+      throw StateError(
+          'Provider [${entry.provider.displayName}] for capability [$capabilityId] is offline.');
+    } else if (entry.availability == CapabilityAvailability.busy) {
+      throw StateError(
+          'Provider [${entry.provider.displayName}] for capability [$capabilityId] is busy.');
+    }
+
+    RtcThinClient().log(
+        '[CAPABILITY_MGR] Requesting capability session [$sessionId]: capability=$capabilityId, provider=$targetProviderId');
     final session = createSession(
       sessionId: sessionId,
-      nodeId: providerId ?? 'unknown',
+      nodeId: targetProviderId,
       capabilityId: capabilityId,
     );
 
     await _sendHostCmd('activate', {
       'capability_id': capabilityId,
       'session_id': sessionId,
-      if (providerId != null) 'provider_id': providerId,
+      'provider_id': targetProviderId,
       if (properties != null) 'properties': properties,
     });
 

@@ -35,7 +35,9 @@ mixin RtcMessageHandler on RtcClientBase {
     }
 
     final elapsed = activeAttempt.elapsedMs;
-    log("[AUTH] [G${activeAttempt.generationId}] [$elapsed] Challenge received from host.");
+    log(
+      "[AUTH] [G${activeAttempt.generationId}] [$elapsed] Challenge received from host.",
+    );
 
     activeAttempt.authAttempt.challenge = AuthChallenge(
       challenge: msg.challenge,
@@ -44,13 +46,24 @@ mixin RtcMessageHandler on RtcClientBase {
     );
     activeAttempt.authAttempt.updateState(AuthState.derivingCredential);
 
+    final argon2Sw = Stopwatch()..start();
+    log(
+      "[AUTH_DIAG] [G${activeAttempt.generationId}] [$elapsed] Starting Argon2 hash derivation...",
+    );
+
     final argon2Hash = await AuthService().computeArgon2Hash(
       currentPassword ?? "",
       msg.salt,
     );
 
+    log(
+      "[AUTH_DIAG] [G${activeAttempt.generationId}] [$elapsed] Argon2 hash completed in +${argon2Sw.elapsedMilliseconds}ms. Computing challenge response...",
+    );
+
     if (client.activeAttempt != activeAttempt || activeAttempt.isDisposed) {
-      log("[AUTH] Ignored derived Argon2 result: Connection attempt changed during computation.");
+      log(
+        "[AUTH] Ignored derived Argon2 result: Connection attempt changed during computation.",
+      );
       return;
     }
 
@@ -58,7 +71,9 @@ mixin RtcMessageHandler on RtcClientBase {
     activeAttempt.authAttempt.response = AuthResponse(response);
     activeAttempt.authAttempt.updateState(AuthState.sendingResponse);
 
-    log("[AUTH] [G${activeAttempt.generationId}] [$elapsed] Sending auth response to host.");
+    log(
+      "[AUTH_DIAG] [G${activeAttempt.generationId}] [$elapsed] Sending auth_response to host via DataChannel.",
+    );
     sendHostMessage(ClientMsgAuthResponse(response: response).toJson());
   }
 
@@ -78,7 +93,9 @@ mixin RtcMessageHandler on RtcClientBase {
     _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
     client.homeDir = msg.homeDir;
     updateHostState(HostConnectionState.authenticated);
-    log("[AUTH] [G${activeAttempt.generationId}] [$elapsed] AUTH SUCCESS. Session Token acquired. Home directory: ${msg.homeDir}");
+    log(
+      "[AUTH] [G${activeAttempt.generationId}] [$elapsed] AUTH SUCCESS. Session Token acquired. Home directory: ${msg.homeDir}",
+    );
     _startBgPingTimer();
   }
 
@@ -89,7 +106,7 @@ mixin RtcMessageHandler on RtcClientBase {
       final client = this as RtcClient;
       if (client.currentHostState == HostConnectionState.authenticated) {
         final now = DateTime.now().millisecondsSinceEpoch;
-        
+
         // Timeout detection: 15 seconds (3 missed heartbeats)
         if (_lastSuccessfulPongTime != null &&
             (now - _lastSuccessfulPongTime!) > 15000) {
@@ -525,7 +542,7 @@ mixin RtcMessageHandler on RtcClientBase {
         case HostMsgLlmToken():
           genDcMsgController.add(msg);
         case HostMsgCapabilitiesInventory():
-          (this as RtcClient).availableCapabilities = msg.capabilities;
+          (this as RtcClient).capabilityInventory.updateFromList(msg.capabilities);
           genDcMsgController.add(msg);
         case HostMsgHostSignal():
           genDcMsgController.add(msg);
@@ -594,10 +611,7 @@ mixin RtcMessageHandler on RtcClientBase {
           final failMsg = IsolateMsg(
             type: IsolateType.event,
             action: IsolateAction.transferFailed,
-            payload: {
-              'id': id,
-              'error': 'Transfer cancelled by host',
-            },
+            payload: {'id': id, 'error': 'Transfer cancelled by host'},
           );
           FlutterForegroundTask.sendDataToTask(failMsg.toJson());
           genDcMsgController.add(msg);
