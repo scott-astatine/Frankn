@@ -20,6 +20,66 @@ mixin RtcConnection on RtcClientBase {
   /// Timer for the next reconnection attempt. Stored to prevent timer stacking.
   Timer? _reconnectTimer;
 
+  /// Subscription to OS network interface changes (WiFi <-> Mobile Data).
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
+  /// Initializes listener for OS network interface changes.
+  void initNetworkConnectivityListener() {
+    _connectivitySubscription?.cancel();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) async {
+      final client = this as RtcClient;
+      log("[NETWORK] OS network interface change detected: $results");
+
+      if (results.contains(ConnectivityResult.none) || results.isEmpty) {
+        log("[NETWORK] Network interface disconnected (NO NETWORK). Holding reconnection.");
+        return;
+      }
+
+      final hasInternet = await NetworkHealthService.hasActiveInternet();
+      if (!hasInternet) {
+        log("[NETWORK] Interface changed but internet lookup failed. Postponing retry.");
+        return;
+      }
+
+      final targetHostId = client.currentHostId ?? client.lastConnectedHostId;
+
+      log("[NETWORK] Internet connectivity verified after interface change. Target Host: $targetHostId");
+
+      if (targetHostId != null && !client.isIntentionalDisconnect) {
+        log("[NETWORK] Triggering instant reconnect after network interface switch to host: $targetHostId...");
+
+        // 1. Reset lock flag and transition state to disconnected cleanly
+        _isConnectingInternal = false;
+        _transitionTo(HostConnectionState.disconnected, "Network interface switch reset");
+
+        // 2. Disconnect stale transport and clear WebRTC connections
+        await client.transport.disconnect();
+        await _clearHostConnections();
+        client.sigState = SignalConnectionState.disconnected;
+        AuthService().identityManager.sessionId = null;
+
+        // 3. Restore target host IDs & reset reconnection window timer
+        client.currentHostId = targetHostId;
+        client.lastConnectedHostId = targetHostId;
+        client.firstDisconnectTime = DateTime.now();
+
+        // 4. Connect signaling server
+        await client.connectToSignaling();
+
+        // 5. Await registration barrier (up to 5s)
+        final signalingReady = await waitForSignalingReady(timeout: const Duration(seconds: 5));
+        if (signalingReady) {
+          log("[NETWORK] Signaling barrier ready. Re-establishing WebRTC link to host $targetHostId...");
+          client.subscribeToSavedHosts();
+          await connectToHost(targetHostId);
+        } else {
+          log("[NETWORK] Signaling barrier timed out during network switch reconnect.");
+          _transitionTo(HostConnectionState.failed, "Signaling unavailable after network switch");
+        }
+      }
+    });
+  }
+
   /// Buffer for SSH messages that arrive before SshController takes over the handler.
   final List<Uint8List> _sshEarlyBuffer = [];
 
@@ -109,6 +169,9 @@ mixin RtcConnection on RtcClientBase {
 
     // Background Service management
     if (newState == HostConnectionState.authenticated) {
+      if (client.currentHostId != null) {
+        client.lastConnectedHostId = client.currentHostId;
+      }
       final hostName = client.currentHostName ?? "Remote PC";
       startBackgroundService(
         title: "☁️ $hostName",
@@ -164,38 +227,38 @@ mixin RtcConnection on RtcClientBase {
           _reconnectTimer = Timer(const Duration(seconds: 3), () async {
             _reconnectTimer = null;
             if (currentHostId != null && !isIntentionalDisconnect) {
+              final hasInternet = await NetworkHealthService.hasActiveInternet();
+              if (!hasInternet) {
+                log("[RECONNECT] No active internet connection. Suppressing retry loop until network restores.");
+                _transitionTo(
+                  HostConnectionState.reconnectWaiting,
+                  "Awaiting internet connection",
+                );
+                return;
+              }
+
               if (client.sigState != SignalConnectionState.connected) {
                 log(
-                  "[RECONNECT] Signaling server offline. Postponing neural P2P link retry.",
+                  "[RECONNECT] Signaling server offline. Re-connecting signaling first.",
                 );
+                client.connectToSignaling();
+                client.subscribeToSavedHosts();
                 _reconnectTimer = Timer(const Duration(seconds: 2), () async {
                   _reconnectTimer = null;
                   if (currentHostId != null && !isIntentionalDisconnect) {
-                    if (client.onlineHostIds.contains(currentHostId)) {
-                      _transitionTo(
-                        HostConnectionState.connecting,
-                        "Retrying connection after signaling check",
-                      );
-                      connectToHost(currentHostId!);
-                    } else {
-                      log(
-                        "[RECONNECT] Host is offline after signaling check. Retrying later.",
-                      );
-                      _transitionTo(HostConnectionState.failed, "Host offline");
-                    }
+                    _transitionTo(
+                      HostConnectionState.connecting,
+                      "Retrying connection after signaling check",
+                    );
+                    connectToHost(currentHostId!);
                   }
                 });
               } else {
-                if (client.onlineHostIds.contains(currentHostId)) {
-                  _transitionTo(
-                    HostConnectionState.connecting,
-                    "Retrying connection",
-                  );
-                  connectToHost(currentHostId!);
-                } else {
-                  log("[RECONNECT] Host is offline. Retrying later.");
-                  _transitionTo(HostConnectionState.failed, "Host offline");
-                }
+                _transitionTo(
+                  HostConnectionState.connecting,
+                  "Retrying connection",
+                );
+                connectToHost(currentHostId!);
               }
             }
           });
@@ -556,6 +619,8 @@ mixin RtcConnection on RtcClientBase {
     // Reset SSH buffering state
     _sshEarlyBuffer.clear();
     _sshHandlerActive = false;
+
+    _isConnectingInternal = false;
   }
 
   @override

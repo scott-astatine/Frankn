@@ -167,6 +167,15 @@ async fn handle_signaling_message(
     subscriptions: &SubMap,
 ) -> Result<(), String> {
     match msg {
+        SignalingMessage::Ping { timestamp } => {
+            let pong = SignalingMessage::Pong {
+                timestamp: if timestamp > 0 { timestamp } else { get_timestamp() },
+            };
+            send_signaling_msg(tx, pong).await.map_err(|e| e.to_string())
+        }
+
+        SignalingMessage::Pong { .. } => Ok(()),
+
         SignalingMessage::ListHosts { timestamp } => {
             let hosts: Vec<HostInfo> = peers
                 .read()

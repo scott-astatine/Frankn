@@ -42,6 +42,8 @@ import 'package:frankn/services/audio_handler.dart';
 import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/services/isolate_protocol.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:frankn/services/client_rtc/network_health_service.dart';
 import 'package:frankn/services/client_rtc/websocket_transport.dart';
 import 'package:frankn/services/client_rtc/signaling_outbox.dart';
 import 'package:frankn/services/client_rtc/rtc_host.dart';
@@ -209,7 +211,9 @@ class RtcClient extends RtcClientBase
       RtcThinClient().capabilitySessionManager;
 
   /// Private constructor for singleton pattern.
-  RtcClient._internal();
+  RtcClient._internal() {
+    initNetworkConnectivityListener();
+  }
 
   /// Subsystem instances
   final WebSocketTransport transport = WebSocketTransport();
@@ -265,6 +269,8 @@ class RtcClient extends RtcClientBase
 
   @override
   String? currentHostId;
+
+  String? lastConnectedHostId;
 
   @override
   String? currentHostName;

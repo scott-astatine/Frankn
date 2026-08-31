@@ -16,6 +16,8 @@ class WebSocketTransport {
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   TransportState _state = TransportState.disconnected;
+  Timer? _heartbeatTimer;
+  DateTime _lastRxTime = DateTime.now();
 
   final StreamController<TransportState> _stateController =
       StreamController<TransportState>.broadcast();
@@ -46,9 +48,16 @@ class WebSocketTransport {
     try {
       _channel = IOWebSocketChannel.connect(url);
       _setState(TransportState.connected);
+      _lastRxTime = DateTime.now();
+      _startHeartbeat();
 
       _subscription = _channel!.stream.listen(
         (message) {
+          _lastRxTime = DateTime.now();
+          if (message is String && (message.contains('"pong"') || message.contains('"ping"'))) {
+            // Heartbeat frame processed cleanly
+            return;
+          }
           final len = message is String ? message.length : 0;
           log('[TRANSPORT_DIAG] WebSocket RX raw payload ($len chars)');
           _messageController.add(message);
@@ -68,6 +77,27 @@ class WebSocketTransport {
       _setState(TransportState.failed);
       rethrow;
     }
+  }
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_state != TransportState.connected) {
+        _heartbeatTimer?.cancel();
+        _heartbeatTimer = null;
+        return;
+      }
+
+      final elapsedSecs = DateTime.now().difference(_lastRxTime).inSeconds;
+      if (elapsedSecs > 12) {
+        log('[TRANSPORT] WebSocket heartbeat timeout (no rx in ${elapsedSecs}s). Force-closing stale socket.');
+        _handleDisconnect();
+        return;
+      }
+
+      // Send lightweight ping frame over signaling WebSocket
+      send('{"type":"ping"}');
+    });
   }
 
   /// Sends a raw encoded string payload over the WebSocket sink.
@@ -92,6 +122,9 @@ class WebSocketTransport {
   }
 
   void _handleDisconnect() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+
     _subscription?.cancel();
     _subscription = null;
 

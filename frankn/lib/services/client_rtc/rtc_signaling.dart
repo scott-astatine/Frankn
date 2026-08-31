@@ -124,7 +124,9 @@ mixin RtcSignaling on RtcClientBase {
     return completer.future;
   }
 
-  @override
+  StreamSubscription? _signalingSubscription;
+
+  /// Establishes WebSocket connection to the signaling server.
   Future<void> connectToSignaling() async {
     final client = this as RtcClient;
     if (client.sigState == SignalConnectionState.connected ||
@@ -136,7 +138,8 @@ mixin RtcSignaling on RtcClientBase {
     log("Initializing Neural Link to ${SettingsService().signalingUrl}...");
 
     try {
-      client.transport.messageStream.listen(
+      await _signalingSubscription?.cancel();
+      _signalingSubscription = client.transport.messageStream.listen(
         (message) {
           if (message is String) {
             _handleSignalingMessage(jsonDecode(message));
@@ -157,14 +160,13 @@ mixin RtcSignaling on RtcClientBase {
   }
 
   /// Handles signaling server disconnection and initiates reconnection.
-  ///
-  /// Updates connection state to disconnected (not failed), closes WebSocket,
-  /// cancels existing timers, and schedules automatic reconnection after 2 seconds.
-  /// Uses 'disconnected' state so the connectToSignaling guard allows reconnection.
   void _handleDisconnection() {
     final client = this as RtcClient;
     client.transport.disconnect();
     client.reconnectTimer?.cancel();
+
+    _updateSigState(SignalConnectionState.disconnected);
+    AuthService().identityManager.sessionId = null;
 
     // Clear online hosts and notify UI
     client.onlineHostIds.clear();

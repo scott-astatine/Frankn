@@ -76,6 +76,18 @@ pub enum SignalingMessage {
         timestamp: u64,
     },
 
+    #[serde(rename = "ping")]
+    Ping {
+        #[serde(default)]
+        timestamp: u64,
+    },
+
+    #[serde(rename = "pong")]
+    Pong {
+        #[serde(default)]
+        timestamp: u64,
+    },
+
     #[serde(rename = "check_hosts_status")]
     CheckHostsStatus {
         host_ids: Vec<String>,
