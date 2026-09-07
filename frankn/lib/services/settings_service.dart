@@ -26,6 +26,7 @@ class SettingsService {
   static const String _keyLlmProvider = 'llm_provider';
   static const String _keySyncPairs = 'sync_pairs';
   static const String _keyDefaultDownloadDir = 'default_download_dir';
+  static const String _keyEnableLiveLogIpc = 'enable_live_log_ipc';
 
   // Default Values
   static const String _defaultSignalingUrl = 'ws://152.67.19.202:8037';
@@ -176,6 +177,14 @@ class SettingsService {
     }
     return await _prefs.setString(_keyDefaultDownloadDir, value);
   }
+
+  /// Returns whether live log IPC streaming to UI is enabled.
+  bool get enableLiveLogIpc =>
+      _prefs.getBool(_keyEnableLiveLogIpc) ?? false;
+
+  /// Persists new live log IPC streaming preference.
+  Future<bool> setEnableLiveLogIpc(bool value) async =>
+      await _prefs.setBool(_keyEnableLiveLogIpc, value);
 
   /// Clears all local data. Used for a complete app reset.
   Future<bool> clearAll() async => await _prefs.clear();

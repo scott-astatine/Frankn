@@ -513,6 +513,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
 
+          const SizedBox(height: 24),
+          _buildSectionHeader("DEVELOPER & LOGGING"),
+          const SizedBox(height: 12),
+          _buildSettingsGroup(
+            children: [
+              _buildSettingsSwitchItem(
+                title: "Live Debug Log Streaming",
+                subtitle: "Stream background isolate logs to UI over IPC. Turn off to optimize UI performance.",
+                value: _settings.enableLiveLogIpc,
+                icon: Icons.bug_report_rounded,
+                iconColor: Colors.amberAccent,
+                onChanged: (val) async {
+                  await _settings.setEnableLiveLogIpc(val);
+                  await _client.updateSettings();
+                  setState(() {});
+                },
+                isLast: true,
+              ),
+            ],
+          ),
+
           const SizedBox(height: 48),
           _buildSectionHeader(l10n.appReset, color: Colors.red[800]),
           const SizedBox(height: 12),
@@ -520,6 +541,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 48),
         ],
       ),
+    );
+  }
+
+  Widget _buildSettingsSwitchItem({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required IconData icon,
+    required Color iconColor,
+    required ValueChanged<bool> onChanged,
+    bool isLast = false,
+  }) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: value,
+                activeTrackColor: AppColors.accentSecondary,
+                onChanged: onChanged,
+              ),
+            ],
+          ),
+        ),
+        if (!isLast)
+          const Divider(
+            height: 1,
+            color: Color(0x3327272A),
+            indent: 52,
+          ),
+      ],
     );
   }
 

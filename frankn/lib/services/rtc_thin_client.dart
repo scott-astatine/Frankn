@@ -10,6 +10,7 @@ import 'package:frankn/utils/utils.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/services/auth/auth_service.dart';
 import 'package:frankn/services/client_rtc/rtc.dart';
+import 'package:frankn/services/logging/frankn_log_frame.dart';
 
 class RtcThinClient {
   static final RtcThinClient _instance = RtcThinClient._internal();
@@ -43,6 +44,16 @@ class RtcThinClient {
       StreamController<SyncStatusEvent>.broadcast();
 
   final _authErrorController = StreamController<String>.broadcast();
+
+  final _logFrameController = StreamController<FranknLogFrame>.broadcast();
+  Stream<FranknLogFrame> get logFrameStream => _logFrameController.stream;
+
+  final _logBatchController = StreamController<List<FranknLogFrame>>.broadcast();
+  Stream<List<FranknLogFrame>> get logBatchStream => _logBatchController.stream;
+
+  final _diagnosticReportController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get diagnosticReportStream => _diagnosticReportController.stream;
+
   HostConnectionState currentHostState = HostConnectionState.disconnected;
 
   SignalConnectionState sigState = SignalConnectionState.disconnected;
@@ -319,6 +330,19 @@ class RtcThinClient {
         logHistory.add(logMsg);
         if (logHistory.length > 1000) logHistory.removeAt(0);
         _logController.add(logMsg);
+      case (IsolateType.event, IsolateAction.logFrame):
+        final frame = FranknLogFrame.fromJson(msg.payload);
+        _logFrameController.add(frame);
+      case (IsolateType.event, IsolateAction.logBatch):
+        final rawList = msg.payload['frames'] as List?;
+        if (rawList != null) {
+          final frames = rawList
+              .map((e) => FranknLogFrame.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _logBatchController.add(frames);
+        }
+      case (IsolateType.event, IsolateAction.diagnosticReport):
+        _diagnosticReportController.add(msg.payload);
       case (IsolateType.event, IsolateAction.notification):
         _notificationController.add(HostMsgNotification.fromJson(msg.payload));
       case (IsolateType.event, IsolateAction.transferProgress):
@@ -411,6 +435,10 @@ class RtcThinClient {
     sendIntent(IsolateAction.sendInput, msg);
   }
 
+  Future<void> updateSettings() async {
+    sendIntent(IsolateAction.updateSettings, {});
+  }
+
   void sendIntent(
     String action, [
     Map<String, dynamic> payload = const {},
@@ -451,4 +479,30 @@ class RtcThinClient {
   void startSsh() => sendIntent(IsolateAction.startSsh);
 
   void stopSsh() => sendIntent(IsolateAction.stopSsh);
+
+  void subscribeLogs({
+    Set<LogCategory>? categories,
+    LogLevel minLevel = LogLevel.debug,
+    String? generationFilter,
+  }) {
+    sendIntent(IsolateAction.subscribeLogs, {
+      if (categories != null) 'categories': categories.map((e) => e.index).toList(),
+      'min_level': minLevel.index,
+      if (generationFilter != null) 'generation_filter': generationFilter,
+    });
+  }
+
+  void unsubscribeLogs() {
+    sendIntent(IsolateAction.unsubscribeLogs);
+  }
+
+  void startDiagnosticCapture([String? captureId]) {
+    sendIntent(IsolateAction.startDiagnosticCapture, {
+      if (captureId != null) 'capture_id': captureId,
+    });
+  }
+
+  void stopDiagnosticCapture() {
+    sendIntent(IsolateAction.stopDiagnosticCapture);
+  }
 }

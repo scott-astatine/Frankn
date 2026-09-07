@@ -15,6 +15,9 @@ import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/services/auth/auth_service.dart';
 import 'package:frankn/services/sync_service.dart';
 import 'package:frankn/services/transfer_engine.dart';
+import 'package:frankn/services/logging/frankn_log_frame.dart';
+import 'package:frankn/services/logging/frankn_logger.dart';
+import 'package:frankn/services/logging/frankn_state_snapshot.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:path_provider/path_provider.dart';
@@ -91,6 +94,15 @@ class FranknTaskHandler extends TaskHandler {
       await NotificationService().initialize(requestPermissions: false);
 
       print("Background Isolate: SERVICES_READY");
+
+      FranknLogger.instance.ipcSink = (payload) {
+        final msg = IsolateMsg(
+          type: IsolateType.event,
+          action: IsolateAction.logFrame,
+          payload: payload,
+        );
+        _broadcastToMain(msg);
+      };
 
       RtcClient().hostStateController.stream.listen((state) {
         // MIRROR state to local background proxy so AudioHandler is not 'blind'
@@ -185,12 +197,14 @@ class FranknTaskHandler extends TaskHandler {
       });
 
       RtcClient().logStream.listen((logMsg) {
-        final msg = IsolateMsg(
-          type: IsolateType.event,
-          action: IsolateAction.logEvent,
-          payload: {'msg': logMsg},
-        );
-        _broadcastToMain(msg);
+        if (SettingsService().enableLiveLogIpc) {
+          final msg = IsolateMsg(
+            type: IsolateType.event,
+            action: IsolateAction.logEvent,
+            payload: {'msg': logMsg},
+          );
+          _broadcastToMain(msg);
+        }
       });
 
       RtcClient().notificationStream.listen((msg) {
@@ -349,6 +363,60 @@ class FranknTaskHandler extends TaskHandler {
         break;
       case IsolateAction.logIntent:
         RtcClient().log(msg.payload['msg'] ?? '');
+        break;
+      case IsolateAction.updateSettings:
+        SettingsService().reload();
+        break;
+      case IsolateAction.subscribeLogs:
+        final rawCats = msg.payload['categories'] as List?;
+        final cats = rawCats != null
+            ? rawCats.map((e) => LogCategory.values[e as int]).toSet()
+            : LogCategory.values.toSet();
+        final minLvlIndex = msg.payload['min_level'] as int? ?? 1;
+        final minLvl = LogLevel.values[minLvlIndex];
+        final genFilter = msg.payload['generation_filter'] as String?;
+
+        final snapshotFrames = FranknLogger.instance.subscribeUiLogs(
+          categories: cats,
+          minLevel: minLvl,
+          generationFilter: genFilter,
+        );
+
+        _broadcastToMain(IsolateMsg(
+          type: IsolateType.event,
+          action: IsolateAction.logBatch,
+          payload: {
+            'frames': snapshotFrames.map((f) => f.toJson()).toList(),
+          },
+        ));
+        break;
+      case IsolateAction.unsubscribeLogs:
+        FranknLogger.instance.unsubscribeUiLogs();
+        break;
+      case IsolateAction.startDiagnosticCapture:
+        final snap = _buildCurrentStateSnapshot('CAPTURE_START');
+        FranknLogger.instance.startDiagnosticCapture(
+          captureId: msg.payload['capture_id'] ??
+              'CAP_${DateTime.now().millisecondsSinceEpoch}',
+          startSnapshot: snap,
+        );
+        break;
+      case IsolateAction.stopDiagnosticCapture:
+        final snap = _buildCurrentStateSnapshot('CAPTURE_END');
+        final session = FranknLogger.instance.stopDiagnosticCapture(snap);
+        if (session != null) {
+          _broadcastToMain(IsolateMsg(
+            type: IsolateType.event,
+            action: IsolateAction.diagnosticReport,
+            payload: {
+              'report': session.generateMarkdownReport(
+                clientVersion: '1.2.0',
+                osInfo: Platform.operatingSystem,
+              ),
+              'session': session.toJson(),
+            },
+          ));
+        }
         break;
       case (IsolateAction.uploadInit):
         _handleUploadInit(msg);
@@ -549,5 +617,26 @@ class FranknTaskHandler extends TaskHandler {
             );
           }
         });
+  }
+
+  FranknStateSnapshot _buildCurrentStateSnapshot(String label) {
+    final hasNet =
+        RtcClient().sigState != SignalConnectionState.disconnected ||
+            RtcClient().currentHostState != HostConnectionState.disconnected;
+
+    return FranknStateSnapshot(
+      timestampMs: DateTime.now().millisecondsSinceEpoch,
+      label: label,
+      hostConnectionState: RtcClient().currentHostState.name,
+      signalingState: RtcClient().sigState.name,
+      activeHostId: RtcClient().currentHostId,
+      activeHostName: RtcClient().currentHostName,
+      hasActiveInternet: hasNet,
+      onlineHostIds: RtcClient().onlineHostIds.toList(),
+      activeCapabilitySessions:
+          RtcClient().capabilitySessionManager.sessions.length,
+      activeSyncPairs: SettingsService().syncPairs.length,
+      systemMemoryInfo: {'os': Platform.operatingSystem},
+    );
   }
 }

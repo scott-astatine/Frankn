@@ -192,6 +192,7 @@ class _HostListPanelState extends State<HostListPanel> {
           ),
           const SizedBox(height: 8),
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: const Color(0xFF09090B),
@@ -200,12 +201,15 @@ class _HostListPanelState extends State<HostListPanel> {
             ),
             height: MediaQuery.of(context).size.height * 0.10,
             child: _logs.isEmpty
-                ? Text(
-                    "> [IDLE] Listening for neural signals...",
-                    style: TextStyle(
-                      fontFamily: 'JetBrainsMonoNerdFont',
-                      fontSize: SettingsService().terminalFontSize,
-                      color: Colors.white38,
+                ? SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      "> [IDLE] Listening for neural signals...",
+                      style: TextStyle(
+                        fontFamily: 'JetBrainsMonoNerdFont',
+                        fontSize: SettingsService().terminalFontSize,
+                        color: Colors.white38,
+                      ),
                     ),
                   )
                 : ListView.builder(

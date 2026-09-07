@@ -55,6 +55,11 @@ class IsolateAction {
   static const stopSync = "stop_sync";
   static const cancelTransfer = "cancel_transfer";
   static const checkSyncStatus = "check_sync_status";
+  static const updateSettings = "update_settings";
+  static const subscribeLogs = "subscribe_logs";
+  static const unsubscribeLogs = "unsubscribe_logs";
+  static const startDiagnosticCapture = "start_diagnostic_capture";
+  static const stopDiagnosticCapture = "stop_diagnostic_capture";
 
   // State & Event Actions (Background -> UI)
   static const hostState = "host_state";
@@ -64,6 +69,9 @@ class IsolateAction {
   static const peerStatus = "peer_status";
   static const hostList = "host_list";
   static const logEvent = "log_event";
+  static const logFrame = "log_frame";
+  static const logBatch = "log_batch";
+  static const diagnosticReport = "diagnostic_report";
   static const notification = "notification";
   static const transferProgress = "transfer_progress";
   static const transferComplete = "transfer_complete";

@@ -36,6 +36,8 @@ import 'package:cryptography/cryptography.dart' as crypto_pkg;
 import 'package:frankn/main.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/services/capabilities/capability.dart';
+import 'package:frankn/services/logging/frankn_log_frame.dart';
+import 'package:frankn/services/logging/frankn_logger.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/services/auth/auth_service.dart';
 import 'package:frankn/services/audio_handler.dart';
@@ -430,17 +432,30 @@ class RtcClient extends RtcClientBase
   /// Logs a message with timestamp to console and log stream.
   /// All RTC operations use this for consistent logging.
   @override
-  void log(String msg) {
+  void log(
+    String msg, {
+    LogCategory category = LogCategory.webrtc,
+    LogLevel level = LogLevel.info,
+    String subsystem = "RTC",
+    Map<String, dynamic>? metadata,
+  }) {
+    final genInt = activeAttempt?.generationId ?? connectionGeneration;
+    final gen = genInt > 0 ? "G$genInt" : null;
+
+    FranknLogger.instance.log(
+      level: level,
+      category: category,
+      subsystem: subsystem,
+      message: msg,
+      generationId: gen,
+      hostSessionId: currentHostId,
+      nodeId: currentHostId,
+      metadata: metadata,
+    );
+
     final time = DateTime.now().toIso8601String().substring(11, 19);
-
-    // Truncate large messages to prevent buffer overflow crashes in release mode
-    String safeMsg = msg;
-    if (msg.length > 2048) {
-      safeMsg = "${msg.substring(0, 2048)}... [TRUNCATED]";
-    }
-
+    String safeMsg = msg.length > 2048 ? "${msg.substring(0, 2048)}... [TRUNCATED]" : msg;
     final logMsg = "[$time] $safeMsg";
-    print(logMsg);
 
     _logHistory.insert(0, logMsg);
     if (_logHistory.length > 1000) _logHistory.removeLast();
