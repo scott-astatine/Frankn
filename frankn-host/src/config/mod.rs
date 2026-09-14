@@ -46,6 +46,10 @@ pub struct HostConfig {
     pub sync_pairs: Vec<SyncPair>,
     #[serde(default)]
     pub sandbox_home: bool,
+    #[serde(default)]
+    pub lock_cmd: Option<String>,
+    #[serde(default)]
+    pub unlock_cmd: Option<String>,
 
     // Node-Specific Configuration
     #[serde(default)]
@@ -220,6 +224,8 @@ impl HostConfig {
                 llm_model_dir,
                 sync_pairs: Vec::new(),
                 sandbox_home,
+                lock_cmd: None,
+                unlock_cmd: None,
                 node: None,
                 allowed_nodes: Vec::new(),
                 custom_config_path: custom_path_clone,

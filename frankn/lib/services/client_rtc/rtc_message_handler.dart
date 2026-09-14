@@ -130,6 +130,7 @@ mixin RtcMessageHandler on RtcClientBase {
 
   void _handleAuthFailed(HostMsgAuthFailed msg) {
     isAuthFailed = true;
+    lastFailureReason = msg.error;
     updateHostState(HostConnectionState.failed);
     log("AUTH FAILED: ${msg.error}");
   }

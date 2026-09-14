@@ -188,12 +188,10 @@ impl DcMsg {
                 capabilities::system::lock_screen(&ctx).await;
                 None
             }
-            DcMsg::UnlockScreen => Some(HostMessage::Response {
-                id: id.to_string(),
-                status: Status::Error("Unlock screen not implemented natively".to_string()),
-                data: None,
-                timestamp: crate::utils::get_timestamp(),
-            }),
+            DcMsg::UnlockScreen => {
+                capabilities::system::unlock_screen(&ctx).await;
+                None
+            }
             DcMsg::Update => Some(HostMessage::Response {
                 id: id.to_string(),
                 status: Status::Error("System update not implemented natively".to_string()),

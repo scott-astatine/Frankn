@@ -127,16 +127,25 @@ class FranknTaskHandler extends TaskHandler {
           final err = IsolateMsg(
             type: IsolateType.event,
             action: IsolateAction.authFailed,
-            payload: {'error': 'AUTHENTICATION_REJECTED'},
+            payload: {'error': RtcClient().lastFailureReason ?? 'Authentication rejected'},
           );
           _broadcastToMain(err);
         } else if (state == HostConnectionState.failed) {
-          final err = IsolateMsg(
-            type: IsolateType.event,
-            action: IsolateAction.authFailed,
-            payload: {'error': 'CONNECTION_FAILED'},
-          );
-          _broadcastToMain(err);
+          // Only show error to user if auto-reconnect will NOT handle this.
+          // Mirrors the reconnect condition in rtc_connection.dart.
+          final willAutoReconnect =
+              !RtcClient().isIntentionalDisconnect &&
+              !RtcClient().isAuthFailed &&
+              RtcClient().currentHostId != null;
+
+          if (!willAutoReconnect) {
+            final err = IsolateMsg(
+              type: IsolateType.event,
+              action: IsolateAction.authFailed,
+              payload: {'error': RtcClient().lastFailureReason ?? 'Connection failed'},
+            );
+            _broadcastToMain(err);
+          }
         }
 
         if (state == HostConnectionState.authenticated) {

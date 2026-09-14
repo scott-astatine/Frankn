@@ -44,6 +44,8 @@ impl App {
                 "Signaling URL".to_string(),
                 "Change Passcode".to_string(),
                 "Neural Model Directory".to_string(),
+                "Lock Command".to_string(),
+                "Unlock Command".to_string(),
                 "SAVE & EXIT".to_string(),
             ],
             state,
@@ -118,6 +120,20 @@ impl App {
                         2 => self.config.signaling_url = self.input.clone(),
                         4 => {
                             self.config.llm_model_dir = if self.input.is_empty() {
+                                None
+                            } else {
+                                Some(self.input.clone())
+                            }
+                        }
+                        5 => {
+                            self.config.lock_cmd = if self.input.is_empty() {
+                                None
+                            } else {
+                                Some(self.input.clone())
+                            }
+                        }
+                        6 => {
+                            self.config.unlock_cmd = if self.input.is_empty() {
                                 None
                             } else {
                                 Some(self.input.clone())
@@ -229,7 +245,19 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                         app.config.llm_model_dir.clone().unwrap_or_default();
                                     app.cursor_position = app.input.len();
                                 }
-                                5 => return Ok(app.config.clone()),
+                                5 => {
+                                    app.input_mode = InputMode::Editing;
+                                    app.input =
+                                        app.config.lock_cmd.clone().unwrap_or_default();
+                                    app.cursor_position = app.input.len();
+                                }
+                                6 => {
+                                    app.input_mode = InputMode::Editing;
+                                    app.input =
+                                        app.config.unlock_cmd.clone().unwrap_or_default();
+                                    app.cursor_position = app.input.len();
+                                }
+                                7 => return Ok(app.config.clone()),
                                 _ => {}
                             }
                         }
@@ -306,6 +334,20 @@ fn ui(f: &mut Frame, app: &mut App) {
                 4 => format!(
                     ": {}",
                     app.config.llm_model_dir.as_deref().unwrap_or("None")
+                ),
+                5 => format!(
+                    ": {}",
+                    app.config
+                        .lock_cmd
+                        .as_deref()
+                        .unwrap_or("Default (loginctl lock-session)")
+                ),
+                6 => format!(
+                    ": {}",
+                    app.config
+                        .unlock_cmd
+                        .as_deref()
+                        .unwrap_or("Default (loginctl unlock-session)")
                 ),
                 _ => String::new(),
             };

@@ -8,10 +8,24 @@ pub async fn reboot() -> std::io::Result<std::process::Output> {
     Command::new("systemctl").arg("reboot").output().await
 }
 
-pub async fn lock_screen() -> std::io::Result<tokio::process::Child> {
-    let _ = Command::new("loginctl").arg("lock-session").output().await;
-    // Spawn screen locker detached (do not await) to prevent event loop blocking
-    Command::new("hyprlock").spawn()
+pub async fn lock_screen(custom_cmd: Option<&str>) -> std::io::Result<tokio::process::Child> {
+    if let Some(cmd) = custom_cmd
+        && !cmd.trim().is_empty()
+    {
+        Command::new("sh").args(["-c", cmd.trim()]).spawn()
+    } else {
+        Command::new("loginctl").arg("lock-session").spawn()
+    }
+}
+
+pub async fn unlock_screen(custom_cmd: Option<&str>) -> std::io::Result<tokio::process::Child> {
+    if let Some(cmd) = custom_cmd
+        && !cmd.trim().is_empty()
+    {
+        Command::new("sh").args(["-c", cmd.trim()]).spawn()
+    } else {
+        Command::new("loginctl").arg("unlock-session").spawn()
+    }
 }
 
 pub async fn restart_host() -> std::io::Result<std::process::Output> {

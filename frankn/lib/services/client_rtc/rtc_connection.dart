@@ -125,6 +125,13 @@ mixin RtcConnection on RtcClientBase {
     client.currentHostState = nextState;
     hostStateController.add(nextState);
 
+    // Capture failure reason for UI propagation
+    if (nextState == HostConnectionState.failed) {
+      client.lastFailureReason = reason;
+    } else if (nextState == HostConnectionState.connecting) {
+      client.lastFailureReason = null;
+    }
+
     _handleStateEffects(current, nextState);
   }
 

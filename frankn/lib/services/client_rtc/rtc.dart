@@ -164,6 +164,10 @@ abstract class RtcClientBase {
   bool get isAuthFailed;
   set isAuthFailed(bool value);
 
+  /// Human-readable reason for the last connection/auth failure.
+  String? get lastFailureReason;
+  set lastFailureReason(String? value);
+
   bool get isIntentionalDisconnect;
   set isIntentionalDisconnect(bool value);
 
@@ -303,6 +307,9 @@ class RtcClient extends RtcClientBase
 
   @override
   bool isAuthFailed = false;
+
+  @override
+  String? lastFailureReason;
 
   @override
   bool isIntentionalDisconnect = false;

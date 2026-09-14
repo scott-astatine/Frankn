@@ -45,25 +45,69 @@ pub async fn reboot(ctx: &CommandContext) {
 }
 
 pub async fn lock_screen(ctx: &CommandContext) {
+    let custom_cmd = ctx.config.lock_cmd.as_deref();
     #[cfg(target_os = "linux")]
     {
-        let result = crate::platform::linux::systemctl::lock_screen().await;
+        let result = crate::platform::linux::systemctl::lock_screen(custom_cmd).await;
         handle_spawn_res(ctx, result).await;
     }
     #[cfg(target_os = "windows")]
     {
-        let result = Command::new("rundll32.exe")
-            .args(["user32.dll,LockWorkStation"])
-            .output()
-            .await;
+        let result = if let Some(cmd) = custom_cmd
+            && !cmd.trim().is_empty()
+        {
+            Command::new("cmd").args(["/C", cmd.trim()]).output().await
+        } else {
+            Command::new("rundll32.exe")
+                .args(["user32.dll,LockWorkStation"])
+                .output()
+                .await
+        };
         handle_res(ctx, result).await;
     }
     #[cfg(target_os = "macos")]
     {
-        let result = Command::new("pmset")
-            .args(["displaysleepnow"])
-            .output()
-            .await;
+        let result = if let Some(cmd) = custom_cmd
+            && !cmd.trim().is_empty()
+        {
+            Command::new("sh").args(["-c", cmd.trim()]).output().await
+        } else {
+            Command::new("pmset")
+                .args(["displaysleepnow"])
+                .output()
+                .await
+        };
+        handle_res(ctx, result).await;
+    }
+}
+
+pub async fn unlock_screen(ctx: &CommandContext) {
+    let custom_cmd = ctx.config.unlock_cmd.as_deref();
+    #[cfg(target_os = "linux")]
+    {
+        let result = crate::platform::linux::systemctl::unlock_screen(custom_cmd).await;
+        handle_spawn_res(ctx, result).await;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let result = if let Some(cmd) = custom_cmd
+            && !cmd.trim().is_empty()
+        {
+            Command::new("cmd").args(["/C", cmd.trim()]).output().await
+        } else {
+            Command::new("loginctl").args(["unlock-session"]).output().await
+        };
+        handle_res(ctx, result).await;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let result = if let Some(cmd) = custom_cmd
+            && !cmd.trim().is_empty()
+        {
+            Command::new("sh").args(["-c", cmd.trim()]).output().await
+        } else {
+            Command::new("loginctl").args(["unlock-session"]).output().await
+        };
         handle_res(ctx, result).await;
     }
 }

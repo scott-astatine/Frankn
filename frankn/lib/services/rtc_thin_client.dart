@@ -124,24 +124,28 @@ class RtcThinClient {
 
   Stream<String> get authErrorStream => _authErrorController.stream;
   Stream<SignalConnectionState> get connectionStateStream =>
-      _connectionStateController.stream;
-  Stream<HostMessage> get genDcMsgStream => _genDcMsgStreamC.stream;
-  Stream<List<dynamic>> get hostListStream => _hostListController.stream;
+      _isBackground ? RtcClient().connectionStateStream : _connectionStateController.stream;
+  Stream<HostMessage> get genDcMsgStream =>
+      _isBackground ? RtcClient().genDcMsgStream : _genDcMsgStreamC.stream;
+  Stream<List<dynamic>> get hostListStream =>
+      _isBackground ? RtcClient().hostListStream : _hostListController.stream;
 
   Stream<HostConnectionState> get hostStateStream =>
-      _hostStateController.stream;
+      _isBackground ? RtcClient().hostStateStream : _hostStateController.stream;
   Stream<IsolateMsg> get localIntentStream => _localIntentController.stream;
-  Stream<String> get logStream => _logController.stream;
+  Stream<String> get logStream =>
+      _isBackground ? RtcClient().logStream : _logController.stream;
 
   Stream<HostMsgNotification> get notificationStream =>
-      _notificationController.stream;
+      _isBackground ? RtcClient().notificationStream : _notificationController.stream;
   Stream<Map<String, dynamic>> get peerStatusStream =>
-      _peerStatusController.stream;
-  Stream<Uint8List> get sshDataStream => _sshDataController.stream;
+      _isBackground ? RtcClient().peerStatusStream : _peerStatusController.stream;
+  Stream<Uint8List> get sshDataStream =>
+      _isBackground ? RtcClient().sshDataStream : _sshDataController.stream;
   Stream<HostMsgSyncSnapshot> get syncSnapshotStream {
     final myId = identityHashCode(this);
-    log("SYNC_DEBUG[$myId]: syncSnapshotStream getter called.");
-    return _syncSnapshotController.stream;
+    log("SYNC_DEBUG[$myId]: syncSnapshotStream getter called (isBackground: $_isBackground).");
+    return _isBackground ? RtcClient().syncSnapshotStream : _syncSnapshotController.stream;
   }
   Stream<SyncBatchProgressEvent> get syncBatchProgressStream =>
       _syncBatchProgressController.stream;
@@ -153,7 +157,7 @@ class RtcThinClient {
   RTCDataChannel? get sshDC => null;
 
   Stream<TransferProgressEvent> get transferProgressStream =>
-      _transferProgressController.stream;
+      _isBackground ? RtcClient().transferProgressStream : _transferProgressController.stream;
 
   void authenticate(String password) =>
       sendIntent(IsolateAction.authenticate, {'password': password});
