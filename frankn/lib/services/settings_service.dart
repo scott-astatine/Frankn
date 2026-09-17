@@ -27,6 +27,10 @@ class SettingsService {
   static const String _keySyncPairs = 'sync_pairs';
   static const String _keyDefaultDownloadDir = 'default_download_dir';
   static const String _keyEnableLiveLogIpc = 'enable_live_log_ipc';
+  static const String _keyEnableHostNotifications = 'enable_host_notifications';
+  static const String _keyEnableTransferNotifications = 'enable_transfer_notifications';
+  static const String _keyEnableNotificationSound = 'enable_notification_sound';
+  static const String _keyEnableNotificationVibration = 'enable_notification_vibration';
 
   // Default Values
   static const String _defaultSignalingUrl = 'ws://152.67.19.202:8037';
@@ -185,6 +189,34 @@ class SettingsService {
   /// Persists new live log IPC streaming preference.
   Future<bool> setEnableLiveLogIpc(bool value) async =>
       await _prefs.setBool(_keyEnableLiveLogIpc, value);
+
+  /// Returns whether host notification mirroring is enabled.
+  bool get enableHostNotifications =>
+      _prefs.getBool(_keyEnableHostNotifications) ?? true;
+
+  Future<bool> setEnableHostNotifications(bool value) async =>
+      await _prefs.setBool(_keyEnableHostNotifications, value);
+
+  /// Returns whether file transfer & folder sync notifications are enabled.
+  bool get enableTransferNotifications =>
+      _prefs.getBool(_keyEnableTransferNotifications) ?? true;
+
+  Future<bool> setEnableTransferNotifications(bool value) async =>
+      await _prefs.setBool(_keyEnableTransferNotifications, value);
+
+  /// Returns whether notification sound is enabled.
+  bool get enableNotificationSound =>
+      _prefs.getBool(_keyEnableNotificationSound) ?? true;
+
+  Future<bool> setEnableNotificationSound(bool value) async =>
+      await _prefs.setBool(_keyEnableNotificationSound, value);
+
+  /// Returns whether notification vibration is enabled.
+  bool get enableNotificationVibration =>
+      _prefs.getBool(_keyEnableNotificationVibration) ?? true;
+
+  Future<bool> setEnableNotificationVibration(bool value) async =>
+      await _prefs.setBool(_keyEnableNotificationVibration, value);
 
   /// Clears all local data. Used for a complete app reset.
   Future<bool> clearAll() async => await _prefs.clear();

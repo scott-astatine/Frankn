@@ -6,6 +6,7 @@ import 'package:frankn/generated/l10n/app_localizations.dart';
 import 'package:frankn/screens/sync_manager_screen.dart';
 import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/services/notification_service.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:frankn/main.dart';
 import 'package:frankn/widgets/cyber_alert_dialog.dart';
@@ -508,6 +509,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 iconColor: Colors.grey[400]!,
                 valueColor: Colors.white,
                 onTap: _showTrackpadSensitivitySelector,
+                isLast: true,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+          _buildSectionHeader("NOTIFICATIONS"),
+          const SizedBox(height: 12),
+          _buildSettingsGroup(
+            children: [
+              _buildSettingsSwitchItem(
+                title: "Mirror Host Notifications",
+                subtitle: "Display desktop alerts from connected host PC over WebRTC.",
+                value: _settings.enableHostNotifications,
+                icon: Icons.notifications_active_rounded,
+                iconColor: Colors.cyanAccent,
+                onChanged: (val) async {
+                  await _settings.setEnableHostNotifications(val);
+                  setState(() {});
+                },
+              ),
+              _buildSettingsSwitchItem(
+                title: "File Transfer & Sync Alerts",
+                subtitle: "Show progress notifications for downloads, uploads, and folder sync.",
+                value: _settings.enableTransferNotifications,
+                icon: Icons.sync_rounded,
+                iconColor: Colors.lightGreenAccent,
+                onChanged: (val) async {
+                  await _settings.setEnableTransferNotifications(val);
+                  setState(() {});
+                },
+              ),
+              _buildSettingsSwitchItem(
+                title: "Notification Sound",
+                subtitle: "Play sound when receiving alerts or sync completions.",
+                value: _settings.enableNotificationSound,
+                icon: Icons.volume_up_rounded,
+                iconColor: Colors.orangeAccent,
+                onChanged: (val) async {
+                  await _settings.setEnableNotificationSound(val);
+                  await NotificationService().initialize(requestPermissions: false);
+                  setState(() {});
+                },
+              ),
+              _buildSettingsSwitchItem(
+                title: "Notification Vibration",
+                subtitle: "Vibrate device for system alerts and completion events.",
+                value: _settings.enableNotificationVibration,
+                icon: Icons.vibration_rounded,
+                iconColor: Colors.purpleAccent,
+                onChanged: (val) async {
+                  await _settings.setEnableNotificationVibration(val);
+                  await NotificationService().initialize(requestPermissions: false);
+                  setState(() {});
+                },
                 isLast: true,
               ),
             ],

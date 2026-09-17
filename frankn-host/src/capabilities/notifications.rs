@@ -6,7 +6,12 @@ use tokio_tungstenite::tungstenite::Bytes;
 #[cfg(target_os = "linux")]
 use zbus::{MatchRule, message::Type};
 
-pub async fn start_notification_listener(peer_map: PeerMap) {
+pub async fn start_notification_listener(peer_map: PeerMap, enabled: bool) {
+    if !enabled {
+        log!("DBus Notification mirroring disabled in host configuration.");
+        return;
+    }
+
     #[cfg(target_os = "linux")]
     {
         tokio::spawn(async move {

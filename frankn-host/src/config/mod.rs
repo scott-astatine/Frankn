@@ -29,6 +29,10 @@ pub struct NodeConfig {
     pub capabilities: Vec<String>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HostConfig {
     #[serde(default)]
@@ -50,6 +54,8 @@ pub struct HostConfig {
     pub lock_cmd: Option<String>,
     #[serde(default)]
     pub unlock_cmd: Option<String>,
+    #[serde(default = "default_true")]
+    pub enable_notifications: bool,
 
     // Node-Specific Configuration
     #[serde(default)]
@@ -226,6 +232,7 @@ impl HostConfig {
                 sandbox_home,
                 lock_cmd: None,
                 unlock_cmd: None,
+                enable_notifications: true,
                 node: None,
                 allowed_nodes: Vec::new(),
                 custom_config_path: custom_path_clone,

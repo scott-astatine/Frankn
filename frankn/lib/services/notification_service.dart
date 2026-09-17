@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:frankn/services/isolate_protocol.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
+import 'package:frankn/services/settings_service.dart';
 import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/utils/utils.dart';
 import 'package:open_filex/open_filex.dart';
@@ -65,6 +66,9 @@ class NotificationService {
       });
     }
 
+    final soundEnabled = SettingsService().enableNotificationSound;
+    final vibrationEnabled = SettingsService().enableNotificationVibration;
+
     await AwesomeNotifications().initialize(
       'resource://drawable/ic_notification',
       [
@@ -78,9 +82,32 @@ class NotificationService {
           ledOnMs: 150,
           ledOffMs: 300,
           enableLights: true,
-          enableVibration: true,
+          playSound: soundEnabled,
+          enableVibration: vibrationEnabled,
           vibrationPattern: Int64List.fromList([0, 120, 80, 120, 80, 250]),
           importance: NotificationImportance.High,
+          channelShowBadge: true,
+        ),
+        NotificationChannel(
+          channelGroupKey: 'frankn_active_transfers_group',
+          channelKey: 'frankn_file_transfers',
+          channelName: 'File Transfers',
+          channelDescription: 'File upload and download progress alerts',
+          defaultColor: AppColors.accentSecondary,
+          playSound: false,
+          enableVibration: false,
+          importance: NotificationImportance.Low,
+          channelShowBadge: false,
+        ),
+        NotificationChannel(
+          channelGroupKey: 'frankn_active_transfers_group',
+          channelKey: 'frankn_folder_sync',
+          channelName: 'Folder Sync',
+          channelDescription: 'Folder sync progress and completion alerts',
+          defaultColor: AppColors.accentSuccess,
+          playSound: soundEnabled,
+          enableVibration: vibrationEnabled,
+          importance: NotificationImportance.Default,
           channelShowBadge: true,
         ),
       ],
@@ -115,6 +142,8 @@ class NotificationService {
   /// The payload includes the original app name and notification body.
   /// Used for things like "Build Complete", "New Email", etc.
   Future<void> showNotificationFromHost(HostMsgNotification msg) async {
+    if (!SettingsService().enableHostNotifications) return;
+
     final int id = msg.id != 0
         ? msg.id
         : (DateTime.now().millisecondsSinceEpoch % 100000);
@@ -150,10 +179,12 @@ Future<void> showProgressNotification(
   double progress, {
   String? transferId,
 }) async {
+  if (!SettingsService().enableTransferNotifications) return;
+
   await AwesomeNotifications().createNotification(
     content: NotificationContent(
       id: id,
-      channelKey: 'frankn_host_alerts',
+      channelKey: 'frankn_file_transfers',
       groupKey: 'frankn_active_transfers_group',
       title: title,
       body: body,
@@ -193,10 +224,12 @@ Future<void> showProgressNotification(
     bool isFailed = false,
     String? customBody,
   }) async {
+    if (!SettingsService().enableTransferNotifications) return;
+
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: id,
-        channelKey: 'frankn_host_alerts',
+        channelKey: 'frankn_file_transfers',
         title: isFailed ? "⚠ [DNLD_ERR] // $fileName" : "◈ [DNLD_DONE] // $fileName",
         body: customBody ?? (isFailed
             ? "Integrity check failed for '$fileName'."
@@ -246,10 +279,12 @@ Future<void> showProgressNotification(
     required double progress,
     bool isComplete = false,
   }) async {
+    if (!SettingsService().enableTransferNotifications) return;
+
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: id,
-        channelKey: 'frankn_host_alerts',
+        channelKey: 'frankn_folder_sync',
         groupKey: 'frankn_active_transfers_group',
         title: isComplete ? "◈ [SYNC_DONE] // $folderName" : "⇅ [SYNC_RUN] // $folderName",
         body: isComplete

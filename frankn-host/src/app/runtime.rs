@@ -84,8 +84,9 @@ impl HostRuntime {
         // BACKGROUND SERVICES
         // =============================================================================
         let pm_notif = Arc::clone(&self.peer_map);
+        let enable_notif = self.config.enable_notifications;
         tokio::spawn(async move {
-            capabilities::notifications::start_notification_listener(pm_notif).await;
+            capabilities::notifications::start_notification_listener(pm_notif, enable_notif).await;
         });
 
         let pm_media = Arc::clone(&self.peer_map);

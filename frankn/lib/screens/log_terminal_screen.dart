@@ -46,7 +46,7 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
       if (mounted && !_isPaused) {
         setState(() {
           _frames.clear();
-          _frames.addAll(batch);
+          _frames.addAll(batch.reversed);
         });
       }
     });
@@ -55,8 +55,8 @@ class _LogTerminalScreenState extends State<LogTerminalScreen> {
     _frameSub = widget.client.logFrameStream.listen((frame) {
       if (mounted && !_isPaused) {
         setState(() {
-          _frames.add(frame);
-          if (_frames.length > 3000) _frames.removeAt(0);
+          _frames.insert(0, frame);
+          if (_frames.length > 3000) _frames.removeLast();
         });
       }
     });
