@@ -130,6 +130,10 @@ impl HostConfig {
                 }
             }
         } else {
+            if let Some(ref path) = custom_path {
+                elog!("ERROR: Configuration file '{:?}' not found!", path);
+                std::process::exit(1);
+            }
             Self::init_interactive(custom_path).await
         };
 
