@@ -31,7 +31,7 @@ class CameraCapabilityController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> startSession(String providerId) async {
+  Future<void> startSession(String providerId, {String? devicePath}) async {
     if (_isInitializing) return;
     _isInitializing = true;
 
@@ -45,11 +45,17 @@ class CameraCapabilityController extends ChangeNotifier {
       _currentProviderId = providerId;
       final sessionId = const Uuid().v4();
       final sessionManager = RtcThinClient().capabilitySessionManager;
+      
+      final properties = <String, dynamic>{};
+      if (devicePath != null) {
+        properties['device_path'] = devicePath;
+      }
 
       _session = await sessionManager.requestCapabilitySession(
         sessionId: sessionId,
         capabilityId: capabilityId,
         providerId: providerId,
+        properties: properties.isNotEmpty ? properties : null,
       );
 
       _session!.addListener(_onSessionUpdated);

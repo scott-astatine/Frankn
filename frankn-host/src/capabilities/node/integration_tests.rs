@@ -60,6 +60,7 @@ fn register_node_capabilities(ci: &mut CapabilityInventory, node_id: &str, capab
             provider: CapabilityProvider {
                 kind: "node".to_string(),
                 provider_id: node_id.to_string(),
+                display_name: None,
             },
             availability: "available".to_string(),
         });

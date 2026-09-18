@@ -105,12 +105,22 @@ impl NodeRuntime {
             // Build capability descriptors
             let mut capabilities = Vec::new();
             for cap in capabilities_raw {
+                let mut properties = std::collections::HashMap::new();
+                
+                // Probe hardware dynamically for known capabilities
+                if cap == "camera" {
+                    let cams = crate::capabilities::camera::probe_cameras().await;
+                    if let Ok(cams_json) = serde_json::to_value(cams) {
+                        properties.insert("devices".to_string(), cams_json);
+                    }
+                }
+
                 capabilities.push(crate::capabilities::registry::CapabilityDescriptor {
                     id: cap.clone(),
                     name: cap.clone(),
                     version: "1.0.0".to_string(),
                     actions: vec![],
-                    properties: std::collections::HashMap::new(),
+                    properties,
                     events: vec![],
                     schemas: std::collections::HashMap::new(),
                     permissions: vec![],
@@ -189,7 +199,7 @@ impl NodeRuntime {
                                     }
                                 }
                             }
-                            Ok(HostMessage::NodeActivateCapability { capability_id, session_id, client_id, .. }) => {
+                            Ok(HostMessage::NodeActivateCapability { capability_id, session_id, client_id, properties, .. }) => {
                                 crate::log!("NODE: Received activation command for '{}' (session: '{}', client: '{}')",
                                     &capability_id, &session_id, &client_id);
                                 let active_sessions_inner = Arc::clone(&active_sessions);
@@ -198,6 +208,13 @@ impl NodeRuntime {
                                 let sess_id = session_id.clone();
                                 let cli_id = client_id.clone();
                                 let sig_client_inner = Arc::clone(&sig_client);
+
+                                // Extract device path if specified for camera
+                                let target_device = if cap_id == "camera" {
+                                    properties.get("device_path").and_then(|v| v.as_str().map(|s| s.to_string()))
+                                } else {
+                                    None
+                                };
 
                                 tokio::spawn(async move {
                                     // Create a new direct RTCConn for this capability session
@@ -374,7 +391,7 @@ impl NodeRuntime {
                                                 sess_entry.stop_tx = Some(stop_tx);
                                             }
                                         }
-                                        let runner = crate::capabilities::camera::CameraRunner::new(track, None, sess_id.clone(), stop_rx);
+                                        let runner = crate::capabilities::camera::CameraRunner::new(track, target_device, sess_id.clone(), stop_rx);
                                         runner.start().await;
                                     }
 

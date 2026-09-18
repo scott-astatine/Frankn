@@ -54,6 +54,7 @@ impl HostRuntime {
                 provider: capabilities::registry::CapabilityProvider {
                     kind: "host".to_string(),
                     provider_id: config.host_id.clone(),
+                    display_name: Some(config.host_name.clone()),
                 },
                 availability: "available".to_string(),
             });

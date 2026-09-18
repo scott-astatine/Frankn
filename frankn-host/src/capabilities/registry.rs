@@ -220,6 +220,8 @@ impl CapabilityRegistry {
 pub struct CapabilityProvider {
     pub kind: String, // "host" or "node"
     pub provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -280,11 +282,13 @@ mod tests {
         let provider_node1 = CapabilityProvider {
             kind: "node".to_string(),
             provider_id: "node-01".to_string(),
+            display_name: None,
         };
 
         let provider_node2 = CapabilityProvider {
             kind: "node".to_string(),
             provider_id: "node-02".to_string(),
+            display_name: None,
         };
 
         // Register camera under node-01

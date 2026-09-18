@@ -51,6 +51,7 @@ pub async fn handle_register(
                     provider: CapabilityProvider {
                         kind: "node".to_string(),
                         provider_id: node_id.to_string(),
+                        display_name: Some(display_name.to_string()),
                     },
                     availability: "available".to_string(),
                 });

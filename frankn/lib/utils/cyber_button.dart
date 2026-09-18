@@ -81,10 +81,10 @@ class _CyberButtonState extends State<CyberButton>
                 vertical: widget.isSmall ? 8 : 14,
               ),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
+                color: Colors.black.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: color.withOpacity(0.8),
+                  color: color.withValues(alpha: 0.8),
                   width: 1.2,
                 ),
                 boxShadow: [
