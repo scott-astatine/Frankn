@@ -28,12 +28,14 @@ class SettingsService {
   static const String _keyDefaultDownloadDir = 'default_download_dir';
   static const String _keyEnableLiveLogIpc = 'enable_live_log_ipc';
   static const String _keyEnableHostNotifications = 'enable_host_notifications';
-  static const String _keyEnableTransferNotifications = 'enable_transfer_notifications';
+  static const String _keyEnableTransferNotifications =
+      'enable_transfer_notifications';
   static const String _keyEnableNotificationSound = 'enable_notification_sound';
-  static const String _keyEnableNotificationVibration = 'enable_notification_vibration';
+  static const String _keyEnableNotificationVibration =
+      'enable_notification_vibration';
 
   // Default Values
-  static const String _defaultSignalingUrl = 'ws://152.67.19.202:8037';
+  static const String _defaultSignalingUrl = 'wss://152.67.19.202:8037';
   static const String _defaultColorScheme = 'Cyberpunk';
   static const String _defaultLocale = 'en';
   static const String _defaultLlmModel = '';
@@ -45,6 +47,13 @@ class SettingsService {
   /// Should be called during app startup.
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
+    final savedUrl = _prefs.getString(_keySignalingUrl);
+    if (savedUrl != null && savedUrl.startsWith('ws://')) {
+      await _prefs.setString(
+        _keySignalingUrl,
+        'wss://${savedUrl.substring(5)}',
+      );
+    }
   }
 
   /// Reloads the preferences from disk.
@@ -91,8 +100,9 @@ class SettingsService {
       _prefs.getString(_keySignalingUrl) ?? _defaultSignalingUrl;
 
   /// Persists a new signaling server URL.
-  Future<bool> setSignalingUrl(String value) async =>
-      await _prefs.setString(_keySignalingUrl, value);
+  Future<bool> setSignalingUrl(String value) async => value.startsWith('wss://')
+      ? await _prefs.setString(_keySignalingUrl, value)
+      : false;
 
   /// Returns the ID of the most recently connected host.
   String? get lastHostId => _prefs.getString(_keyLastHostId);
@@ -183,8 +193,7 @@ class SettingsService {
   }
 
   /// Returns whether live log IPC streaming to UI is enabled.
-  bool get enableLiveLogIpc =>
-      _prefs.getBool(_keyEnableLiveLogIpc) ?? false;
+  bool get enableLiveLogIpc => _prefs.getBool(_keyEnableLiveLogIpc) ?? false;
 
   /// Persists new live log IPC streaming preference.
   Future<bool> setEnableLiveLogIpc(bool value) async =>

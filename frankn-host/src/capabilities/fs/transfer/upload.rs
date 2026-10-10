@@ -118,11 +118,26 @@ pub async fn handle_transfer_init(
         }
     };
 
+    let mut hasher = Sha256::new();
+    if actual_offset > 0 {
+        match tokio::fs::read(&part).await {
+            Ok(prefix) => hasher.update(prefix),
+            Err(e) => {
+                return HostMessage::Response {
+                    id: ctx.id.clone(),
+                    status: Status::Error(format!("Failed to hash resumed partial: {e}")),
+                    data: None,
+                    timestamp: crate::utils::get_timestamp(),
+                };
+            }
+        }
+    }
     let session = UploadSession {
         file,
-        hasher: Sha256::new(),
+        hasher,
         current_offset: actual_offset,
         total_size,
+        expected_hash: hash.clone(),
         last_seq: 0,
         path: path_str.clone(),
         client_id: ctx.client_id.clone(),
@@ -155,6 +170,10 @@ pub async fn handle_transfer_init(
         timestamp: crate::utils::get_timestamp(),
     };
     let _ = ctx.stream(resp.clone()).await;
+
+    if actual_offset == total_size {
+        finalize_upload(&ctx.id, ctx).await;
+    }
 
     resp
 }
@@ -248,7 +267,7 @@ pub async fn handle_transfer_chunk_raw(data: &[u8], ctx: &CommandContext) {
         path: session.path.clone(),
         total_size: session.total_size,
         current_offset: session.current_offset,
-        expected_hash: None,
+        expected_hash: session.expected_hash.clone(),
         last_seq: seq,
     };
     let _ = write_state(&session.path, &state).await;
@@ -293,6 +312,37 @@ async fn finalize_upload(id: &str, ctx: &CommandContext) {
     }
 
     let hash_hex = hex::encode(session.hasher.clone().finalize());
+
+    if session.current_offset != session.total_size {
+        let message = format!(
+            "Upload size mismatch: expected {}, received {}",
+            session.total_size, session.current_offset
+        );
+        let _ = ctx
+            .stream(HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Error(message),
+                data: None,
+                timestamp: crate::utils::get_timestamp(),
+            })
+            .await;
+        cleanup_partial(&session.path).await;
+        return;
+    }
+    if let Some(expected) = session.expected_hash.as_deref()
+        && !expected.eq_ignore_ascii_case(&hash_hex)
+    {
+        let _ = ctx
+            .stream(HostMessage::Response {
+                id: id.to_string(),
+                status: Status::Error("Upload SHA-256 mismatch".to_string()),
+                data: None,
+                timestamp: crate::utils::get_timestamp(),
+            })
+            .await;
+        cleanup_partial(&session.path).await;
+        return;
+    }
 
     let part = part_path(&session.path);
     if let Err(e) = tokio::fs::rename(&part, &session.path).await {

@@ -27,8 +27,10 @@ pub enum RtcRole {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PeerRole {
-    Client,
+    UnauthenticatedClient,
+    AuthenticatedClient,
     Node,
+    TrustedHostInternal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,19 +52,22 @@ pub struct PeerSession {
     pub client_id: String,
     pub session_id: String,
     pub conn: Arc<Mutex<RTCConn>>,
-    pub authenticated: Arc<Mutex<bool>>,
-    pub current_challenge: Arc<Mutex<Option<String>>>,
+    pub role: Arc<Mutex<PeerRole>>,
     pub ssh_bridge_stop: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 impl PeerSession {
-    pub fn new(client_id: String, session_id: String, conn: Arc<Mutex<RTCConn>>) -> Self {
+    pub fn new(
+        client_id: String,
+        session_id: String,
+        conn: Arc<Mutex<RTCConn>>,
+        role: PeerRole,
+    ) -> Self {
         Self {
             client_id,
             session_id,
             conn,
-            authenticated: Arc::new(Mutex::new(false)),
-            current_challenge: Arc::new(Mutex::new(None)),
+            role: Arc::new(Mutex::new(role)),
             ssh_bridge_stop: Arc::new(Mutex::new(None)),
         }
     }

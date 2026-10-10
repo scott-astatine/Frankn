@@ -19,6 +19,7 @@ use crate::utils::get_timestamp;
 /// Handle a NodeRegister message: verify the node is allowed, store it in the
 /// NodeRegistry, register its capabilities in the inventory, and ack.
 pub async fn handle_register(
+    sender_id: &str,
     node_id: &str,
     display_name: &str,
     capabilities: &[CapabilityDescriptor],
@@ -29,7 +30,11 @@ pub async fn handle_register(
     capability_inventory: &Arc<Mutex<CapabilityInventory>>,
     peer_map: &PeerMap,
 ) {
-    let is_allowed = config.allowed_nodes.contains(&node_id.to_string());
+    let is_allowed = sender_id == node_id
+        && config
+            .allowed_nodes
+            .iter()
+            .any(|allowed| allowed == sender_id);
     if is_allowed {
         let node_info = NodeInfo {
             node_id: node_id.to_string(),
@@ -89,7 +94,19 @@ pub async fn handle_register(
 }
 
 /// Handle a NodeHeartbeat message: update the node's last_seen timestamp.
-pub async fn handle_heartbeat(node_id: &str, node_registry: &Arc<Mutex<NodeRegistry>>) {
+pub async fn handle_heartbeat(
+    sender_id: &str,
+    node_id: &str,
+    node_registry: &Arc<Mutex<NodeRegistry>>,
+) {
+    if sender_id != node_id {
+        crate::elog!(
+            "SECURITY: Node {} attempted heartbeat for {}",
+            sender_id,
+            node_id
+        );
+        return;
+    }
     let mut nr = node_registry.lock().await;
     nr.update_heartbeat(node_id);
 }
@@ -208,6 +225,7 @@ pub async fn handle_signal(
 /// Handle a NodeActivationStatus message: update the session state and forward
 /// the status to the requesting client.
 pub async fn handle_activation_status(
+    sender_id: &str,
     capability_id: String,
     session_id: String,
     status: CapabilitySessionStatus,
@@ -225,7 +243,9 @@ pub async fn handle_activation_status(
 
     let client_id = {
         let mut cs = capability_sessions.lock().await;
-        if let Some(sess) = cs.get_mut(&session_id) {
+        if let Some(sess) = cs.get_mut(&session_id)
+            && sess.node_id == sender_id
+        {
             sess.status = status;
             sess.error = error.clone();
             Some(sess.client_id.clone())
@@ -366,6 +386,7 @@ pub async fn handle_activate_capability(
 /// Handle a DeactivateCapability message from a Client: look up the session,
 /// find the node, and forward the deactivation request.
 pub async fn handle_deactivate_capability(
+    client_id: &str,
     capability_id: String,
     session_id: String,
     auth_token: &str,
@@ -379,7 +400,7 @@ pub async fn handle_deactivate_capability(
             cs.get(&session_id).cloned()
         };
 
-        if let Some(sess) = sess_info {
+        if let Some(sess) = sess_info.filter(|sess| sess.client_id == client_id) {
             let node_conn = {
                 let nr = node_registry.lock().await;
                 nr.get(&sess.node_id).map(|n| Arc::clone(&n.rtc_conn))

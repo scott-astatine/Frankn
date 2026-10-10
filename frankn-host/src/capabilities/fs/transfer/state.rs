@@ -12,8 +12,8 @@ pub struct TransferState {
     pub transfer_id: String,
     pub path: String,
     pub total_size: u64,
-    pub current_offset: u64,
     pub expected_hash: Option<String>,
+    pub current_offset: u64,
     #[serde(default)]
     pub last_seq: u32,
 }
@@ -24,6 +24,7 @@ pub struct UploadSession {
     pub hasher: Sha256,
     pub current_offset: u64,
     pub total_size: u64,
+    pub expected_hash: Option<String>,
     pub last_seq: u32,
     pub path: String,
     pub client_id: String,

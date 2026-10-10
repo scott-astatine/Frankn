@@ -9,6 +9,57 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::fs;
 
+static CONFIG_TEMP_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn write_config_atomically(
+    file_path: &std::path::Path,
+    content: String,
+    secure_parent: bool,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let parent = file_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    #[cfg(unix)]
+    if secure_parent {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))?;
+    }
+
+    let sequence = CONFIG_TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let file_name = file_path.file_name().unwrap_or_default().to_string_lossy();
+    let temporary = parent.join(format!(
+        ".{file_name}.{}.{}.tmp",
+        std::process::id(),
+        sequence
+    ));
+    let mut options = std::fs::OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let result = (|| {
+        let mut file = options.open(&temporary)?;
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, file_path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(file_path, std::fs::Permissions::from_mode(0o600))?;
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RuntimeMode {
@@ -42,6 +93,9 @@ pub struct HostConfig {
     pub password_hash: String,
     #[serde(default)]
     pub salt: String,
+    /// RFC 9807 Host setup and password file. Missing means local migration is required.
+    #[serde(default)]
+    pub opaque_auth: Option<frankn_opaque::OpaqueEnrollment>,
     pub signaling_url: String,
     pub is_public: bool,
     pub restricted_cmds: Vec<String>,
@@ -62,6 +116,9 @@ pub struct HostConfig {
     pub node: Option<NodeConfig>,
     #[serde(default)]
     pub allowed_nodes: Vec<String>,
+    /// Client peer IDs permitted by a private signaling host.
+    #[serde(default)]
+    pub allowed_clients: Vec<String>,
 
     #[serde(skip)]
     pub custom_config_path: Option<PathBuf>,
@@ -146,6 +203,11 @@ impl HostConfig {
             config.host_id = peer_id;
         }
 
+        if let Some(secure_url) = config.signaling_url.strip_prefix("ws://") {
+            config.signaling_url = format!("wss://{secure_url}");
+            config.save().await;
+        }
+
         config
     }
 
@@ -189,7 +251,7 @@ impl HostConfig {
 
             let signaling_url: String = Input::new()
                 .with_prompt("Signaling Server URL")
-                .default("ws://152.67.19.202:8037".to_string())
+                .default("wss://152.67.19.202:8037".to_string())
                 .interact_text()
                 .expect("Failed to get signaling URL");
 
@@ -217,17 +279,17 @@ impl HostConfig {
                 .map(char::from)
                 .collect();
 
-            // Hash the password using existing AuthManager logic
-            let auth_manager = AuthManager::new(&password);
-            let password_hash = auth_manager.password_hash.clone();
-            let salt = auth_manager.salt.clone();
+            let auth_manager =
+                AuthManager::new(&password).expect("Failed to enroll Host passcode with OPAQUE");
+            let opaque_auth = auth_manager.opaque_enrollment.clone();
 
             HostConfig {
                 mode: RuntimeMode::Host,
                 host_id,
                 host_name,
-                password_hash,
-                salt,
+                password_hash: String::new(),
+                salt: String::new(),
+                opaque_auth,
                 signaling_url,
                 is_public,
                 restricted_cmds: Vec::new(),
@@ -239,6 +301,7 @@ impl HostConfig {
                 enable_notifications: true,
                 node: None,
                 allowed_nodes: Vec::new(),
+                allowed_clients: Vec::new(),
                 custom_config_path: custom_path_clone,
             }
         })
@@ -251,6 +314,12 @@ impl HostConfig {
     }
 
     pub async fn save(&self) {
+        if let Err(e) = self.save_checked().await {
+            elog!("Failed to write config file: {}", e);
+        }
+    }
+
+    pub async fn save_checked(&self) -> Result<(), String> {
         let file_path = self
             .custom_config_path
             .clone()
@@ -260,19 +329,70 @@ impl HostConfig {
             && !dir.exists()
             && let Err(e) = fs::create_dir_all(dir).await
         {
-            elog!("Failed to create config directory: {}", e);
+            return Err(format!("create config directory: {e}"));
         }
 
-        match toml::to_string_pretty(self) {
-            Ok(content) => {
-                if let Err(e) = fs::write(&file_path, content).await {
-                    elog!("Failed to write config file: {}", e);
-                }
-            }
-            Err(e) => {
-                elog!("Failed to serialize config: {}", e);
-            }
+        let content = toml::to_string_pretty(self).map_err(|e| format!("serialize config: {e}"))?;
+        let secure_parent = self.custom_config_path.is_none();
+        tokio::task::spawn_blocking(move || {
+            write_config_atomically(&file_path, content, secure_parent)
+        })
+        .await
+        .map_err(|e| format!("config writer task: {e}"))?
+        .map_err(|e| format!("write config: {e}"))
+    }
+
+    /// Persist the current client ACL and fail pairing if the update cannot be saved.
+    pub async fn persist_allowed_clients(&self, allowed_clients: &[String]) -> Result<(), String> {
+        let file_path = self
+            .custom_config_path
+            .clone()
+            .unwrap_or_else(Self::config_file);
+        if let Some(dir) = file_path.parent() {
+            fs::create_dir_all(dir)
+                .await
+                .map_err(|e| format!("create config directory: {e}"))?;
         }
+        let mut updated = self.clone();
+        updated.allowed_clients = allowed_clients.to_vec();
+        let content =
+            toml::to_string_pretty(&updated).map_err(|e| format!("serialize config: {e}"))?;
+        tokio::task::spawn_blocking(move || write_config_atomically(&file_path, content, false))
+            .await
+            .map_err(|e| format!("config writer task: {e}"))?
+            .map_err(|e| format!("write config: {e}"))
+    }
+
+    pub async fn migrate_opaque_auth(&self) -> Result<(), String> {
+        if self.opaque_auth.is_some() {
+            return Err("Host authentication is already migrated to OPAQUE".into());
+        }
+        if !atty::is(atty::Stream::Stdin) {
+            return Err("OPAQUE migration requires a local interactive terminal".into());
+        }
+
+        let old_hash = self.password_hash.clone();
+        let old_salt = self.salt.clone();
+        let opaque_auth = tokio::task::spawn_blocking(move || {
+            let password = Password::new()
+                .with_prompt("Enter the current Host passcode to migrate authentication")
+                .interact()
+                .map_err(|_| "Could not read the current passcode".to_string())?;
+            if !AuthManager::verify_password(&password, &old_hash, &old_salt) {
+                return Err("Current passcode verification failed".to_string());
+            }
+            let auth = AuthManager::new(&password)?;
+            Ok::<_, String>(auth.opaque_enrollment)
+        })
+        .await
+        .map_err(|e| format!("migration task failed: {e}"))??;
+
+        let mut migrated = self.clone();
+        migrated.password_hash.clear();
+        migrated.salt.clear();
+        migrated.opaque_auth = opaque_auth;
+        migrated.save_checked().await?;
+        Ok(())
     }
 
     pub fn identity_file(&self) -> PathBuf {

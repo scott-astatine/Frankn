@@ -27,7 +27,12 @@ pub struct HostRuntime {
 impl HostRuntime {
     pub fn new(config: HostConfig) -> Self {
         let config = Arc::new(config);
-        let auth_manager = Arc::new(AuthManager::from_hash(&config.password_hash, &config.salt));
+        let auth_manager = Arc::new(AuthManager::from_config(config.opaque_auth.clone()));
+        if config.opaque_auth.is_none() {
+            crate::elog!(
+                "SECURITY: Legacy passcode verifier cannot be used for network authentication. Run `frankn-host auth migrate` locally."
+            );
+        }
         let peer_map: PeerMap = Arc::new(Mutex::new(HashMap::new()));
         let llm_manager = Arc::new(Mutex::new(LlmManager::new()));
         let input_manager = match capabilities::input::InputManager::new() {
@@ -190,6 +195,11 @@ impl HostRuntime {
                         let map = pm_telemetry.lock().await;
                         for conn in map.values() {
                             let sess = conn.lock().await;
+                            if *sess.role.lock().await
+                                != crate::transport::webrtc::connection::PeerRole::AuthenticatedClient
+                            {
+                                continue;
+                            }
                             let r_conn = sess.conn.lock().await;
                             let _ = r_conn
                                 .send_message("frankn_cmd", &Bytes::from(json.clone()))

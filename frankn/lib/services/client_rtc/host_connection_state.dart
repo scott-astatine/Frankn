@@ -8,15 +8,16 @@ enum HostConnectionState {
   signaling, // WebSocket SDP Offer enqueued / waiting for SDP Answer
   iceConnecting, // WebRTC SDP Answer received, ICE candidate exchange active
   connected, // Legacy compatibility placeholder
-  authenticating, // Command DataChannel OPEN, Argon2id challenge active
-  authenticated, // Host AuthSuccess received, session token acquired
+  authenticating, // Command DataChannel OPEN, OPAQUE exchange active
+  authenticated, // Host AuthSuccess received, session credential derived locally
   failed, // Connection or authentication failed
   disconnecting, // User termination active
 }
 
 /// Transition validation logic for [HostConnectionState].
 class HostConnectionStateValidation {
-  static const Map<HostConnectionState, Set<HostConnectionState>> _validTransitions = {
+  static const Map<HostConnectionState, Set<HostConnectionState>>
+  _validTransitions = {
     HostConnectionState.disconnected: {
       HostConnectionState.connecting,
       HostConnectionState.reconnectWaiting,
@@ -56,18 +57,21 @@ class HostConnectionStateValidation {
       HostConnectionState.disconnected,
       HostConnectionState.connecting,
     },
-    HostConnectionState.disconnecting: {
-      HostConnectionState.disconnected,
-    },
+    HostConnectionState.disconnecting: {HostConnectionState.disconnected},
   };
 
   /// Returns true if transitioning from [current] to [next] is legal.
-  static bool isValidTransition(HostConnectionState current, HostConnectionState next) {
+  static bool isValidTransition(
+    HostConnectionState current,
+    HostConnectionState next,
+  ) {
     if (current == next) return true;
     final allowed = _validTransitions[current];
     final isAllowed = allowed != null && allowed.contains(next);
     if (!isAllowed) {
-      log('[FSM WARNING] Illegal state transition attempted: ${current.name} -> ${next.name}');
+      log(
+        '[FSM WARNING] Illegal state transition attempted: ${current.name} -> ${next.name}',
+      );
     }
     return isAllowed;
   }

@@ -1,11 +1,13 @@
 import 'dart:convert';
+import 'package:frankn/services/logging/redaction_engine.dart';
 
 /// Immutable point-in-time runtime state snapshot schema.
 /// Captured at Diagnostic Capture Session START and END to record system context.
 class FranknStateSnapshot {
   final int timestampMs;
   final String label; // "CAPTURE_START" or "CAPTURE_END"
-  final String hostConnectionState; // e.g. "authenticated", "connecting", "disconnected"
+  final String
+  hostConnectionState; // e.g. "authenticated", "connecting", "disconnected"
   final String signalingState; // e.g. "connected", "reconnecting", "offline"
   final String? activeHostId;
   final String? activeHostName;
@@ -29,19 +31,21 @@ class FranknStateSnapshot {
     required this.systemMemoryInfo,
   });
 
-  Map<String, dynamic> toJson() => {
-        'ts': timestampMs,
-        'label': label,
-        'host_state': hostConnectionState,
-        'sig_state': signalingState,
-        if (activeHostId != null) 'host_id': activeHostId,
-        if (activeHostName != null) 'host_name': activeHostName,
-        'has_internet': hasActiveInternet,
-        'online_hosts': onlineHostIds,
-        'cap_sessions': activeCapabilitySessions,
-        'sync_pairs': activeSyncPairs,
-        'sys_info': systemMemoryInfo,
-      };
+  Map<String, dynamic> toJson() =>
+      RedactionEngine().sanitizeValue({
+            'ts': timestampMs,
+            'label': label,
+            'host_state': hostConnectionState,
+            'sig_state': signalingState,
+            if (activeHostId != null) 'host_id': activeHostId,
+            if (activeHostName != null) 'host_name': activeHostName,
+            'has_internet': hasActiveInternet,
+            'online_hosts': onlineHostIds,
+            'cap_sessions': activeCapabilitySessions,
+            'sync_pairs': activeSyncPairs,
+            'sys_info': systemMemoryInfo,
+          })
+          as Map<String, dynamic>;
 
   factory FranknStateSnapshot.fromJson(Map<String, dynamic> map) =>
       FranknStateSnapshot(

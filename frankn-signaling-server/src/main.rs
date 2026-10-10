@@ -7,13 +7,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
     net::TcpListener,
     sync::{mpsc::UnboundedSender, RwLock},
 };
 use tokio_tungstenite::{accept_async, tungstenite::Message};
-use base64::Engine;
 
 type SubMap = Arc<RwLock<HashMap<String, Vec<String>>>>;
 
@@ -36,6 +36,27 @@ async fn send_signaling_msg(
     Ok(())
 }
 
+async fn send_attested_signaling_msg(
+    tx: &UnboundedSender<Message>,
+    msg: SignalingMessage,
+    sender_public_key: &str,
+) -> SignalingResult {
+    let mut value =
+        serde_json::to_value(msg).map_err(|e| format!("Failed to serialize message: {}", e))?;
+    value
+        .as_object_mut()
+        .ok_or_else(|| "Signaling message must serialize to an object".to_string())?
+        .insert(
+            "from_public_key".to_string(),
+            serde_json::Value::String(sender_public_key.to_string()),
+        );
+    let json = serde_json::to_string(&value)
+        .map_err(|e| format!("Failed to serialize attested message: {}", e))?;
+    tx.send(Message::Text(json.into()))
+        .map_err(|e| format!("Failed to send to peer channel: {}", e))?;
+    Ok(())
+}
+
 async fn verify_data_plane_message(
     msg_type: u8,
     from_peer_id_str: &str,
@@ -46,11 +67,12 @@ async fn verify_data_plane_message(
     payload_str: &str,
     signature_hex: &str,
     peers: &PeerMap,
-) -> Result<(), String> {
+) -> Result<String, String> {
     // 1. Session Validation & Sender Binding
     let pub_key_bytes = {
         let peers_map = peers.read().await;
-        let conn = peers_map.get(from_peer_id_str)
+        let conn = peers_map
+            .get(from_peer_id_str)
             .ok_or_else(|| "Sender peer not found".to_string())?;
         if conn.session_id != session_id_str {
             return Err("Invalid or inactive session_id for sender".to_string());
@@ -64,48 +86,57 @@ async fn verify_data_plane_message(
     buf[0..14].copy_from_slice(b"FRANKN-SIG-V1\0");
     buf[14] = 0x01;
     buf[15] = msg_type;
-    
+
     use base64::Engine;
-    let session_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(session_id_str)
+    let session_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(session_id_str)
         .map_err(|e| format!("Invalid session_id encoding: {}", e))?;
     if session_bytes.len() != 32 {
         return Err("Invalid session_id byte length".to_string());
     }
     buf[16..48].copy_from_slice(&session_bytes);
-    
+
     buf[48..56].copy_from_slice(&sequence.to_be_bytes());
     buf[56..64].copy_from_slice(&timestamp.to_be_bytes());
-    
-    let from_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(from_peer_id_str)
+
+    let from_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(from_peer_id_str)
         .map_err(|e| format!("Invalid from_peer_id encoding: {}", e))?;
     if from_bytes.len() != 32 {
         return Err("Invalid from_peer_id byte length".to_string());
     }
     buf[64..96].copy_from_slice(&from_bytes);
-    
-    let to_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(to_peer_id_str)
+
+    let to_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(to_peer_id_str)
         .map_err(|e| format!("Invalid to_peer_id encoding: {}", e))?;
     if to_bytes.len() != 32 {
         return Err("Invalid to_peer_id byte length".to_string());
     }
     buf[96..128].copy_from_slice(&to_bytes);
-    
-    use sha2::{Sha256, Digest};
+
+    use sha2::{Digest, Sha256};
     let payload_hash = Sha256::digest(payload_str.as_bytes());
     buf[128..160].copy_from_slice(&payload_hash);
 
     // Verify Ed25519 signature
-    let sig_bytes = hex::decode(signature_hex)
-        .map_err(|e| format!("Invalid signature hex: {}", e))?;
+    let sig_bytes =
+        hex::decode(signature_hex).map_err(|e| format!("Invalid signature hex: {}", e))?;
     if sig_bytes.len() != 64 {
         return Err("Signature must be 64 bytes".to_string());
     }
 
-    use ed25519_dalek::{VerifyingKey, Signature, Verifier};
-    let verifying_key = VerifyingKey::from_bytes(&pub_key_bytes.try_into().unwrap())
+    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+    let public_key_hex = hex::encode(&pub_key_bytes);
+    let public_key_array: [u8; 32] = pub_key_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| "Invalid verifying key length".to_string())?;
+    let verifying_key = VerifyingKey::from_bytes(&public_key_array)
         .map_err(|e| format!("Invalid verifying key: {}", e))?;
     let sig = Signature::from_bytes(&sig_bytes.try_into().unwrap());
-    verifying_key.verify(&buf, &sig)
+    verifying_key
+        .verify(&buf, &sig)
         .map_err(|e| format!("Ed25519 signature verification failed: {}", e))?;
 
     // 3. Replay / Freshness Validation
@@ -114,13 +145,14 @@ async fn verify_data_plane_message(
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64;
-    
-    // Bypass skew validation for deterministic test vector timestamp
-    if timestamp != 1789385043 {
-        let skew = if now_ms > timestamp { now_ms - timestamp } else { timestamp - now_ms };
-        if skew > 60_000 {
-            return Err("Timestamp skew exceeds 60 seconds limit".to_string());
-        }
+
+    let skew = if now_ms > timestamp {
+        now_ms - timestamp
+    } else {
+        timestamp - now_ms
+    };
+    if skew > 60_000 {
+        return Err("Timestamp skew exceeds 60 seconds limit".to_string());
     }
 
     // Sequence number verification (sequence > last_received_sequence)
@@ -137,26 +169,58 @@ async fn verify_data_plane_message(
             );
             return Err("Sequence regression or replay detected".to_string());
         }
-        conn.last_sequence.store(sequence, std::sync::atomic::Ordering::SeqCst);
+        conn.last_sequence
+            .store(sequence, std::sync::atomic::Ordering::SeqCst);
     }
 
     // 4. Authorization / ACL Verification
-    let target_conn = peers_map.get(to_peer_id_str)
+    let target_conn = peers_map
+        .get(to_peer_id_str)
         .ok_or_else(|| "Target peer not found".to_string())?;
-    
+
     if target_conn.peer_type == PeerType::Host {
-        if !target_conn.allowed_peers.is_empty() && !target_conn.allowed_peers.contains(&from_peer_id_str.to_string()) {
+        let pending_pair_ice = msg_type == 0x03
+            && target_conn
+                .pending_peers
+                .get(from_peer_id_str)
+                .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(120));
+        if !target_conn.is_public
+            && !target_conn
+                .allowed_peers
+                .contains(&from_peer_id_str.to_string())
+            && !(msg_type == 0x01
+                && peers_map
+                    .get(from_peer_id_str)
+                    .is_some_and(|sender| sender.peer_type == PeerType::Client))
+            && !pending_pair_ice
+        {
             return Err("Sender is not authorized in target host's ACL".to_string());
         }
     } else {
-        if let Some(host_conn) = peers_map.get(from_peer_id_str) {
-            if !host_conn.allowed_peers.is_empty() && !host_conn.allowed_peers.contains(&to_peer_id_str.to_string()) {
-                return Err("Host is not authorized to contact this client (not in host ACL)".to_string());
-            }
+        let host_conn = peers_map
+            .get(from_peer_id_str)
+            .ok_or_else(|| "Sender peer not found".to_string())?;
+        if host_conn.peer_type != PeerType::Host {
+            return Err("Only hosts may signal clients".to_string());
+        }
+        let pending = (msg_type == 0x02 || msg_type == 0x03)
+            && host_conn
+                .pending_peers
+                .get(to_peer_id_str)
+                .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(120));
+        if !host_conn.is_public
+            && !host_conn
+                .allowed_peers
+                .contains(&to_peer_id_str.to_string())
+            && !pending
+        {
+            return Err(
+                "Host is not authorized to contact this client (not in host ACL)".to_string(),
+            );
         }
     }
 
-    Ok(())
+    Ok(public_key_hex)
 }
 
 async fn handle_signaling_message(
@@ -169,9 +233,15 @@ async fn handle_signaling_message(
     match msg {
         SignalingMessage::Ping { timestamp } => {
             let pong = SignalingMessage::Pong {
-                timestamp: if timestamp > 0 { timestamp } else { get_timestamp() },
+                timestamp: if timestamp > 0 {
+                    timestamp
+                } else {
+                    get_timestamp()
+                },
             };
-            send_signaling_msg(tx, pong).await.map_err(|e| e.to_string())
+            send_signaling_msg(tx, pong)
+                .await
+                .map_err(|e| e.to_string())
         }
 
         SignalingMessage::Pong { .. } => Ok(()),
@@ -189,18 +259,15 @@ async fn handle_signaling_message(
                 .collect();
 
             log!("Listing hosts: Found {} host(s).", hosts.len());
-            send_signaling_msg(
-                tx,
-                SignalingMessage::HostList {
-                    hosts,
-                    timestamp,
-                },
-            )
-            .await
-            .map_err(|e| e.to_string())
+            send_signaling_msg(tx, SignalingMessage::HostList { hosts, timestamp })
+                .await
+                .map_err(|e| e.to_string())
         }
 
-        SignalingMessage::SubscribeHosts { host_ids, timestamp } => {
+        SignalingMessage::SubscribeHosts {
+            host_ids,
+            timestamp,
+        } => {
             let client_id = current_peer_id.as_ref().ok_or("Not registered")?;
             let mut statuses = HashMap::new();
 
@@ -214,15 +281,7 @@ async fn handle_signaling_message(
                     sub_list.push(client_id.clone());
                 }
 
-                let is_online = if let Some(host_conn) = peers_map.get(&host_id) {
-                    if host_conn.peer_type == PeerType::Host {
-                        host_conn.is_public || host_conn.allowed_peers.is_empty() || host_conn.allowed_peers.contains(client_id)
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                let is_online = host_presence_for_client(peers_map.get(&host_id), client_id);
                 statuses.insert(host_id.clone(), is_online);
             }
 
@@ -237,25 +296,19 @@ async fn handle_signaling_message(
             .map_err(|e| e.to_string())
         }
 
-        SignalingMessage::CheckHostsStatus { host_ids, timestamp } => {
+        SignalingMessage::CheckHostsStatus {
+            host_ids,
+            timestamp,
+        } => {
             let client_id = current_peer_id.as_ref().ok_or("Not registered")?;
             let mut statuses = HashMap::new();
 
             let peers_map = peers.read().await;
             for host_id in host_ids {
-                if let Some(host_conn) = peers_map.get(&host_id) {
-                    if host_conn.peer_type == PeerType::Host {
-                        if host_conn.is_public || host_conn.allowed_peers.is_empty() || host_conn.allowed_peers.contains(client_id) {
-                            statuses.insert(host_id.clone(), true);
-                        } else {
-                            statuses.insert(host_id.clone(), false);
-                        }
-                    } else {
-                        statuses.insert(host_id.clone(), false);
-                    }
-                } else {
-                    statuses.insert(host_id.clone(), false);
-                }
+                statuses.insert(
+                    host_id.clone(),
+                    host_presence_for_client(peers_map.get(&host_id), client_id),
+                );
             }
 
             send_signaling_msg(
@@ -269,9 +322,20 @@ async fn handle_signaling_message(
             .map_err(|e| e.to_string())
         }
 
-        SignalingMessage::UpdateHostAcl { allowed_peers, timestamp, signature } => {
+        SignalingMessage::UpdateHostAcl {
+            allowed_peers,
+            timestamp,
+            signature,
+        } => {
             let host_id = current_peer_id.as_ref().ok_or("Not registered")?;
-            
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| e.to_string())?
+                .as_millis() as u64;
+            if timestamp.abs_diff(now) > 60_000 {
+                return Err("ACL update timestamp is stale".to_string());
+            }
+
             let pub_key_bytes = {
                 let peers_map = peers.read().await;
                 let conn = peers_map.get(host_id).ok_or("Host not found")?;
@@ -282,21 +346,62 @@ async fn handle_signaling_message(
             };
 
             let msg_str = format!("{}:{}", allowed_peers.join(","), timestamp);
-            let sig_bytes = hex::decode(&signature)
-                .map_err(|e| format!("Invalid signature hex: {}", e))?;
-            
-            use ed25519_dalek::{VerifyingKey, Signature, Verifier};
-            let verifying_key = VerifyingKey::from_bytes(&pub_key_bytes.try_into().unwrap())
+            let sig_bytes =
+                hex::decode(&signature).map_err(|e| format!("Invalid signature hex: {}", e))?;
+
+            use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+            let public_key: [u8; 32] = pub_key_bytes
+                .try_into()
+                .map_err(|_| "Invalid host public key length".to_string())?;
+            let verifying_key = VerifyingKey::from_bytes(&public_key)
                 .map_err(|e| format!("Invalid verifying key: {}", e))?;
-            let sig = Signature::from_bytes(&sig_bytes.try_into().unwrap());
-            verifying_key.verify(msg_str.as_bytes(), &sig)
+            let signature_bytes: [u8; 64] = sig_bytes
+                .try_into()
+                .map_err(|_| "Invalid ACL signature length".to_string())?;
+            let sig = Signature::from_bytes(&signature_bytes);
+            verifying_key
+                .verify(msg_str.as_bytes(), &sig)
                 .map_err(|e| format!("ACL signature verification failed: {}", e))?;
 
-            {
+            let subscriber_ids = subscriptions
+                .read()
+                .await
+                .get(host_id)
+                .cloned()
+                .unwrap_or_default();
+            let changed_presence = {
                 let mut peers_map = peers.write().await;
                 if let Some(conn) = peers_map.get_mut(host_id) {
+                    conn.pending_peers
+                        .retain(|peer_id, _| !allowed_peers.contains(peer_id));
                     conn.allowed_peers = allowed_peers;
                 }
+                let host = peers_map.get(host_id);
+                subscriber_ids
+                    .into_iter()
+                    .filter_map(|client_id| {
+                        let client = peers_map.get(&client_id)?;
+                        (client.peer_type == PeerType::Client).then(|| {
+                            (
+                                client.sender.clone(),
+                                host_presence_for_client(host, &client_id),
+                            )
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            };
+
+            for (client_sender, online) in changed_presence {
+                send_signaling_msg(
+                    &client_sender,
+                    SignalingMessage::PeerStatusUpdate {
+                        peer_id: host_id.clone(),
+                        online,
+                        timestamp: get_timestamp(),
+                    },
+                )
+                .await
+                .map_err(|e| e.to_string())?;
             }
 
             log!("Host {} updated allowed peers list.", host_id);
@@ -313,8 +418,15 @@ async fn handle_signaling_message(
             timestamp,
         } => {
             let start = std::time::Instant::now();
-            log!("[SIG_SERVER_DIAG] Offer RX from {} to {}. Verifying envelope signature...", from, to);
-            verify_data_plane_message(
+            log!(
+                "[SIG_SERVER_DIAG] Offer RX from {} to {}. Verifying envelope signature...",
+                from,
+                to
+            );
+            if current_peer_id.as_deref() != Some(from.as_str()) {
+                return Err("Offer sender does not match this signaling connection".to_string());
+            }
+            let sender_public_key = verify_data_plane_message(
                 0x01,
                 &from,
                 &to,
@@ -327,9 +439,32 @@ async fn handle_signaling_message(
             )
             .await?;
 
+            // The first signed offer opens a tightly bounded pairing window.
+            {
+                let mut peers_map = peers.write().await;
+                let target = peers_map.get_mut(&to).ok_or("Target not found")?;
+                if target.peer_type == PeerType::Host
+                    && !target.is_public
+                    && !target.allowed_peers.contains(&from)
+                {
+                    target.pending_peers.retain(|_, started| {
+                        started.elapsed() < std::time::Duration::from_secs(120)
+                    });
+                    if !target.pending_peers.contains_key(&from)
+                        && target.pending_peers.len() >= 128
+                    {
+                        return Err("Host pairing queue is full".to_string());
+                    }
+                    target
+                        .pending_peers
+                        .entry(from.clone())
+                        .or_insert_with(std::time::Instant::now);
+                }
+            }
+
             let peers_map = peers.read().await;
             if let Some(target_conn) = peers_map.get(&to) {
-                let send_res = send_signaling_msg(
+                let send_res = send_attested_signaling_msg(
                     &target_conn.sender,
                     SignalingMessage::Offer {
                         from: from.clone(),
@@ -340,6 +475,7 @@ async fn handle_signaling_message(
                         signature,
                         timestamp,
                     },
+                    &sender_public_key,
                 )
                 .await
                 .map_err(|e| e.to_string());
@@ -360,8 +496,15 @@ async fn handle_signaling_message(
             timestamp,
         } => {
             let start = std::time::Instant::now();
-            log!("[SIG_SERVER_DIAG] Answer RX from {} to {}. Verifying envelope signature...", from, to);
-            verify_data_plane_message(
+            log!(
+                "[SIG_SERVER_DIAG] Answer RX from {} to {}. Verifying envelope signature...",
+                from,
+                to
+            );
+            if current_peer_id.as_deref() != Some(from.as_str()) {
+                return Err("Answer sender does not match this signaling connection".to_string());
+            }
+            let sender_public_key = verify_data_plane_message(
                 0x02,
                 &from,
                 &to,
@@ -376,7 +519,7 @@ async fn handle_signaling_message(
 
             let peers_map = peers.read().await;
             if let Some(target_conn) = peers_map.get(&to) {
-                let send_res = send_signaling_msg(
+                let send_res = send_attested_signaling_msg(
                     &target_conn.sender,
                     SignalingMessage::Answer {
                         from: from.clone(),
@@ -387,6 +530,7 @@ async fn handle_signaling_message(
                         signature,
                         timestamp,
                     },
+                    &sender_public_key,
                 )
                 .await
                 .map_err(|e| e.to_string());
@@ -408,7 +552,10 @@ async fn handle_signaling_message(
             signature,
             timestamp,
         } => {
-            verify_data_plane_message(
+            if current_peer_id.as_deref() != Some(from.as_str()) {
+                return Err("ICE sender does not match this signaling connection".to_string());
+            }
+            let sender_public_key = verify_data_plane_message(
                 0x03,
                 &from,
                 &to,
@@ -423,7 +570,7 @@ async fn handle_signaling_message(
 
             let peers_map = peers.read().await;
             if let Some(target_conn) = peers_map.get(&to) {
-                send_signaling_msg(
+                send_attested_signaling_msg(
                     &target_conn.sender,
                     SignalingMessage::IceCandidate {
                         from,
@@ -436,6 +583,7 @@ async fn handle_signaling_message(
                         signature,
                         timestamp,
                     },
+                    &sender_public_key,
                 )
                 .await
                 .map_err(|e| e.to_string())
@@ -456,7 +604,11 @@ async fn handle_signaling_message(
     }
 }
 
-async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap, subscriptions: SubMap) {
+async fn handle_peer_connection(
+    stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
+    peers: PeerMap,
+    subscriptions: SubMap,
+) {
     let ws_stream = match accept_async(stream).await {
         Ok(ws) => ws,
         Err(e) => {
@@ -593,11 +745,57 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap, s
                                 base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sess_bytes)
                             };
 
-                            let mut peers_map = peers.write().await;
-                            if let Some(old_conn) = peers_map.remove(&reg_peer_id) {
+                            let existing_subscribers = subscriptions
+                                .read()
+                                .await
+                                .get(&reg_peer_id)
+                                .cloned()
+                                .unwrap_or_default();
+                            let (old_sender, client_updates) = {
+                                let mut peers_map = peers.write().await;
+                                let old_sender = peers_map
+                                    .remove(&reg_peer_id)
+                                    .map(|old_conn| old_conn.sender);
+                                peers_map.insert(
+                                    reg_peer_id.clone(),
+                                    PeerConnection {
+                                        sender: tx.clone(),
+                                        peer_type: peer_type.clone(),
+                                        display_name: display_name.clone(),
+                                        is_public,
+                                        public_key: hex::decode(&public_key).unwrap(),
+                                        session_id: sess_id.clone(),
+                                        allowed_peers: Vec::new(),
+                                        pending_peers: HashMap::new(),
+                                        last_sequence: std::sync::Arc::new(
+                                            std::sync::atomic::AtomicU64::new(0),
+                                        ),
+                                    },
+                                );
+                                let host = peers_map.get(&reg_peer_id);
+                                let client_updates = if peer_type == PeerType::Host {
+                                    existing_subscribers
+                                        .iter()
+                                        .filter_map(|client_id| {
+                                            let client = peers_map.get(client_id)?;
+                                            (client.peer_type == PeerType::Client).then(|| {
+                                                (
+                                                    client.sender.clone(),
+                                                    host_presence_for_client(host, client_id),
+                                                )
+                                            })
+                                        })
+                                        .collect()
+                                } else {
+                                    Vec::new()
+                                };
+                                (old_sender, client_updates)
+                            };
+
+                            if let Some(old_sender) = old_sender {
                                 log!("Registering peer: Replacing connection for peer ID '{}'", reg_peer_id);
                                 let _ = send_signaling_msg(
-                                    &old_conn.sender,
+                                    &old_sender,
                                     SignalingMessage::SessionReplaced {
                                         reason: "authenticated_replacement".to_string(),
                                         timestamp: get_timestamp(),
@@ -613,20 +811,6 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap, s
                                 is_public
                             );
 
-                            peers_map.insert(
-                                reg_peer_id.clone(),
-                                PeerConnection {
-                                    sender: tx.clone(),
-                                    peer_type: peer_type.clone(),
-                                    display_name,
-                                    is_public,
-                                    public_key: hex::decode(&public_key).unwrap(),
-                                    session_id: sess_id.clone(),
-                                    allowed_peers: Vec::new(),
-                                    last_sequence: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-                                },
-                            );
-
                             peer_id = Some(reg_peer_id.clone());
 
                             let ok_msg = SignalingMessage::RegisterSuccess {
@@ -636,23 +820,14 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap, s
                             };
                             let _ = ws_write.send(Message::Text(serde_json::to_string(&ok_msg).unwrap().into())).await;
 
-                             if peer_type == PeerType::Host {
-                                 let status_msg = SignalingMessage::PeerStatusUpdate {
-                                     peer_id: reg_peer_id.clone(),
-                                     online: true,
-                                     timestamp: get_timestamp(),
-                                 };
-                                 let sub_map = subscriptions.read().await;
-                                 if let Some(clients) = sub_map.get(&reg_peer_id) {
-                                     for client_id in clients {
-                                          if let Some(client_conn) = peers_map.get(client_id) {
-                                             if client_conn.peer_type == PeerType::Client {
-                                                 let _ = send_signaling_msg(&client_conn.sender, status_msg.clone()).await;
-                                             }
-                                         }
-                                     }
-                                 }
-                             }
+                            for (client_sender, online) in client_updates {
+                                let status_msg = SignalingMessage::PeerStatusUpdate {
+                                    peer_id: reg_peer_id.clone(),
+                                    online,
+                                    timestamp: get_timestamp(),
+                                };
+                                let _ = send_signaling_msg(&client_sender, status_msg).await;
+                            }
 
                             break;
                         }
@@ -748,7 +923,10 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap, s
     }
 
     if let Some(id) = peer_id {
-        log!("Peer {} disconnected. Checking if it should be removed from map.", id);
+        log!(
+            "Peer {} disconnected. Checking if it should be removed from map.",
+            id
+        );
 
         let mut should_remove = false;
         let mut was_host = false;
@@ -774,16 +952,15 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap, s
                 };
 
                 let peers_read = peers.read().await;
-                let status_msg = SignalingMessage::PeerStatusUpdate {
-                    peer_id: id,
-                    online: false,
-                    timestamp: get_timestamp(),
-                };
-
                 for client_id in subs {
                     if let Some(client_conn) = peers_read.get(&client_id) {
                         if client_conn.peer_type == PeerType::Client {
-                            let _ = send_signaling_msg(&client_conn.sender, status_msg.clone()).await;
+                            let status_msg = SignalingMessage::PeerStatusUpdate {
+                                peer_id: id.clone(),
+                                online: host_presence_for_client(None, &client_id),
+                                timestamp: get_timestamp(),
+                            };
+                            let _ = send_signaling_msg(&client_conn.sender, status_msg).await;
                         }
                     }
                 }
@@ -794,39 +971,65 @@ async fn handle_peer_connection(stream: tokio::net::TcpStream, peers: PeerMap, s
                 }
             }
         } else {
-            log!("Peer {} has a newer connection in the map, skipping removal.", id);
+            log!(
+                "Peer {} has a newer connection in the map, skipping removal.",
+                id
+            );
         }
     }
     log!("Connection handling closed.");
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     log!("🚀 Starting Frankn Signaling Server...");
     let peers: PeerMap = Arc::new(RwLock::new(HashMap::new()));
     let subscriptions: SubMap = Arc::new(RwLock::new(HashMap::new()));
 
-    let listener = TcpListener::bind("0.0.0.0:8037")
-        .await
-        .expect("Failed to bind to the port");
+    use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+    let cert_path = std::env::var("FRANKN_TLS_CERT")?;
+    let key_path = std::env::var("FRANKN_TLS_KEY")?;
+    let certificates = CertificateDer::pem_file_iter(&cert_path)?.collect::<Result<Vec<_>, _>>()?;
+    if certificates.is_empty() {
+        return Err("FRANKN_TLS_CERT contains no certificates".into());
+    }
+    let private_key = PrivateKeyDer::from_pem_file(&key_path)?;
+    let tls_config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certificates, private_key)?;
+    let tls_acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(tls_config));
 
-    log!("Signaling server listening on 0.0.0.0:8037");
+    let bind_addr =
+        std::env::var("FRANKN_SIGNALING_BIND").unwrap_or_else(|_| "0.0.0.0:8037".to_string());
+    let listener = TcpListener::bind(&bind_addr).await?;
+
+    log!("TLS signaling server listening on {}", bind_addr);
     while let Ok((stream, addr)) = listener.accept().await {
         log!("New connection from: {}", addr);
         let peers = peers.clone();
         let subscriptions = subscriptions.clone();
-        tokio::spawn(handle_peer_connection(stream, peers, subscriptions));
+        let acceptor = tls_acceptor.clone();
+        tokio::spawn(async move {
+            match acceptor.accept(stream).await {
+                Ok(tls_stream) => handle_peer_connection(tls_stream, peers, subscriptions).await,
+                Err(error) => {
+                    elog!("TLS handshake failed for {}: {}", addr, error);
+                }
+            }
+        });
     }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::{SigningKey, Signer};
+    use base64::Engine;
+    use ed25519_dalek::{Signer, SigningKey};
     use rand::rngs::OsRng;
     use rand::RngCore;
-    use sha2::{Sha256, Digest};
-    use base64::Engine;
+    use sha2::{Digest, Sha256};
 
     #[tokio::test]
     async fn test_cryptographic_verification_pipeline() {
@@ -846,7 +1049,7 @@ mod tests {
         let host_peer_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(host_raw_id);
 
         let peers: PeerMap = Arc::new(RwLock::new(HashMap::new()));
-        
+
         let client_session_id = {
             let mut sess_bytes = [0u8; 32];
             csprng.fill_bytes(&mut sess_bytes);
@@ -870,6 +1073,7 @@ mod tests {
                     public_key: client_pub_bytes.to_vec(),
                     session_id: client_session_id.clone(),
                     allowed_peers: Vec::new(),
+                    pending_peers: HashMap::new(),
                     last_sequence: Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 },
             );
@@ -884,6 +1088,7 @@ mod tests {
                     public_key: host_pub_bytes.to_vec(),
                     session_id: host_session_id.clone(),
                     allowed_peers: vec![client_peer_id.clone()],
+                    pending_peers: HashMap::new(),
                     last_sequence: Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 },
             );
@@ -891,22 +1096,31 @@ mod tests {
 
         let sdp = "v=0\r\no=- 987654321 2 IN IP4 127.0.0.1\r\ns=-";
         let seq: u64 = 1;
-        let ts: u64 = 1789385043;
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
 
         let mut buf = [0u8; 160];
         buf[0..14].copy_from_slice(b"FRANKN-SIG-V1\0");
         buf[14] = 0x01;
         buf[15] = 0x01;
-        
-        let sess_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&client_session_id).unwrap();
+
+        let sess_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(&client_session_id)
+            .unwrap();
         buf[16..48].copy_from_slice(&sess_bytes);
         buf[48..56].copy_from_slice(&seq.to_be_bytes());
         buf[56..64].copy_from_slice(&ts.to_be_bytes());
 
-        let from_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&client_peer_id).unwrap();
+        let from_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(&client_peer_id)
+            .unwrap();
         buf[64..96].copy_from_slice(&from_bytes);
 
-        let to_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&host_peer_id).unwrap();
+        let to_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(&host_peer_id)
+            .unwrap();
         buf[96..128].copy_from_slice(&to_bytes);
 
         let payload_hash = Sha256::digest(sdp.as_bytes());
@@ -941,7 +1155,10 @@ mod tests {
             &peers,
         )
         .await;
-        assert!(res_replay.is_err(), "Replay attack should have failed verification");
+        assert!(
+            res_replay.is_err(),
+            "Replay attack should have failed verification"
+        );
 
         let mut wrong_sig = sig.to_bytes();
         wrong_sig[5] ^= 0xFF;
@@ -958,7 +1175,10 @@ mod tests {
             &peers,
         )
         .await;
-        assert!(res_bad_sig.is_err(), "Corrupted signature should have failed verification");
+        assert!(
+            res_bad_sig.is_err(),
+            "Corrupted signature should have failed verification"
+        );
 
         let res_wrong_sess = verify_data_plane_message(
             0x01,
@@ -972,7 +1192,10 @@ mod tests {
             &peers,
         )
         .await;
-        assert!(res_wrong_sess.is_err(), "Wrong session ID should have failed verification");
+        assert!(
+            res_wrong_sess.is_err(),
+            "Wrong session ID should have failed verification"
+        );
 
         {
             let mut peers_map = peers.write().await;
@@ -992,6 +1215,111 @@ mod tests {
             &peers,
         )
         .await;
-        assert!(res_acl.is_err(), "Access from un-whitelisted client should have failed ACL check");
+        assert!(
+            res_acl.is_err(),
+            "Access from un-whitelisted client should have failed ACL check"
+        );
+    }
+
+    #[tokio::test]
+    async fn acl_update_pushes_recomputed_presence_to_existing_subscribers() {
+        let mut csprng = OsRng;
+        let host_key = SigningKey::generate(&mut csprng);
+        let host_id = "host-test".to_string();
+        let allowed_client = "client-allowed".to_string();
+        let denied_client = "client-denied".to_string();
+        let (host_tx, _host_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (allowed_tx, mut allowed_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (denied_tx, mut denied_rx) = tokio::sync::mpsc::unbounded_channel();
+        let peers: PeerMap = Arc::new(RwLock::new(HashMap::new()));
+        peers.write().await.insert(
+            host_id.clone(),
+            PeerConnection {
+                sender: host_tx.clone(),
+                peer_type: PeerType::Host,
+                display_name: "Host".to_string(),
+                is_public: false,
+                public_key: host_key.verifying_key().to_bytes().to_vec(),
+                session_id: "host-session".to_string(),
+                allowed_peers: Vec::new(),
+                pending_peers: HashMap::new(),
+                last_sequence: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            },
+        );
+        for (client_id, sender) in [
+            (allowed_client.clone(), allowed_tx),
+            (denied_client.clone(), denied_tx),
+        ] {
+            peers.write().await.insert(
+                client_id,
+                PeerConnection {
+                    sender,
+                    peer_type: PeerType::Client,
+                    display_name: "Client".to_string(),
+                    is_public: false,
+                    public_key: vec![0; 32],
+                    session_id: "client-session".to_string(),
+                    allowed_peers: Vec::new(),
+                    pending_peers: HashMap::new(),
+                    last_sequence: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+                },
+            );
+        }
+        let subscriptions: SubMap = Arc::new(RwLock::new(HashMap::from([(
+            host_id.clone(),
+            vec![allowed_client.clone(), denied_client.clone()],
+        )])));
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let allowed_peers = vec![allowed_client.clone()];
+        let payload = format!("{}:{}", allowed_peers.join(","), timestamp);
+        let signature = hex::encode(host_key.sign(payload.as_bytes()).to_bytes());
+        let mut current_peer_id = Some(host_id.clone());
+
+        handle_signaling_message(
+            SignalingMessage::UpdateHostAcl {
+                allowed_peers,
+                timestamp,
+                signature,
+            },
+            &mut current_peer_id,
+            &host_tx,
+            &peers,
+            &subscriptions,
+        )
+        .await
+        .expect("valid signed ACL update should succeed");
+
+        let allowed_update: SignalingMessage = serde_json::from_str(
+            allowed_rx
+                .recv()
+                .await
+                .unwrap()
+                .into_text()
+                .unwrap()
+                .as_str(),
+        )
+        .unwrap();
+        let denied_update: SignalingMessage = serde_json::from_str(
+            denied_rx
+                .recv()
+                .await
+                .unwrap()
+                .into_text()
+                .unwrap()
+                .as_str(),
+        )
+        .unwrap();
+        assert!(matches!(
+            allowed_update,
+            SignalingMessage::PeerStatusUpdate { online: true, .. }
+        ));
+        assert!(matches!(
+            denied_update,
+            SignalingMessage::PeerStatusUpdate { online: false, .. }
+        ));
     }
 }

@@ -395,8 +395,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Re-initializing Neural Link to new server...';
 
   @override
-  String get invalidUrlFormat =>
-      'Invalid URL format. Must start with ws:// or wss://';
+  String get invalidUrlFormat => 'Invalid URL format. Must start with wss://';
 
   @override
   String get defaultLlm => 'Default LLM';

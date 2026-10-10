@@ -56,13 +56,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 setState(() {});
               },
             ),
-            _buildSelectorTile(l10n.korean, _settings.localeCode == 'ko', () async {
-              await _settings.setLocaleCode('ko');
-              appLocale.value = const Locale('ko');
-              if (!context.mounted) return;
-              Navigator.pop(context);
-              setState(() {});
-            }),
+            _buildSelectorTile(
+              l10n.korean,
+              _settings.localeCode == 'ko',
+              () async {
+                await _settings.setLocaleCode('ko');
+                appLocale.value = const Locale('ko');
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                setState(() {});
+              },
+            ),
           ],
         ),
       ),
@@ -121,7 +125,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     trailing: _settings.terminalFontSize == size.toDouble()
-                        ? const Icon(Icons.check, color: AppColors.accentSecondary)
+                        ? const Icon(
+                            Icons.check,
+                            color: AppColors.accentSecondary,
+                          )
                         : null,
                     onTap: () async {
                       await _settings.setTerminalFontSize(size.toDouble());
@@ -170,7 +177,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     trailing: _settings.trackpadSensitivity == size
-                        ? const Icon(Icons.check, color: AppColors.accentSecondary)
+                        ? const Icon(
+                            Icons.check,
+                            color: AppColors.accentSecondary,
+                          )
                         : null,
                     onTap: () async {
                       await _settings.setTrackpadSensitivity(size);
@@ -280,7 +290,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             TextButton(
               onPressed: () async {
                 final newUrl = controller.text.trim();
-                if (newUrl.isNotEmpty && newUrl.startsWith('ws')) {
+                final uri = Uri.tryParse(newUrl);
+                if (uri != null && uri.scheme == 'wss' && uri.host.isNotEmpty) {
                   await _settings.setSignalingUrl(newUrl);
                   _client.disconnectFromHost();
                   _client.connectToSignaling();
@@ -415,7 +426,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context, 'CLOSE'),
-                          child: Text(l10n.close, style: const TextStyle(color: AppColors.textSecondary)),
+                          child: Text(
+                            l10n.close,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                         ),
                         if (_settings.defaultDownloadDir != null)
                           TextButton(
@@ -453,7 +469,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (context) => const LocalDirSelector(pickFiles: false),
+                        builder: (context) =>
+                            const LocalDirSelector(pickFiles: false),
                       );
                     } else {
                       selected = await FilePicker.platform.getDirectoryPath(
@@ -489,7 +506,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _buildSettingsItem(
                 title: l10n.language,
-                value: _settings.localeCode == 'ko' ? l10n.korean : l10n.english,
+                value: _settings.localeCode == 'ko'
+                    ? l10n.korean
+                    : l10n.english,
                 icon: Icons.language_rounded,
                 iconColor: Colors.blue,
                 onTap: _showLanguageSelector,
@@ -521,7 +540,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _buildSettingsSwitchItem(
                 title: "Mirror Host Notifications",
-                subtitle: "Display desktop alerts from connected host PC over WebRTC.",
+                subtitle:
+                    "Display desktop alerts from connected host PC over WebRTC.",
                 value: _settings.enableHostNotifications,
                 icon: Icons.notifications_active_rounded,
                 iconColor: Colors.cyanAccent,
@@ -532,7 +552,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSettingsSwitchItem(
                 title: "File Transfer & Sync Alerts",
-                subtitle: "Show progress notifications for downloads, uploads, and folder sync.",
+                subtitle:
+                    "Show progress notifications for downloads, uploads, and folder sync.",
                 value: _settings.enableTransferNotifications,
                 icon: Icons.sync_rounded,
                 iconColor: Colors.lightGreenAccent,
@@ -543,25 +564,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSettingsSwitchItem(
                 title: "Notification Sound",
-                subtitle: "Play sound when receiving alerts or sync completions.",
+                subtitle:
+                    "Play sound when receiving alerts or sync completions.",
                 value: _settings.enableNotificationSound,
                 icon: Icons.volume_up_rounded,
                 iconColor: Colors.orangeAccent,
                 onChanged: (val) async {
                   await _settings.setEnableNotificationSound(val);
-                  await NotificationService().initialize(requestPermissions: false);
+                  await NotificationService().initialize(
+                    requestPermissions: false,
+                  );
                   setState(() {});
                 },
               ),
               _buildSettingsSwitchItem(
                 title: "Notification Vibration",
-                subtitle: "Vibrate device for system alerts and completion events.",
+                subtitle:
+                    "Vibrate device for system alerts and completion events.",
                 value: _settings.enableNotificationVibration,
                 icon: Icons.vibration_rounded,
                 iconColor: Colors.purpleAccent,
                 onChanged: (val) async {
                   await _settings.setEnableNotificationVibration(val);
-                  await NotificationService().initialize(requestPermissions: false);
+                  await NotificationService().initialize(
+                    requestPermissions: false,
+                  );
                   setState(() {});
                 },
                 isLast: true,
@@ -576,7 +603,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               _buildSettingsSwitchItem(
                 title: "Live Debug Log Streaming",
-                subtitle: "Stream background isolate logs to UI over IPC. Turn off to optimize UI performance.",
+                subtitle:
+                    "Stream background isolate logs to UI over IPC. Turn off to optimize UI performance.",
                 value: _settings.enableLiveLogIpc,
                 icon: Icons.bug_report_rounded,
                 iconColor: Colors.amberAccent,
@@ -656,11 +684,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         if (!isLast)
-          const Divider(
-            height: 1,
-            color: Color(0x3327272A),
-            indent: 52,
-          ),
+          const Divider(height: 1, color: Color(0x3327272A), indent: 52),
       ],
     );
   }

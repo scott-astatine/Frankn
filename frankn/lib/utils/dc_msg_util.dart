@@ -13,6 +13,8 @@ sealed class HostMessage {
     switch (type) {
       case 'challenge':
         return HostMsgChallenge.fromJson(json);
+      case 'auth_opaque_response':
+        return HostMsgOpaqueResponse.fromJson(json);
       case 'auth_success':
         return HostMsgAuthSuccess.fromJson(json);
       case 'auth_failed':
@@ -87,28 +89,50 @@ class HostMsgChallenge extends HostMessage {
 }
 
 class HostMsgAuthSuccess extends HostMessage {
-  final String token;
+  final String attemptId;
   final String homeDir;
   final int timestamp;
 
   HostMsgAuthSuccess({
-    required this.token,
+    required this.attemptId,
     required this.homeDir,
     required this.timestamp,
   }) : super('auth_success');
 
   factory HostMsgAuthSuccess.fromJson(Map<String, dynamic> json) {
     return HostMsgAuthSuccess(
-      token: (json['token'] ?? '').toString(),
+      attemptId: (json['attempt_id'] ?? '').toString(),
       homeDir: (json['home_dir'] ?? '/home/').toString(),
       timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
     );
   }
 
   @override
-  Map<String, dynamic> toJson() =>
-      super.toJson()
-        ..addAll({'token': token, 'home_dir': homeDir, 'timestamp': timestamp});
+  Map<String, dynamic> toJson() => super.toJson()
+    ..addAll({
+      'attempt_id': attemptId,
+      'home_dir': homeDir,
+      'timestamp': timestamp,
+    });
+}
+
+class HostMsgOpaqueResponse extends HostMessage {
+  final String attemptId;
+  final String response;
+  final int timestamp;
+
+  HostMsgOpaqueResponse({
+    required this.attemptId,
+    required this.response,
+    required this.timestamp,
+  }) : super('auth_opaque_response');
+
+  factory HostMsgOpaqueResponse.fromJson(Map<String, dynamic> json) =>
+      HostMsgOpaqueResponse(
+        attemptId: (json['attempt_id'] ?? '').toString(),
+        response: (json['response'] ?? '').toString(),
+        timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
+      );
 }
 
 class HostMsgAuthFailed extends HostMessage {
@@ -936,20 +960,27 @@ sealed class ClientMessage {
   }
 }
 
-class ClientMsgAuthRequest extends ClientMessage {
-  const ClientMsgAuthRequest() : super('auth_request');
+class ClientMsgOpaqueStart extends ClientMessage {
+  final String attemptId;
+  final String request;
+  const ClientMsgOpaqueStart({required this.attemptId, required this.request})
+    : super('auth_opaque_start');
+  @override
+  Map<String, dynamic> toJson() =>
+      super.toJson()..addAll({'attempt_id': attemptId, 'request': request});
 }
 
-class ClientMsgAuthResponse extends ClientMessage {
-  final String response;
-
-  const ClientMsgAuthResponse({required this.response})
-    : super('auth_response');
-
+class ClientMsgOpaqueFinish extends ClientMessage {
+  final String attemptId;
+  final String finalization;
+  const ClientMsgOpaqueFinish({
+    required this.attemptId,
+    required this.finalization,
+  }) : super('auth_opaque_finish');
   @override
-  Map<String, dynamic> toJson() {
-    return super.toJson()..addAll({'response': response});
-  }
+  Map<String, dynamic> toJson() =>
+      super.toJson()
+        ..addAll({'attempt_id': attemptId, 'finalization': finalization});
 }
 
 class ClientMsgXDcMsg extends ClientMessage {

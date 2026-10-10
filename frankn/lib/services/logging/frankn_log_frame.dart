@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:frankn/services/logging/redaction_engine.dart';
 
 /// Severity levels for Frankn telemetry events.
 enum LogLevel {
@@ -62,33 +63,35 @@ class FranknLogFrame {
     this.metadata,
   });
 
-  Map<String, dynamic> toJson() => {
-        'ts': timestampMs,
-        'lvl': level.index,
-        'cat': category.index,
-        'sub': subsystem,
-        'msg': message,
-        if (generationId != null) 'gen': generationId,
-        if (hostSessionId != null) 'hsid': hostSessionId,
-        if (capabilitySessionId != null) 'csid': capabilitySessionId,
-        if (nodeId != null) 'nid': nodeId,
-        if (metadata != null) 'meta': metadata,
-      };
+  Map<String, dynamic> toJson() =>
+      RedactionEngine().sanitizeValue({
+            'ts': timestampMs,
+            'lvl': level.index,
+            'cat': category.index,
+            'sub': subsystem,
+            'msg': message,
+            if (generationId != null) 'gen': generationId,
+            if (hostSessionId != null) 'hsid': hostSessionId,
+            if (capabilitySessionId != null) 'csid': capabilitySessionId,
+            if (nodeId != null) 'nid': nodeId,
+            if (metadata != null) 'meta': metadata,
+          })
+          as Map<String, dynamic>;
 
   factory FranknLogFrame.fromJson(Map<String, dynamic> map) => FranknLogFrame(
-        timestampMs: map['ts'] as int,
-        level: LogLevel.values[map['lvl'] as int],
-        category: LogCategory.values[map['cat'] as int],
-        subsystem: map['sub'] as String,
-        message: map['msg'] as String,
-        generationId: map['gen'] as String?,
-        hostSessionId: map['hsid'] as String?,
-        capabilitySessionId: map['csid'] as String?,
-        nodeId: map['nid'] as String?,
-        metadata: map['meta'] is Map<String, dynamic>
-            ? map['meta'] as Map<String, dynamic>
-            : null,
-      );
+    timestampMs: map['ts'] as int,
+    level: LogLevel.values[map['lvl'] as int],
+    category: LogCategory.values[map['cat'] as int],
+    subsystem: map['sub'] as String,
+    message: map['msg'] as String,
+    generationId: map['gen'] as String?,
+    hostSessionId: map['hsid'] as String?,
+    capabilitySessionId: map['csid'] as String?,
+    nodeId: map['nid'] as String?,
+    metadata: map['meta'] is Map<String, dynamic>
+        ? map['meta'] as Map<String, dynamic>
+        : null,
+  );
 
   String toEncodedJson() => jsonEncode(toJson());
 

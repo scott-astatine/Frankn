@@ -95,7 +95,10 @@ pub async fn unlock_screen(ctx: &CommandContext) {
         {
             Command::new("cmd").args(["/C", cmd.trim()]).output().await
         } else {
-            Command::new("loginctl").args(["unlock-session"]).output().await
+            Command::new("loginctl")
+                .args(["unlock-session"])
+                .output()
+                .await
         };
         handle_res(ctx, result).await;
     }
@@ -106,7 +109,10 @@ pub async fn unlock_screen(ctx: &CommandContext) {
         {
             Command::new("sh").args(["-c", cmd.trim()]).output().await
         } else {
-            Command::new("loginctl").args(["unlock-session"]).output().await
+            Command::new("loginctl")
+                .args(["unlock-session"])
+                .output()
+                .await
         };
         handle_res(ctx, result).await;
     }

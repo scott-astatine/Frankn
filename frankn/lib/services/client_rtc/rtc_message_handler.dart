@@ -26,55 +26,51 @@ mixin RtcMessageHandler on RtcClientBase {
   int _lastPingMs = 0;
   int? _lastSuccessfulPongTime;
 
-  void _handleChallenge(HostMsgChallenge msg) async {
+  Future<void> _handleOpaqueResponse(HostMsgOpaqueResponse msg) async {
     final client = this as RtcClient;
     final activeAttempt = client.activeAttempt;
     if (activeAttempt == null || activeAttempt.isDisposed) {
-      log("[AUTH] Ignored challenge: No active connection attempt.");
+      log("[AUTH] Ignored OPAQUE response: No active connection attempt.");
       return;
     }
 
     final elapsed = activeAttempt.elapsedMs;
     log(
-      "[AUTH] [G${activeAttempt.generationId}] [$elapsed] Challenge received from host.",
+      "[AUTH] [G${activeAttempt.generationId}] [$elapsed] OPAQUE response received.",
     );
-
-    activeAttempt.authAttempt.challenge = AuthChallenge(
-      challenge: msg.challenge,
-      salt: msg.salt,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-    );
-    activeAttempt.authAttempt.updateState(AuthState.derivingCredential);
-
-    final argon2Sw = Stopwatch()..start();
-    log(
-      "[AUTH_DIAG] [G${activeAttempt.generationId}] [$elapsed] Starting Argon2 hash derivation...",
-    );
-
-    final argon2Hash = await AuthService().computeArgon2Hash(
-      currentPassword ?? "",
-      msg.salt,
-    );
-
-    log(
-      "[AUTH_DIAG] [G${activeAttempt.generationId}] [$elapsed] Argon2 hash completed in +${argon2Sw.elapsedMilliseconds}ms. Computing challenge response...",
-    );
-
-    if (client.activeAttempt != activeAttempt || activeAttempt.isDisposed) {
-      log(
-        "[AUTH] Ignored derived Argon2 result: Connection attempt changed during computation.",
-      );
+    if (msg.attemptId != activeAttempt.authAttempt.opaqueAttemptId) {
+      activeAttempt.authAttempt.clearOpaqueState();
+      activeAttempt.authAttempt.updateState(AuthState.failed);
+      isAuthFailed = true;
+      log('[AUTH] Discarded OPAQUE response for a different login attempt.');
       return;
     }
-
-    final response = AuthService().computeResponse(argon2Hash, msg.challenge);
-    activeAttempt.authAttempt.response = AuthResponse(response);
-    activeAttempt.authAttempt.updateState(AuthState.sendingResponse);
-
-    log(
-      "[AUTH_DIAG] [G${activeAttempt.generationId}] [$elapsed] Sending auth_response to host via DataChannel.",
-    );
-    sendHostMessage(ClientMsgAuthResponse(response: response).toJson());
+    final handle = activeAttempt.authAttempt.opaqueHandle;
+    if (handle == null) return;
+    activeAttempt.authAttempt.updateState(AuthState.derivingCredential);
+    try {
+      final result = FranknOpaqueClient().finish(
+        handle: handle,
+        response: msg.response,
+      );
+      if (client.activeAttempt != activeAttempt || activeAttempt.isDisposed) {
+        return;
+      }
+      activeAttempt.authAttempt.opaqueHandle = null;
+      activeAttempt.authAttempt.sessionCredential = result.credential;
+      activeAttempt.authAttempt.updateState(AuthState.sendingResponse);
+      sendHostMessage(
+        ClientMsgOpaqueFinish(
+          attemptId: activeAttempt.authAttempt.opaqueAttemptId,
+          finalization: result.finalization,
+        ).toJson(),
+      );
+    } catch (_) {
+      activeAttempt.authAttempt.clearOpaqueState();
+      activeAttempt.authAttempt.updateState(AuthState.failed);
+      isAuthFailed = true;
+      log("[AUTH] OPAQUE authentication failed locally.");
+    }
   }
 
   void _handleAuthSuccess(HostMsgAuthSuccess msg) {
@@ -85,9 +81,20 @@ mixin RtcMessageHandler on RtcClientBase {
       return;
     }
 
+    if (msg.attemptId != activeAttempt.authAttempt.opaqueAttemptId) {
+      log('[AUTH] Ignored auth_success for a different login attempt.');
+      return;
+    }
+
     final elapsed = activeAttempt.elapsedMs;
+    final credential = activeAttempt.authAttempt.sessionCredential;
+    if (credential == null) {
+      log("[AUTH] Ignored auth_success without a completed OPAQUE exchange.");
+      return;
+    }
     isAuthFailed = false;
-    AuthService().setToken(msg.token);
+    AuthService().setToken(credential);
+    activeAttempt.authAttempt.sessionCredential = null;
     activeAttempt.authAttempt.updateState(AuthState.authenticated);
 
     _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
@@ -129,10 +136,13 @@ mixin RtcMessageHandler on RtcClientBase {
   }
 
   void _handleAuthFailed(HostMsgAuthFailed msg) {
+    final activeAttempt = (this as RtcClient).activeAttempt;
+    activeAttempt?.authAttempt.clearOpaqueState();
+    AuthService().clearToken();
     isAuthFailed = true;
     lastFailureReason = msg.error;
     updateHostState(HostConnectionState.failed);
-    log("AUTH FAILED: ${msg.error}");
+    log("AUTH FAILED: Host rejected OPAQUE authentication.");
   }
 
   void _handleBinaryChunk(Uint8List chunk) async {
@@ -514,10 +524,13 @@ mixin RtcMessageHandler on RtcClientBase {
     _lastSuccessfulPongTime = DateTime.now().millisecondsSinceEpoch;
     try {
       final strD = data.toString();
-      if (!(strD.contains('telemetry') ||
-          strD.contains('art_data') ||
-          strD.contains('toggle_play_pause') ||
-          strD.contains('Pong'))) {
+      final messageType = data['type']?.toString();
+      if (!(messageType?.startsWith('auth_') ?? false) &&
+          messageType != 'challenge' &&
+          !(strD.contains('telemetry') ||
+              strD.contains('art_data') ||
+              strD.contains('toggle_play_pause') ||
+              strD.contains('Pong'))) {
         log("RAW_RX: ${jsonEncode(data)}");
       }
 
@@ -528,8 +541,16 @@ mixin RtcMessageHandler on RtcClientBase {
           _handleDownloadStart(msg);
         case HostMsgDownloadEnd():
           _handleDownloadEnd(msg);
+        case HostMsgOpaqueResponse():
+          await _handleOpaqueResponse(msg);
         case HostMsgChallenge():
-          _handleChallenge(msg);
+          (this as RtcClient).activeAttempt?.authAttempt.clearOpaqueState();
+          AuthService().clearToken();
+          isAuthFailed = true;
+          updateHostState(HostConnectionState.failed);
+          log(
+            '[AUTH] Legacy authentication challenge rejected; update the Host and client.',
+          );
         case HostMsgAuthSuccess():
           _handleAuthSuccess(msg);
         case HostMsgAuthFailed():
@@ -543,7 +564,9 @@ mixin RtcMessageHandler on RtcClientBase {
         case HostMsgLlmToken():
           genDcMsgController.add(msg);
         case HostMsgCapabilitiesInventory():
-          (this as RtcClient).capabilityInventory.updateFromList(msg.capabilities);
+          (this as RtcClient).capabilityInventory.updateFromList(
+            msg.capabilities,
+          );
           genDcMsgController.add(msg);
         case HostMsgHostSignal():
           genDcMsgController.add(msg);

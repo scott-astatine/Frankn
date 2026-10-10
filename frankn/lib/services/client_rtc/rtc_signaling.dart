@@ -10,6 +10,70 @@ part of 'rtc.dart';
 
 mixin RtcSignaling on RtcClientBase {
   int _reconnectDelaySeconds = 2;
+  final Map<String, int> _lastInboundPeerSequence = {};
+
+  Future<bool> _verifyHostDataPlaneMessage(
+    Map<String, dynamic> data, {
+    required int messageType,
+    required String payload,
+    required RtcConnectionAttempt attempt,
+  }) async {
+    final client = this as RtcClient;
+    final from = data['from'] as String?;
+    final to = data['to'] as String?;
+    final sessionId = data['session_id'] as String?;
+    final publicKey = data['from_public_key'] as String?;
+    final signature = data['signature'] as String?;
+    final sequence = data['sequence'] as int?;
+    final timestamp = data['timestamp'] as int?;
+    if (from == null ||
+        to != client.identityManager.selfId ||
+        from != client.currentHostId ||
+        sessionId == null ||
+        publicKey == null ||
+        signature == null ||
+        sequence == null ||
+        timestamp == null) {
+      log(
+        '[SIG] Rejected inbound signaling message with incomplete or unexpected identity fields.',
+      );
+      return false;
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if ((now - timestamp).abs() > 60000) {
+      log('[SIG] Rejected stale inbound signaling message from $from.');
+      return false;
+    }
+    if (attempt.hostSessionId != null && attempt.hostSessionId != sessionId) {
+      log('[SIG] Rejected message from stale host session $sessionId.');
+      return false;
+    }
+    final sequenceKey = '$from:$sessionId';
+    if (sequence <= (_lastInboundPeerSequence[sequenceKey] ?? 0)) {
+      log('[SIG] Rejected replayed or reordered signaling sequence $sequence.');
+      return false;
+    }
+    final valid = await client.identityManager.verifyEnvelope(
+      publicKeyHex: publicKey,
+      msgType: messageType,
+      fromPeerId: from,
+      toPeerId: to!,
+      payload: payload,
+      sequence: sequence,
+      timestamp: timestamp,
+      activeSessionId: sessionId,
+      signatureHex: signature,
+    );
+    if (!valid || client.activeAttempt != attempt || attempt.isDisposed) {
+      log(
+        '[SIG] Rejected unauthenticated or stale signaling message from $from.',
+      );
+      return false;
+    }
+    _lastInboundPeerSequence[sequenceKey] = sequence;
+    attempt.hostSessionId ??= sessionId;
+    return true;
+  }
 
   /// Minimum interval between host list requests to avoid spamming the signaling server.
   DateTime? _lastHostListRequest;
@@ -25,7 +89,6 @@ mixin RtcSignaling on RtcClientBase {
   /// 5. Registers client with device information
   ///
   /// The connection is kept alive automatically and will reconnect on failures.
-
 
   Future<void> _handleAuthChallenge(String challengeStr) async {
     try {
@@ -50,6 +113,7 @@ mixin RtcSignaling on RtcClientBase {
         }
         return output;
       }
+
       final challengeBytes = base64Decode(normalizeBase64Url(challengeStr));
 
       final algorithm = crypto_pkg.Ed25519();
@@ -91,7 +155,9 @@ mixin RtcSignaling on RtcClientBase {
 
   /// Waits until the signaling layer is fully connected, identity key loaded, and session_id established.
   @override
-  Future<bool> waitForSignalingReady({Duration timeout = const Duration(seconds: 10)}) async {
+  Future<bool> waitForSignalingReady({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     final client = this as RtcClient;
     final identity = AuthService().identityManager;
     if (client.sigState == SignalConnectionState.connected &&
@@ -152,7 +218,8 @@ mixin RtcSignaling on RtcClientBase {
       );
 
       await client.transport.connect(SettingsService().signalingUrl);
-      _reconnectDelaySeconds = 2; // Reset reconnect delay on successful connection
+      _reconnectDelaySeconds =
+          2; // Reset reconnect delay on successful connection
     } catch (e) {
       log("Fatal Connection Error: $e");
       _handleDisconnection();
@@ -177,11 +244,14 @@ mixin RtcSignaling on RtcClientBase {
     // listeners that care about it, but set the actual state to disconnected.
     client._connectionStateController.add(SignalConnectionState.failed);
     client.sigState = SignalConnectionState.disconnected;
-    
+
     log("Signaling reconnect scheduled in $_reconnectDelaySeconds seconds.");
-    client.reconnectTimer = Timer(Duration(seconds: _reconnectDelaySeconds), () {
-      connectToSignaling();
-    });
+    client.reconnectTimer = Timer(
+      Duration(seconds: _reconnectDelaySeconds),
+      () {
+        connectToSignaling();
+      },
+    );
 
     // Exponential backoff up to 60 seconds
     _reconnectDelaySeconds = (_reconnectDelaySeconds * 2).clamp(2, 60);
@@ -332,24 +402,40 @@ mixin RtcSignaling on RtcClientBase {
         final client = this as RtcClient;
         final activeAttempt = client.activeAttempt;
         if (activeAttempt == null) {
-          log("WARN: Received SDP answer but no active connection attempt. Ignoring.");
+          log(
+            "WARN: Received SDP answer but no active connection attempt. Ignoring.",
+          );
           break;
         }
 
-        log("[SIG] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] Received SDP Answer from host.");
-        final msgSessionId = data['session_id'] as String;
-        activeAttempt.hostSessionId = msgSessionId;
+        log(
+          "[SIG] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] Received SDP Answer from host.",
+        );
+        final sdp = data['sdp'] as String?;
+        if (sdp == null ||
+            !await _verifyHostDataPlaneMessage(
+              data,
+              messageType: 0x02,
+              payload: sdp,
+              attempt: activeAttempt,
+            )) {
+          break;
+        }
 
         // Immediately transition to iceConnecting to cancel signaling stage timeout while setRemoteDescription runs
         _transitionTo(HostConnectionState.iceConnecting, "Received SDP Answer");
 
         // Set the remote SDP answer to complete WebRTC handshake
         try {
-          log("[RTC] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] setRemoteDescription started");
-          await activeAttempt.peerConnection.setRemoteDescription(
-            RTCSessionDescription(data['sdp'], 'answer'),
+          log(
+            "[RTC] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] setRemoteDescription started",
           );
-          log("[RTC] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] setRemoteDescription completed");
+          await activeAttempt.peerConnection.setRemoteDescription(
+            RTCSessionDescription(sdp, 'answer'),
+          );
+          log(
+            "[RTC] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] setRemoteDescription completed",
+          );
         } catch (e) {
           log("CORE ERROR: Failed to set remote description: $e");
         }
@@ -359,26 +445,30 @@ mixin RtcSignaling on RtcClientBase {
         final client = this as RtcClient;
         final activeAttempt = client.activeAttempt;
         if (activeAttempt == null) {
-          log("WARN: Received ICE candidate but no active connection attempt. Ignoring.");
-          break;
-        }
-
-        final msgSessionId = data['session_id'];
-        if (activeAttempt.hostSessionId != null && msgSessionId != activeAttempt.hostSessionId) {
-          log("WARN: Received ICE candidate with mismatched Host Session ID ($msgSessionId vs ${activeAttempt.hostSessionId}). Discarding stale candidate.");
+          log(
+            "WARN: Received ICE candidate but no active connection attempt. Ignoring.",
+          );
           break;
         }
 
         // Add ICE candidate for NAT traversal
         try {
           final candStr = data['candidate'] as String;
+          if (!await _verifyHostDataPlaneMessage(
+            data,
+            messageType: 0x03,
+            payload: candStr,
+            attempt: activeAttempt,
+          )) {
+            break;
+          }
           final parts = candStr.split(' ');
           final proto = parts.length > 2 ? parts[2] : 'udp';
           final candTypeIndex = parts.indexOf('typ');
           final candType =
               (candTypeIndex != -1 && parts.length > candTypeIndex + 1)
-                  ? parts[candTypeIndex + 1]
-                  : 'host';
+              ? parts[candTypeIndex + 1]
+              : 'host';
           log(
             "[ICE] [G${activeAttempt.generationId}] [${activeAttempt.elapsedMs}] Received remote candidate ($proto/$candType)",
           );
@@ -417,7 +507,10 @@ mixin RtcSignaling on RtcClientBase {
         log("DEBUG: Signaling error: ${data['message']}");
         final client = this as RtcClient;
         if (client.currentHostState != HostConnectionState.disconnected) {
-          _transitionTo(HostConnectionState.failed, "Signaling error: ${data['message']}");
+          _transitionTo(
+            HostConnectionState.failed,
+            "Signaling error: ${data['message']}",
+          );
         }
         break;
     }

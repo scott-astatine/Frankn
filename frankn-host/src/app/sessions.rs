@@ -23,6 +23,7 @@ pub struct SessionManager {
     pub capability_inventory: Arc<Mutex<crate::capabilities::registry::CapabilityInventory>>,
     pub capability_sessions:
         Arc<Mutex<crate::capabilities::node::registry::CapabilitySessionRegistry>>,
+    allowed_clients: Arc<Mutex<Vec<String>>>,
 }
 
 impl SessionManager {
@@ -38,6 +39,7 @@ impl SessionManager {
             Mutex<crate::capabilities::node::registry::CapabilitySessionRegistry>,
         >,
     ) -> Self {
+        let allowed_clients = Arc::new(Mutex::new(config.allowed_clients.clone()));
         Self {
             config,
             auth_manager,
@@ -47,6 +49,7 @@ impl SessionManager {
             node_registry,
             capability_inventory,
             capability_sessions,
+            allowed_clients,
         }
     }
 
@@ -79,6 +82,16 @@ impl SessionManager {
             };
 
             let signaling_client = Arc::new(signaling_client);
+            if !self.config.is_public {
+                if let Err(e) = signaling_client
+                    .update_host_acl(self.allowed_clients.lock().await.clone())
+                    .await
+                {
+                    crate::elog!("NODE: Failed to publish private-host ACL: {e}");
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            }
 
             while let Some(msg) = signaling_rx.recv().await {
                 match msg {
@@ -172,10 +185,10 @@ impl SessionManager {
         session_id: String,
         signaling_client: Arc<SignalingClient>,
     ) -> Result<(), String> {
-        let _peer_type = if self.config.allowed_nodes.contains(&client_id) {
+        let peer_role = if self.config.allowed_nodes.contains(&client_id) {
             crate::transport::webrtc::connection::PeerRole::Node
         } else {
-            crate::transport::webrtc::connection::PeerRole::Client
+            crate::transport::webrtc::connection::PeerRole::UnauthenticatedClient
         };
         let rtc_conn = Arc::new(Mutex::new(
             RTCConn::new(crate::transport::webrtc::connection::RtcRole::Answerer)
@@ -195,6 +208,7 @@ impl SessionManager {
                 client_id.clone(),
                 session_id.clone(),
                 Arc::clone(&rtc_conn),
+                peer_role,
             ),
         ));
 
@@ -287,6 +301,8 @@ impl SessionManager {
         let node_registry_clone = Arc::clone(&self.node_registry);
         let capability_inventory_clone = Arc::clone(&self.capability_inventory);
         let capability_sessions_clone = Arc::clone(&self.capability_sessions);
+        let allowed_clients_clone = Arc::clone(&self.allowed_clients);
+        let signaling_client_clone = Arc::clone(&signaling_client);
 
         {
             let conn = rtc_conn.lock().await;
@@ -301,6 +317,8 @@ impl SessionManager {
                 let nr = Arc::clone(&node_registry_clone);
                 let ci = Arc::clone(&capability_inventory_clone);
                 let cs = Arc::clone(&capability_sessions_clone);
+                let allowed_clients = Arc::clone(&allowed_clients_clone);
+                let sig = Arc::clone(&signaling_client_clone);
 
                 match label.as_str() {
                     "frankn_ssh" => {
@@ -308,10 +326,26 @@ impl SessionManager {
                     }
                     "frankn_input" => {
                         let im_c = im.clone();
+                        let peer_map_input = Arc::clone(&pm);
+                        let peer_id_input = cid.clone();
                         dc.on_message(Box::new(move |msg| {
                             let im_c2 = im_c.clone();
+                            let peer_map = Arc::clone(&peer_map_input);
+                            let peer_id = peer_id_input.clone();
                             Box::pin(async move {
-                                if let Ok(input_msg) = serde_json::from_slice::<
+                                let peer_session = {
+                                    let map = peer_map.lock().await;
+                                    map.get(&peer_id).cloned()
+                                };
+                                let is_authorized = if let Some(peer) = peer_session {
+                                    let peer = peer.lock().await;
+                                    *peer.role.lock().await
+                                        == crate::transport::webrtc::connection::PeerRole::AuthenticatedClient
+                                } else {
+                                    false
+                                };
+                                if is_authorized
+                                    && let Ok(input_msg) = serde_json::from_slice::<
                                     crate::capabilities::input::InputMsg,
                                 >(&msg.data)
                                     && let Some(manager) = im_c2
@@ -336,6 +370,8 @@ impl SessionManager {
                             node_registry: Arc::clone(&nr),
                             capability_inventory: Arc::clone(&ci),
                             capability_sessions: Arc::clone(&cs),
+                            allowed_clients: Arc::clone(&allowed_clients),
+                            signaling_client: Arc::clone(&sig),
                         });
                         dc.on_message(Box::new(move |msg: DataChannelMessage| {
                             let d = msg.data.to_vec();
@@ -385,6 +421,9 @@ impl SessionManager {
         .await;
 
         if let Err(e) = handshake_res {
+            self.auth_manager
+                .cancel_opaque_logins_for_scope(&session_id)
+                .await;
             crate::elog!("CORE: Handshake failed for client {}: {}", client_id, e);
             {
                 let mut map = self.peer_map.lock().await;
@@ -406,11 +445,23 @@ impl SessionManager {
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
         {
             let conn = rtc_conn.lock().await;
+            let peer_connection = Arc::clone(&conn.peer_connection);
             conn.on_peer_connection_state_change(move |state| {
                 if state == RTCPeerConnectionState::Closed
                     || state == RTCPeerConnectionState::Failed
                 {
                     let _ = tx.try_send(());
+                } else if state == RTCPeerConnectionState::Disconnected {
+                    let tx = tx.clone();
+                    let peer_connection = Arc::clone(&peer_connection);
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_secs(15)).await;
+                        if peer_connection.connection_state()
+                            == RTCPeerConnectionState::Disconnected
+                        {
+                            let _ = tx.try_send(());
+                        }
+                    });
                 }
             });
         }
@@ -419,11 +470,55 @@ impl SessionManager {
             let conn = rtc_conn.lock().await;
             conn.peer_connection.connection_state()
         };
-        if current_state != RTCPeerConnectionState::Closed
+        if current_state != RTCPeerConnectionState::Connected
+            && current_state != RTCPeerConnectionState::Closed
             && current_state != RTCPeerConnectionState::Failed
         {
-            let _ = rx.recv().await;
+            let deadline = offer_rx_time + Duration::from_secs(30);
+            loop {
+                if std::time::Instant::now() >= deadline {
+                    crate::elog!("CORE: WebRTC handshake timed out for peer {}", client_id);
+                    break;
+                }
+                let state = {
+                    let conn = rtc_conn.lock().await;
+                    conn.peer_connection.connection_state()
+                };
+                if state == RTCPeerConnectionState::Connected
+                    || state == RTCPeerConnectionState::Closed
+                    || state == RTCPeerConnectionState::Failed
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
         }
+
+        let connected = {
+            let conn = rtc_conn.lock().await;
+            conn.peer_connection.connection_state() == RTCPeerConnectionState::Connected
+        };
+        if !connected {
+            self.auth_manager
+                .cancel_opaque_logins_for_scope(&session_id)
+                .await;
+            let mut map = self.peer_map.lock().await;
+            if map
+                .get(&client_id)
+                .is_some_and(|current| Arc::ptr_eq(current, &session))
+            {
+                map.remove(&client_id);
+            }
+            drop(map);
+            let conn = rtc_conn.lock().await;
+            let _ = conn.close().await;
+            return Ok(());
+        }
+
+        let _ = rx.recv().await;
+        self.auth_manager
+            .cancel_opaque_logins_for_scope(&session_id)
+            .await;
 
         {
             let mut map = self.peer_map.lock().await;

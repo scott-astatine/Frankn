@@ -46,7 +46,7 @@ class FranknLogger {
 
   /// Authoritative Log Entry Point:
   /// Sanitizes secrets, pushes to ring buffer, writes to stdout, and dispatches IPC if subscribed.
-  void log({
+  FranknLogFrame? log({
     required LogLevel level,
     required LogCategory category,
     required String subsystem,
@@ -57,13 +57,13 @@ class FranknLogger {
     String? nodeId,
     Map<String, dynamic>? metadata,
   }) {
-    if (!shouldLog(category, level)) return;
+    if (!shouldLog(category, level)) return null;
 
     // 1. Mandatory Secret Redaction Boundary
     final safeMessage = redactionEngine.sanitizeMessage(message);
     final safeMetadata = redactionEngine.sanitizeMetadata(metadata);
 
-    final frame = FranknLogFrame(
+    final rawFrame = FranknLogFrame(
       timestampMs: DateTime.now().millisecondsSinceEpoch,
       level: level,
       category: category,
@@ -74,6 +74,9 @@ class FranknLogger {
       capabilitySessionId: capabilitySessionId,
       nodeId: nodeId,
       metadata: safeMetadata,
+    );
+    final frame = FranknLogFrame.fromJson(
+      redactionEngine.sanitizeValue(rawFrame.toJson()) as Map<String, dynamic>,
     );
 
     // 2. Add to Ring Buffer
@@ -97,18 +100,25 @@ class FranknLogger {
         _dispatchIpcPayload(payload);
       }
     }
+    return frame;
   }
 
   /// Formats and outputs log frame to stdout for terminal/logcat debugging.
   void _writeToStdout(FranknLogFrame frame) {
-    final timeStr = DateTime.fromMillisecondsSinceEpoch(frame.timestampMs)
-        .toIso8601String()
-        .substring(11, 19);
+    final timeStr = DateTime.fromMillisecondsSinceEpoch(
+      frame.timestampMs,
+    ).toIso8601String().substring(11, 19);
     final gen = frame.generationId != null ? "[${frame.generationId}]" : "";
-    final hsid = frame.hostSessionId != null ? "[S:${frame.hostSessionId}]" : "";
-    final csid = frame.capabilitySessionId != null ? "[C:${frame.capabilitySessionId}]" : "";
+    final hsid = frame.hostSessionId != null
+        ? "[S:${frame.hostSessionId}]"
+        : "";
+    final csid = frame.capabilitySessionId != null
+        ? "[C:${frame.capabilitySessionId}]"
+        : "";
     final nid = frame.nodeId != null ? "[N:${frame.nodeId}]" : "";
-    print("[$timeStr][${frame.category.code}][${frame.level.name.toUpperCase()}]$gen$hsid$csid$nid[${frame.subsystem}] ${frame.message}");
+    print(
+      "[$timeStr][${frame.category.code}][${frame.level.name.toUpperCase()}]$gen$hsid$csid$nid[${frame.subsystem}] ${frame.message}",
+    );
   }
 
   /// Hook for sending serialized IPC payload to main isolate.
@@ -149,7 +159,9 @@ class FranknLogger {
   /// UI Unsubscribes from Live IPC Log Stream when log screen closes.
   /// NOTE: Disables UI IPC streaming ONLY. Background logger configuration & stdout UNTOUCHED.
   void unsubscribeUiLogs() {
-    ipcEngine.subscriptionConfig = const IpcSubscriptionConfig(isUiSubscribed: false);
+    ipcEngine.subscriptionConfig = const IpcSubscriptionConfig(
+      isUiSubscribed: false,
+    );
     // Keep logger's internal policy intact; only set subscriber state to inactive
   }
 
@@ -186,19 +198,29 @@ class FranknLogger {
     required FranknStateSnapshot startSnapshot,
     int maxFrameLimit = 10000,
   }) {
+    final safeSnapshot = FranknStateSnapshot.fromJson(
+      redactionEngine.sanitizeValue(startSnapshot.toJson())
+          as Map<String, dynamic>,
+    );
     final session = DiagnosticCaptureSession(
       captureId: captureId,
       maxFrameLimit: maxFrameLimit,
     );
-    session.start(startSnapshot);
+    session.start(safeSnapshot);
     _activeCapture = session;
     return session;
   }
 
-  DiagnosticCaptureSession? stopDiagnosticCapture(FranknStateSnapshot endSnapshot) {
+  DiagnosticCaptureSession? stopDiagnosticCapture(
+    FranknStateSnapshot endSnapshot,
+  ) {
     if (_activeCapture == null) return null;
     final session = _activeCapture!;
-    session.stop(endSnapshot);
+    final safeSnapshot = FranknStateSnapshot.fromJson(
+      redactionEngine.sanitizeValue(endSnapshot.toJson())
+          as Map<String, dynamic>,
+    );
+    session.stop(safeSnapshot);
     _activeCapture = null;
     return session;
   }

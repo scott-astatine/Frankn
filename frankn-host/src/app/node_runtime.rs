@@ -106,7 +106,7 @@ impl NodeRuntime {
             let mut capabilities = Vec::new();
             for cap in capabilities_raw {
                 let mut properties = std::collections::HashMap::new();
-                
+
                 // Probe hardware dynamically for known capabilities
                 if cap == "camera" {
                     let cams = crate::capabilities::camera::probe_cameras().await;
@@ -237,6 +237,7 @@ impl NodeRuntime {
                                         let nc = node_cap_conn.lock().await;
                                         let rtc_ctrl_inner = Arc::clone(&rtc_ctrl);
                                         let active_sessions_inner_c = Arc::clone(&active_sessions_inner);
+                                        let peer_connection = Arc::clone(&nc.peer_connection);
                                         let sess_id_inner = sess_id.clone();
                                         let cap_id_inner = cap_id.clone();
 
@@ -253,8 +254,16 @@ impl NodeRuntime {
                                                     let rtc_ctrl_inner_2 = Arc::clone(&rtc_ctrl_inner);
                                                     let sess_id_inner_2 = sess_id_inner.clone();
                                                     let cap_id_inner_2 = cap_id_inner.clone();
+                                                    let peer_connection = Arc::clone(&peer_connection);
+                                                    let disconnected = state == RTCPeerConnectionState::Disconnected;
 
                                                     tokio::spawn(async move {
+                                                        if disconnected {
+                                                            tokio::time::sleep(Duration::from_secs(15)).await;
+                                                            if peer_connection.connection_state() != RTCPeerConnectionState::Disconnected {
+                                                                return;
+                                                            }
+                                                        }
                                                         let old_sess = {
                                                             let mut map = active_sessions_inner_2.lock().await;
                                                             map.remove(&sess_id_inner_2)
@@ -518,12 +527,17 @@ impl NodeRuntime {
                                         match signal {
                                             crate::signaling::SignalingMessage::Offer { sdp, .. } => {
                                                 let c = nc.lock().await;
-                                                let desc = webrtc::peer_connection::sdp::session_description::RTCSessionDescription::offer(sdp).unwrap();
-                                                if let Err(e) = c.peer_connection.set_remote_description(desc).await {
+                                                let desc = match webrtc::peer_connection::sdp::session_description::RTCSessionDescription::offer(sdp) {
+                                                    Ok(desc) => desc,
+                                                    Err(e) => {
+                                                        crate::elog!("NODE: Invalid capability offer SDP: {e}");
+                                                        return;
+                                                    }
+                                                };
+                                                if let Err(e) = c.set_remote_description(desc).await {
                                                     crate::elog!("NODE: Failed to set remote description: {e}");
                                                     return;
                                                 }
-                                                let _ = c.flush_candidates().await;
 
                                                 match c.peer_connection.create_answer(None).await {
                                                     Ok(answer) => {
@@ -674,11 +688,23 @@ impl NodeRuntime {
             {
                 let conn = rtc_conn_recv.lock().await;
                 let tx_c = tx_close.clone();
+                let peer_connection = Arc::clone(&conn.peer_connection);
                 conn.on_peer_connection_state_change(move |state| {
                     if state == RTCPeerConnectionState::Closed
                         || state == RTCPeerConnectionState::Failed
                     {
                         let _ = tx_c.try_send(());
+                    } else if state == RTCPeerConnectionState::Disconnected {
+                        let tx_c = tx_c.clone();
+                        let peer_connection = Arc::clone(&peer_connection);
+                        tokio::spawn(async move {
+                            tokio::time::sleep(Duration::from_secs(15)).await;
+                            if peer_connection.connection_state()
+                                == RTCPeerConnectionState::Disconnected
+                            {
+                                let _ = tx_c.try_send(());
+                            }
+                        });
                     }
                 });
             }
@@ -692,14 +718,16 @@ impl NodeRuntime {
                                 crate::log!(
                                     "NODE: Received Answer from Host. Setting remote description..."
                                 );
-                                let desc = webrtc::peer_connection::sdp::session_description::RTCSessionDescription::answer(sdp).unwrap();
                                 let conn = rtc_conn_recv.lock().await;
-                                if let Err(e) =
-                                    conn.peer_connection.set_remote_description(desc).await
-                                {
+                                let desc = match webrtc::peer_connection::sdp::session_description::RTCSessionDescription::answer(sdp) {
+                                    Ok(desc) => desc,
+                                    Err(e) => {
+                                        crate::elog!("NODE: Invalid Host answer SDP: {e}");
+                                        continue;
+                                    }
+                                };
+                                if let Err(e) = conn.set_remote_description(desc).await {
                                     crate::elog!("NODE: Failed to set remote description: {e}");
-                                } else {
-                                    let _ = conn.flush_candidates().await;
                                 }
                             }
                         }
@@ -721,6 +749,37 @@ impl NodeRuntime {
                     }
                 }
             });
+
+            let handshake_deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+            let mut connected = false;
+            loop {
+                let state = {
+                    let conn = rtc_conn.lock().await;
+                    conn.peer_connection.connection_state()
+                };
+                if state == RTCPeerConnectionState::Connected {
+                    connected = true;
+                    break;
+                }
+                if state == RTCPeerConnectionState::Failed
+                    || state == RTCPeerConnectionState::Closed
+                {
+                    break;
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep_until(handshake_deadline) => break,
+                    _ = tokio::time::sleep(Duration::from_millis(100)) => {}
+                    _ = rx_close.recv() => break,
+                }
+            }
+            if !connected {
+                crate::elog!("NODE: Control WebRTC handshake timed out or failed.");
+                recv_loop.abort();
+                let conn = rtc_conn.lock().await;
+                let _ = conn.close().await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
 
             // Block until connection is closed or signaling terminates
             tokio::select! {

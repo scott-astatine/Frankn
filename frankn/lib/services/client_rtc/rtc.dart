@@ -7,7 +7,7 @@
 /// Architecture:
 /// - WebRTC Data Channels: frankn_cmd, frankn_fs, frankn_media, frankn_ssh
 /// - Signaling Server: WebSocket-based peer discovery and SDP exchange
-/// - Authentication: Argon2id challenge-response protocol
+/// - Authentication: RFC 9807 OPAQUE over the authenticated data channel
 /// - Background Service: Maintains connection when app is backgrounded
 ///
 /// Key Features:
@@ -51,6 +51,7 @@ import 'package:frankn/services/client_rtc/signaling_outbox.dart';
 import 'package:frankn/services/client_rtc/rtc_host.dart';
 import 'package:frankn/services/client_rtc/rtc_host_manager.dart';
 import 'package:frankn/services/client_rtc/rtc_connection_attempt.dart';
+import 'package:frankn_opaque/frankn_opaque.dart';
 import 'package:frankn/services/rtc_thin_client.dart';
 part 'rtc_message_handler.dart';
 part 'rtc_signaling.dart';
@@ -123,7 +124,7 @@ abstract class RtcClientBase {
     Duration timeout = const Duration(seconds: 10),
   });
 
-  /// Initiates the Argon2id challenge-response authentication process.
+  /// Initiates the OPAQUE authentication exchange with the connected Host.
   void authenticate(String password);
 
   /// Processes incoming messages from the host via WebRTC data channels.
@@ -228,7 +229,8 @@ class RtcClient extends RtcClientBase
   IdentityManager get identityManager => AuthService().identityManager;
 
   /// Current Host accessor
-  RtcHost? get currentHost => currentHostId != null ? hostManager.findHost(currentHostId!) : null;
+  RtcHost? get currentHost =>
+      currentHostId != null ? hostManager.findHost(currentHostId!) : null;
 
   // ========== CONNECTION ATTEMPT TRACKING ==========
   RtcConnectionAttempt? activeAttempt;
@@ -290,9 +292,9 @@ class RtcClient extends RtcClientBase
       capabilityInventory.entries.map((e) => e.toJson()).toList();
 
   String? findProviderForCapability(String capabilityId) {
-    final available = capabilityInventory.byCapability(capabilityId).where(
-          (e) => e.availability == CapabilityAvailability.available,
-        );
+    final available = capabilityInventory
+        .byCapability(capabilityId)
+        .where((e) => e.availability == CapabilityAvailability.available);
     if (available.isNotEmpty) {
       return available.first.provider.providerId;
     }
@@ -449,7 +451,8 @@ class RtcClient extends RtcClientBase
     final genInt = activeAttempt?.generationId ?? connectionGeneration;
     final gen = genInt > 0 ? "G$genInt" : null;
 
-    FranknLogger.instance.log(
+    final logger = FranknLogger.instance;
+    final frame = logger.log(
       level: level,
       category: category,
       subsystem: subsystem,
@@ -461,7 +464,11 @@ class RtcClient extends RtcClientBase
     );
 
     final time = DateTime.now().toIso8601String().substring(11, 19);
-    String safeMsg = msg.length > 2048 ? "${msg.substring(0, 2048)}... [TRUNCATED]" : msg;
+    String safeMsg =
+        frame?.message ?? logger.redactionEngine.sanitizeMessage(msg);
+    safeMsg = safeMsg.length > 2048
+        ? "${safeMsg.substring(0, 2048)}... [TRUNCATED]"
+        : safeMsg;
     final logMsg = "[$time] $safeMsg";
 
     _logHistory.insert(0, logMsg);
@@ -483,12 +490,25 @@ class RtcClient extends RtcClientBase
         !msg.contains(InputSig.Scroll) &&
         !msg.contains(InputSig.Text) &&
         !msg.contains(InputSig.KeyPress)) {
-      log("SENT to $currentHostName [$label]: $msg");
+      final messageType = _safeMessageType(msg);
+      log("SENT to $currentHostName [$label]: $messageType");
     }
     if (channel?.state == RTCDataChannelState.RTCDataChannelOpen) {
       channel!.send(RTCDataChannelMessage(msg));
     } else {
       log("Uplink [$label] Offline (State: ${channel?.state}). Cannot send.");
     }
+  }
+
+  String _safeMessageType(String message) {
+    try {
+      final decoded = jsonDecode(message);
+      if (decoded is Map<String, dynamic>) {
+        return 'type=${decoded['type'] ?? 'unknown'}';
+      }
+    } on FormatException {
+      // Keep non-JSON diagnostics useful while never echoing the message body.
+    }
+    return 'non-JSON message';
   }
 }

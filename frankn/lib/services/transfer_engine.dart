@@ -96,17 +96,34 @@ class TransferEngine {
     // Initialize transfer on host
     int actualResumeOffset = resumeOffset;
     final initCompleter = Completer<void>();
+    final complete = Completer<void>();
+    unawaited(complete.future.then<void>((_) {}, onError: (_, _) {}));
     final initSub = client.genDcMsgStream.listen((msg) {
-      if (msg is HostMsgResponse && msg.id == id) {
+      if (msg is HostMsgResponse && msg.id == id && msg.status == 'Error') {
+        if (!initCompleter.isCompleted) {
+          initCompleter.completeError(
+            Exception(msg.error ?? 'Upload initialization failed'),
+          );
+        }
+      } else if (msg is HostMsgResponse && msg.id == id) {
         final respData = msg.data;
         if (respData != null && respData is Map && respData['offset'] != null) {
           actualResumeOffset = respData['offset'] as int;
-          client.log("FS: Host requested resume from offset $actualResumeOffset");
+          client.log(
+            "FS: Host requested resume from offset $actualResumeOffset",
+          );
         }
         initCompleter.complete();
       } else if (msg is HostMsgTransferComplete && msg.id == id) {
         // Host finished before we sent all data (edge case — resume matched total)
-        initCompleter.complete();
+        if (!initCompleter.isCompleted) initCompleter.complete();
+        _activeTransfers[id]?.isComplete = true;
+        if (!complete.isCompleted) complete.complete();
+      } else if (msg is HostMsgResponse &&
+          msg.id == id &&
+          msg.status == 'Error' &&
+          !complete.isCompleted) {
+        complete.completeError(Exception(msg.error ?? 'Upload failed'));
       }
     });
 
@@ -118,83 +135,76 @@ class TransferEngine {
       resumeOffset: resumeOffset,
     );
 
-    await initCompleter.future.timeout(const Duration(seconds: 15));
-    initSub.cancel();
-
-    // Stream chunks
-    int offset = actualResumeOffset;
-    int seq = 0;
-
-    final raf = await file.open(mode: FileMode.read);
     try {
-      await raf.setPosition(actualResumeOffset);
-
-      while (offset < totalSize) {
-        if (_cancelledTransfers.contains(id)) {
-          client.log("FS: Upload $id cancelled by user.");
-          throw Exception("TRANSFER_CANCELLED");
-        }
-
-        final fsDC = client.currentHost?.fsDC;
-        if (fsDC?.state != RTCDataChannelState.RTCDataChannelOpen) {
-          throw Exception("FS channel closed during upload $id");
-        }
-
-        // Backpressure: wait if buffered amount is too high
-        if ((fsDC?.bufferedAmount ?? 0) > bufferThreshold) {
-          await Future.delayed(const Duration(milliseconds: 10));
-          continue;
-        }
-
-        final remaining = totalSize - offset;
-        final toRead = remaining < chunkSize ? remaining : chunkSize;
-        final chunk = await raf.read(toRead);
-        final isFinal = (offset + toRead) >= totalSize;
-
-        // Build binary frame
-        final frame = _encodeFrame(
-          id: id,
-          offset: offset,
-          seq: seq,
-          flags:
-              (isFinal ? _FrameConst.flagFinal : 0) |
-              (seq % 50 == 0 ? _FrameConst.flagAckRequested : 0),
-          data: chunk,
-        );
-
-        fsDC!.send(RTCDataChannelMessage.fromBinary(frame));
-
-        offset += toRead;
-        seq++;
-
-        _activeTransfers[id]?.bytesTransferred = offset;
-        onProgress?.call(
-          progress: offset / totalSize,
-          bytesTransferred: offset,
-          totalBytes: totalSize,
-        );
-      }
-    } finally {
-      await raf.close();
+      await initCompleter.future.timeout(const Duration(seconds: 15));
+    } catch (_) {
+      await initSub.cancel();
+      _activeTransfers.remove(id);
+      rethrow;
     }
 
-    // Wait for host ACK of completion
-    final completeSub = client.genDcMsgStream.listen((msg) {
-      if (msg is HostMsgTransferComplete && msg.id == id) {
-        final state = _activeTransfers[id];
-        state?.isComplete = true;
+    try {
+      // Stream chunks
+      int offset = actualResumeOffset;
+      int seq = 0;
+
+      final raf = await file.open(mode: FileMode.read);
+      try {
+        await raf.setPosition(actualResumeOffset);
+
+        while (offset < totalSize) {
+          if (_cancelledTransfers.contains(id)) {
+            client.log("FS: Upload $id cancelled by user.");
+            throw Exception("TRANSFER_CANCELLED");
+          }
+
+          final fsDC = client.currentHost?.fsDC;
+          if (fsDC?.state != RTCDataChannelState.RTCDataChannelOpen) {
+            throw Exception("FS channel closed during upload $id");
+          }
+
+          // Backpressure: wait if buffered amount is too high
+          if ((fsDC?.bufferedAmount ?? 0) > bufferThreshold) {
+            await Future.delayed(const Duration(milliseconds: 10));
+            continue;
+          }
+
+          final remaining = totalSize - offset;
+          final toRead = remaining < chunkSize ? remaining : chunkSize;
+          final chunk = await raf.read(toRead);
+          final isFinal = (offset + toRead) >= totalSize;
+
+          // Build binary frame
+          final frame = _encodeFrame(
+            id: id,
+            offset: offset,
+            seq: seq,
+            flags:
+                (isFinal ? _FrameConst.flagFinal : 0) |
+                (seq % 50 == 0 ? _FrameConst.flagAckRequested : 0),
+            data: chunk,
+          );
+
+          fsDC!.send(RTCDataChannelMessage.fromBinary(frame));
+
+          offset += toRead;
+          seq++;
+
+          _activeTransfers[id]?.bytesTransferred = offset;
+          onProgress?.call(
+            progress: offset / totalSize,
+            bytesTransferred: offset,
+            totalBytes: totalSize,
+          );
+        }
+      } finally {
+        await raf.close();
       }
-    });
 
-    // Give host time to finalize
-    await Future.delayed(const Duration(seconds: 2));
-    completeSub.cancel();
-
-    _activeTransfers.remove(id);
-
-    final state = _activeTransfers[id];
-    if (state != null && !state.isComplete) {
-      throw Exception("Upload $id completed locally but host did not confirm");
+      await complete.future.timeout(const Duration(seconds: 30));
+    } finally {
+      await initSub.cancel();
+      _activeTransfers.remove(id);
     }
   }
 

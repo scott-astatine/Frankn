@@ -149,6 +149,9 @@ impl SignalingClient {
         is_public: bool,
         peer_type: PeerType,
     ) -> Result<(Self, UnboundedReceiver<SignalingMessage>), Box<dyn std::error::Error>> {
+        if !signaling_server_url.starts_with("wss://") {
+            return Err("Signaling server URL must use wss://".into());
+        }
         log!("Connecting to signaling server: {}", signaling_server_url);
 
         let (ws_stream, _) = connect_async(signaling_server_url).await?;
@@ -289,6 +292,24 @@ impl SignalingClient {
         };
 
         Ok((client, incoming_rx))
+    }
+
+    pub async fn update_host_acl(
+        &self,
+        allowed_peers: Vec<String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use ed25519_dalek::Signer;
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis() as u64;
+        let message = format!("{}:{}", allowed_peers.join(","), timestamp);
+        let signature = hex::encode(self.signing_key.sign(message.as_bytes()).to_bytes());
+        self.send_message(SignalingMessage::UpdateHostAcl {
+            allowed_peers,
+            timestamp,
+            signature,
+        })
+        .await
     }
 
     /// Sign data-plane message using the 160-byte canonical binary structure

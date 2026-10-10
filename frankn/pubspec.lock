@@ -9,14 +9,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.9"
-  argon2:
-    dependency: "direct main"
-    description:
-      name: argon2
-      sha256: ee456fa6f71392faadd9c43f4a2cc66c8d56132337fe71dc09d217d4e994102e
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.1"
   args:
     dependency: transitive
     description:
@@ -493,6 +485,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  frankn_opaque:
+    dependency: "direct main"
+    description:
+      path: "packages/frankn_opaque"
+      relative: true
+    source: path
+    version: "0.1.0"
   glob:
     dependency: transitive
     description:
@@ -1014,7 +1013,7 @@ packages:
     source: hosted
     version: "2.1.8"
   pointycastle:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: pointycastle
       sha256: "4be0097fcf3fd3e8449e53730c631200ebc7b88016acecab2b0da2f0149222fe"

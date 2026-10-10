@@ -26,6 +26,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Manage Host authentication credentials
+    Auth {
+        #[command(subcommand)]
+        action: AuthCommands,
+    },
     /// Configure host settings
     Config,
     /// Display pairing ID and QR code
@@ -37,6 +42,12 @@ enum Commands {
     },
     /// Detect, inspect and report status of video capture devices (/dev/video*)
     ProbeCamera,
+}
+
+#[derive(Subcommand)]
+enum AuthCommands {
+    /// Migrate an existing Host config to RFC 9807 OPAQUE authentication
+    Migrate,
 }
 
 #[tokio::main]
@@ -53,6 +64,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = crate::capabilities::fs::SANDBOX_HOME.set(config.sandbox_home);
 
     match cli.command {
+        Some(Commands::Auth {
+            action: AuthCommands::Migrate,
+        }) => {
+            config.migrate_opaque_auth().await?;
+            println!("Host authentication migrated to OPAQUE.");
+            Ok(())
+        }
         Some(Commands::Config) => {
             config::tui::run_tui(config).await?;
             Ok(())

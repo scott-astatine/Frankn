@@ -1,0 +1,47 @@
+group 'com.astatine.frankn_opaque'
+version '1.0-SNAPSHOT'
+
+buildscript {
+    ext.kotlin_version = '2.1.0'
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.7.3'; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace 'com.astatine.frankn_opaque'
+    compileSdk 36
+    defaultConfig { minSdk 21 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_11.toString()
+}
+
+def crateDir = file('../../../../frankn-opaque')
+def sdkDir = android.sdkDirectory
+def ndkDir = file("${sdkDir}/ndk").listFiles()?.sort()?.find { true }
+def installRustTargets = tasks.register('installFranknRustTargets', Exec) {
+    commandLine 'rustup', 'target', 'add', 'aarch64-linux-android',
+        'armv7-linux-androideabi', 'x86_64-linux-android'
+}
+def buildOpaque = tasks.register('buildFranknOpaque', Exec) {
+    inputs.files(fileTree(crateDir) { exclude 'target/**' })
+    outputs.dir(file('src/main/jniLibs'))
+    workingDir crateDir
+    environment 'ANDROID_NDK_HOME', ndkDir?.absolutePath ?: ''
+    environment 'ANDROID_NDK_ROOT', ndkDir?.absolutePath ?: ''
+    commandLine 'cargo', 'ndk', '-t', 'arm64-v8a', '-t', 'armeabi-v7a', '-t', 'x86_64',
+        '-o', file('src/main/jniLibs').absolutePath,
+        'build', '--release', '--manifest-path', new File(crateDir, 'Cargo.toml').absolutePath
+}
+buildOpaque.configure { dependsOn(installRustTargets) }
+tasks.named('preBuild').configure { dependsOn(buildOpaque) }
+
+dependencies { implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.1.0' }

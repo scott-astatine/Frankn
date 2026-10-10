@@ -328,7 +328,7 @@ class _CameraScreenState extends State<CameraScreen> {
                         Text(
                           _selectedProviderId != null
                               ? "ESTABLISHING P2P LINK... (${state.name.toUpperCase()})"
-                              : "SEARCHING FOR NODE...",
+                              : "NO CAMERA NODES ONLINE",
                           style: TextStyle(
                             color: _accentCyan.withValues(alpha: 0.7),
                             fontFamily: 'JetBrains Mono',

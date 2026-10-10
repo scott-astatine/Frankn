@@ -394,7 +394,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get reinitializingNeuralLink => '새 서버로 신경 링크 재설정 중...';
 
   @override
-  String get invalidUrlFormat => '잘못된 URL 형식입니다. ws:// 또는 wss://로 시작해야 합니다.';
+  String get invalidUrlFormat => '잘못된 URL 형식입니다. wss://로 시작해야 합니다.';
 
   @override
   String get defaultLlm => '기본 LLM';

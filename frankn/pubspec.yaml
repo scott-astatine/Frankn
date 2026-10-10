@@ -16,8 +16,6 @@ dependencies:
   json_annotation: ^4.9.0
   crypto: ^3.0.7
   hex: ^0.2.0
-  argon2: ^1.0.1
-  pointycastle: ^3.9.1
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
   flutter_foreground_task: ^9.2.0
@@ -58,6 +56,8 @@ dependencies:
   path: ^1.9.1
   webview_flutter: ^4.14.1
   connectivity_plus: ^7.3.1
+  frankn_opaque:
+    path: packages/frankn_opaque
 
 dev_dependencies:
   flutter_test:
@@ -95,4 +95,3 @@ flutter_launcher_icons:
   linux:
     generate: true
     image_path: "assets/logo/frankn_master.png"
-

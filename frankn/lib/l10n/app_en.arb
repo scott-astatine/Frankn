@@ -162,7 +162,7 @@
   },
   "renameHost": "Rename Host",
   "reinitializingNeuralLink": "Re-initializing Neural Link to new server...",
-  "invalidUrlFormat": "Invalid URL format. Must start with ws:// or wss://",
+  "invalidUrlFormat": "Invalid URL format. Must start with wss://",
   "defaultLlm": "Default LLM",
   "unknown": "Unknown",
   "notSet": "Not Set",

@@ -45,7 +45,9 @@ class IdentityManager {
         await _deriveIdentifiers(keyPair);
         return keyPair;
       } catch (e) {
-        log('ERROR: Stored identity seed was corrupted, generating new identity... $e');
+        log(
+          'ERROR: Stored identity seed was corrupted, generating new identity... $e',
+        );
       }
     }
 
@@ -54,10 +56,7 @@ class IdentityManager {
     final keyPairData = await keyPair.extract();
     final seedBytes = keyPairData.bytes;
 
-    await storage.write(
-      key: _storageKey,
-      value: base64Encode(seedBytes),
-    );
+    await storage.write(key: _storageKey, value: base64Encode(seedBytes));
 
     _keyPair = keyPair;
     await _deriveIdentifiers(keyPair);
@@ -142,6 +141,89 @@ class IdentityManager {
     final signature = await algorithm.sign(buf, keyPair: keyPair);
 
     return hex.encode(signature.bytes);
+  }
+
+  /// Verifies a signaling envelope against its sender key and canonical payload.
+  Future<bool> verifyEnvelope({
+    required String publicKeyHex,
+    required int msgType,
+    required String fromPeerId,
+    required String toPeerId,
+    required String payload,
+    required int sequence,
+    required int timestamp,
+    required String activeSessionId,
+    required String signatureHex,
+  }) async {
+    try {
+      String normalizeBase64Url(String input) {
+        var output = input.replaceAll('-', '+').replaceAll('_', '/');
+        switch (output.length % 4) {
+          case 0:
+            break;
+          case 2:
+            output += '==';
+            break;
+          case 3:
+            output += '=';
+            break;
+          default:
+            throw const FormatException('Invalid base64url length');
+        }
+        return output;
+      }
+
+      final publicKeyBytes = hex.decode(publicKeyHex);
+      if (publicKeyBytes.length != 32) return false;
+      final publicKey = crypto_pkg.SimplePublicKey(
+        publicKeyBytes,
+        type: crypto_pkg.KeyPairType.ed25519,
+      );
+      final fromBytes = base64Decode(normalizeBase64Url(fromPeerId));
+      final toBytes = base64Decode(normalizeBase64Url(toPeerId));
+      final sessionBytes = base64Decode(normalizeBase64Url(activeSessionId));
+      if (fromBytes.length != 32 ||
+          toBytes.length != 32 ||
+          sessionBytes.length != 32) {
+        return false;
+      }
+
+      final derivedPeerId = base64Url
+          .encode(crypto.sha256.convert(publicKeyBytes).bytes)
+          .replaceAll('=', '');
+      if (derivedPeerId != fromPeerId) return false;
+
+      final buffer = Uint8List(160);
+      buffer.setRange(0, 14, utf8.encode('FRANKN-SIG-V1\u0000'));
+      buffer[14] = 0x01;
+      buffer[15] = msgType;
+      buffer.setRange(16, 48, sessionBytes);
+      buffer.setRange(
+        48,
+        56,
+        (ByteData(8)..setUint64(0, sequence, Endian.big)).buffer.asUint8List(),
+      );
+      buffer.setRange(
+        56,
+        64,
+        (ByteData(8)..setUint64(0, timestamp, Endian.big)).buffer.asUint8List(),
+      );
+      buffer.setRange(64, 96, fromBytes);
+      buffer.setRange(96, 128, toBytes);
+      buffer.setRange(
+        128,
+        160,
+        crypto.sha256.convert(utf8.encode(payload)).bytes,
+      );
+
+      final signature = crypto_pkg.Signature(
+        hex.decode(signatureHex),
+        publicKey: publicKey,
+      );
+      return await crypto_pkg.Ed25519().verify(buffer, signature: signature);
+    } catch (_) {
+      return false;
+    }
   }
 
   static String base58Encode(Uint8List bytes) {

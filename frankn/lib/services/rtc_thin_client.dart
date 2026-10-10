@@ -11,6 +11,7 @@ import 'package:frankn/utils/dc_msg_util.dart';
 import 'package:frankn/services/auth/auth_service.dart';
 import 'package:frankn/services/client_rtc/rtc.dart';
 import 'package:frankn/services/logging/frankn_log_frame.dart';
+import 'package:frankn/services/logging/redaction_engine.dart';
 
 class RtcThinClient {
   static final RtcThinClient _instance = RtcThinClient._internal();
@@ -33,26 +34,27 @@ class RtcThinClient {
   final _transferProgressController =
       StreamController<TransferProgressEvent>.broadcast();
 
-  final _aiStreamController =
-      StreamController<HostMsgLlmToken>.broadcast();
+  final _aiStreamController = StreamController<HostMsgLlmToken>.broadcast();
   final _sshDataController = StreamController<Uint8List>.broadcast();
   final _syncSnapshotController =
       StreamController<HostMsgSyncSnapshot>.broadcast();
   final _syncBatchProgressController =
       StreamController<SyncBatchProgressEvent>.broadcast();
-  final _syncStatusController =
-      StreamController<SyncStatusEvent>.broadcast();
+  final _syncStatusController = StreamController<SyncStatusEvent>.broadcast();
 
   final _authErrorController = StreamController<String>.broadcast();
 
   final _logFrameController = StreamController<FranknLogFrame>.broadcast();
   Stream<FranknLogFrame> get logFrameStream => _logFrameController.stream;
 
-  final _logBatchController = StreamController<List<FranknLogFrame>>.broadcast();
+  final _logBatchController =
+      StreamController<List<FranknLogFrame>>.broadcast();
   Stream<List<FranknLogFrame>> get logBatchStream => _logBatchController.stream;
 
-  final _diagnosticReportController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get diagnosticReportStream => _diagnosticReportController.stream;
+  final _diagnosticReportController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get diagnosticReportStream =>
+      _diagnosticReportController.stream;
 
   HostConnectionState currentHostState = HostConnectionState.disconnected;
 
@@ -123,8 +125,9 @@ class RtcThinClient {
   Stream<HostMsgLlmToken> get aiStream => _aiStreamController.stream;
 
   Stream<String> get authErrorStream => _authErrorController.stream;
-  Stream<SignalConnectionState> get connectionStateStream =>
-      _isBackground ? RtcClient().connectionStateStream : _connectionStateController.stream;
+  Stream<SignalConnectionState> get connectionStateStream => _isBackground
+      ? RtcClient().connectionStateStream
+      : _connectionStateController.stream;
   Stream<HostMessage> get genDcMsgStream =>
       _isBackground ? RtcClient().genDcMsgStream : _genDcMsgStreamC.stream;
   Stream<List<dynamic>> get hostListStream =>
@@ -136,28 +139,35 @@ class RtcThinClient {
   Stream<String> get logStream =>
       _isBackground ? RtcClient().logStream : _logController.stream;
 
-  Stream<HostMsgNotification> get notificationStream =>
-      _isBackground ? RtcClient().notificationStream : _notificationController.stream;
-  Stream<Map<String, dynamic>> get peerStatusStream =>
-      _isBackground ? RtcClient().peerStatusStream : _peerStatusController.stream;
+  Stream<HostMsgNotification> get notificationStream => _isBackground
+      ? RtcClient().notificationStream
+      : _notificationController.stream;
+  Stream<Map<String, dynamic>> get peerStatusStream => _isBackground
+      ? RtcClient().peerStatusStream
+      : _peerStatusController.stream;
   Stream<Uint8List> get sshDataStream =>
       _isBackground ? RtcClient().sshDataStream : _sshDataController.stream;
   Stream<HostMsgSyncSnapshot> get syncSnapshotStream {
     final myId = identityHashCode(this);
-    log("SYNC_DEBUG[$myId]: syncSnapshotStream getter called (isBackground: $_isBackground).");
-    return _isBackground ? RtcClient().syncSnapshotStream : _syncSnapshotController.stream;
+    log(
+      "SYNC_DEBUG[$myId]: syncSnapshotStream getter called (isBackground: $_isBackground).",
+    );
+    return _isBackground
+        ? RtcClient().syncSnapshotStream
+        : _syncSnapshotController.stream;
   }
+
   Stream<SyncBatchProgressEvent> get syncBatchProgressStream =>
       _syncBatchProgressController.stream;
 
-  Stream<SyncStatusEvent> get syncStatusStream =>
-      _syncStatusController.stream;
+  Stream<SyncStatusEvent> get syncStatusStream => _syncStatusController.stream;
 
   // Mocks for DC state checks
   RTCDataChannel? get sshDC => null;
 
-  Stream<TransferProgressEvent> get transferProgressStream =>
-      _isBackground ? RtcClient().transferProgressStream : _transferProgressController.stream;
+  Stream<TransferProgressEvent> get transferProgressStream => _isBackground
+      ? RtcClient().transferProgressStream
+      : _transferProgressController.stream;
 
   void authenticate(String password) =>
       sendIntent(IsolateAction.authenticate, {'password': password});
@@ -185,7 +195,7 @@ class RtcThinClient {
       final msg = IsolateMsg.fromJson(data);
       handleMsg(msg);
     } catch (e) {
-      print("ThinClient parse error: $e");
+      print(RedactionEngine().sanitizeMessage("ThinClient parse error: $e"));
     }
   }
 
@@ -280,7 +290,11 @@ class RtcThinClient {
               volume: media.volume,
             );
           } catch (e) {
-            print("AUDIO ERROR IN UI ISOLATE: $e");
+            print(
+              RedactionEngine().sanitizeMessage(
+                "AUDIO ERROR IN UI ISOLATE: $e",
+              ),
+            );
           }
         }
 
@@ -289,13 +303,17 @@ class RtcThinClient {
         }
 
         if (msg.payload['type'] == 'host_signal') {
-          log('[RTC_THIN] Dispatching host_signal for session [${msg.payload['session_id']}] to capabilitySessionManager');
+          log(
+            '[RTC_THIN] Dispatching host_signal for session [${msg.payload['session_id']}] to capabilitySessionManager',
+          );
           capabilitySessionManager.handleHostSignal(
             sessionId: msg.payload['session_id'],
             signal: msg.payload['signal'],
           );
         } else if (msg.payload['type'] == 'capability_activation_status') {
-          log('[RTC_THIN] Dispatching activation_status for session [${msg.payload['session_id']}] (${msg.payload['status']}) to capabilitySessionManager');
+          log(
+            '[RTC_THIN] Dispatching activation_status for session [${msg.payload['session_id']}] (${msg.payload['status']}) to capabilitySessionManager',
+          );
           capabilitySessionManager.handleActivationStatus(
             sessionId: msg.payload['session_id'],
             statusStr: msg.payload['status'],
@@ -306,9 +324,9 @@ class RtcThinClient {
         // BRIDGE: If this is a stream_end, also notify the transfer progress stream
         // so that viewers (Editor/Image) know to stop loading.
         if (msg.payload['type'] == 'download_end') {
-          _transferProgressController.add(TransferProgressComplete(
-            id: msg.payload['id'] ?? 'unknown',
-          ));
+          _transferProgressController.add(
+            TransferProgressComplete(id: msg.payload['id'] ?? 'unknown'),
+          );
         }
       case (IsolateType.event, IsolateAction.peerStatus):
         final id = msg.payload['peer_id'];
@@ -330,18 +348,27 @@ class RtcThinClient {
         }
         _hostListController.add(currentHosts);
       case (IsolateType.event, IsolateAction.logEvent):
-        final String logMsg = msg.payload['msg'];
+        final String logMsg = RedactionEngine().sanitizeMessage(
+          msg.payload['msg']?.toString() ?? '',
+        );
         logHistory.add(logMsg);
         if (logHistory.length > 1000) logHistory.removeAt(0);
         _logController.add(logMsg);
       case (IsolateType.event, IsolateAction.logFrame):
-        final frame = FranknLogFrame.fromJson(msg.payload);
+        final safePayload =
+            RedactionEngine().sanitizeValue(msg.payload)
+                as Map<String, dynamic>;
+        final frame = FranknLogFrame.fromJson(safePayload);
         _logFrameController.add(frame);
       case (IsolateType.event, IsolateAction.logBatch):
         final rawList = msg.payload['frames'] as List?;
         if (rawList != null) {
           final frames = rawList
-              .map((e) => FranknLogFrame.fromJson(e as Map<String, dynamic>))
+              .map(
+                (e) => FranknLogFrame.fromJson(
+                  RedactionEngine().sanitizeValue(e) as Map<String, dynamic>,
+                ),
+              )
               .toList();
           _logBatchController.add(frames);
         }
@@ -350,22 +377,32 @@ class RtcThinClient {
       case (IsolateType.event, IsolateAction.notification):
         _notificationController.add(HostMsgNotification.fromJson(msg.payload));
       case (IsolateType.event, IsolateAction.transferProgress):
-        _transferProgressController.add(TransferProgressEvent.fromJson(msg.payload));
+        _transferProgressController.add(
+          TransferProgressEvent.fromJson(msg.payload),
+        );
       case (IsolateType.event, IsolateAction.transferComplete):
-        _transferProgressController.add(TransferProgressComplete(
+        _transferProgressController.add(
+          TransferProgressComplete(
             id: msg.payload['id'],
             finalPath: msg.payload['target_path'],
             fileName: msg.payload['file_name'],
-        ));
+          ),
+        );
       case (IsolateType.event, IsolateAction.downloadStart):
-        _transferProgressController.add(TransferProgressStart(msg.payload['id']));
+        _transferProgressController.add(
+          TransferProgressStart(msg.payload['id']),
+        );
       case (IsolateType.event, IsolateAction.downloadEnd):
-        _transferProgressController.add(TransferProgressComplete(id: msg.payload['id']));
+        _transferProgressController.add(
+          TransferProgressComplete(id: msg.payload['id']),
+        );
       case (IsolateType.event, IsolateAction.transferFailed):
-        _transferProgressController.add(TransferProgressFailed(
+        _transferProgressController.add(
+          TransferProgressFailed(
             id: msg.payload['id'],
             error: msg.payload['error'] ?? 'Transfer failed',
-        ));
+          ),
+        );
       case (IsolateType.event, IsolateAction.sshOutput):
         _sshDataController.add(base64Decode(msg.payload['data']));
       case (IsolateType.event, IsolateAction.folderSyncSnapshot):
@@ -374,7 +411,9 @@ class RtcThinClient {
         );
         _syncSnapshotController.add(HostMsgSyncSnapshot.fromJson(msg.payload));
       case (IsolateType.event, IsolateAction.syncBatchProgress):
-        _syncBatchProgressController.add(SyncBatchProgressEvent.fromJson(msg.payload));
+        _syncBatchProgressController.add(
+          SyncBatchProgressEvent.fromJson(msg.payload),
+        );
       case (IsolateType.event, IsolateAction.syncStatusUpdate):
         _syncStatusController.add(SyncStatusEvent.fromJson(msg.payload));
       case (IsolateType.event, IsolateAction.authFailed):
@@ -490,7 +529,8 @@ class RtcThinClient {
     String? generationFilter,
   }) {
     sendIntent(IsolateAction.subscribeLogs, {
-      if (categories != null) 'categories': categories.map((e) => e.index).toList(),
+      if (categories != null)
+        'categories': categories.map((e) => e.index).toList(),
       'min_level': minLevel.index,
       if (generationFilter != null) 'generation_filter': generationFilter,
     });

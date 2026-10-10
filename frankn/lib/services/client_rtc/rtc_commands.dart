@@ -9,16 +9,43 @@
 part of 'rtc.dart';
 
 mixin RtcCommands on RtcClientBase {
-  /// Initiates the Argon2id challenge-response authentication process.
-  ///
-  /// Stores the password for later use in the challenge response and sends
-  /// an authentication request to the host to begin the security handshake.
+  /// Starts RFC 9807 OPAQUE authentication for the active Host connection.
   @override
   void authenticate(String password) {
     isAuthFailed = false; // Clear previous failure state
     currentPassword = password;
-    log("Requesting Authentication...");
-    sendHostMessage(const ClientMsgAuthRequest().toJson());
+    final client = this as RtcClient;
+    final attempt = client.activeAttempt;
+    final clientId = client.identityManager.selfId;
+    final hostId = client.currentHostId;
+    if (attempt == null || clientId == null || hostId == null) {
+      isAuthFailed = true;
+      log(
+        "[AUTH] Cannot start OPAQUE authentication without an active peer identity.",
+      );
+      return;
+    }
+    try {
+      attempt.authAttempt.clearOpaqueState();
+      attempt.authAttempt.updateState(AuthState.awaitingChallenge);
+      final start = FranknOpaqueClient().begin(
+        password: password,
+        clientId: clientId,
+        hostId: hostId,
+      );
+      attempt.authAttempt.opaqueHandle = start.handle;
+      log("Requesting OPAQUE authentication...");
+      sendHostMessage(
+        ClientMsgOpaqueStart(
+          attemptId: attempt.authAttempt.opaqueAttemptId,
+          request: start.request,
+        ).toJson(),
+      );
+    } catch (_) {
+      isAuthFailed = true;
+      attempt.authAttempt.updateState(AuthState.failed);
+      log("[AUTH] Could not initialize OPAQUE authentication.");
+    }
   }
 
   /// Starts an SSH terminal session on the connected host.

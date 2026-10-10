@@ -1,0 +1,17 @@
+[package]
+name = "frankn-opaque"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+base64 = "0.22"
+hkdf = "0.12"
+opaque-ke = { version = "4.0.1", features = ["argon2", "ristretto255"] }
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+zeroize = { version = "1", features = ["alloc"] }

@@ -145,11 +145,23 @@ impl App {
                 self.input_mode = InputMode::Normal;
             }
             InputMode::VerifyingPassword => {
-                if AuthManager::verify_password(
-                    &self.input,
-                    &self.config.password_hash,
-                    &self.config.salt,
-                ) {
+                let valid = self.config.opaque_auth.as_ref().map_or_else(
+                    || {
+                        AuthManager::verify_password(
+                            &self.input,
+                            &self.config.password_hash,
+                            &self.config.salt,
+                        )
+                    },
+                    |enrollment| {
+                        frankn_opaque::verify_password_locally(
+                            enrollment,
+                            self.input.as_bytes(),
+                            &self.config.host_id,
+                        )
+                    },
+                );
+                if valid {
                     self.input_mode = InputMode::SettingNewPassword;
                     self.error_msg = None;
                 } else {
@@ -158,9 +170,11 @@ impl App {
                 }
             }
             InputMode::SettingNewPassword => {
-                let auth = AuthManager::new(&self.input);
-                self.config.password_hash = auth.password_hash;
-                self.config.salt = auth.salt;
+                let auth = AuthManager::new(&self.input)
+                    .expect("Failed to enroll updated passcode with OPAQUE");
+                self.config.password_hash.clear();
+                self.config.salt.clear();
+                self.config.opaque_auth = auth.opaque_enrollment;
                 self.input_mode = InputMode::Normal;
                 self.error_msg = Some("Passcode updated successfully.".to_string());
             }
@@ -247,14 +261,12 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                 }
                                 5 => {
                                     app.input_mode = InputMode::Editing;
-                                    app.input =
-                                        app.config.lock_cmd.clone().unwrap_or_default();
+                                    app.input = app.config.lock_cmd.clone().unwrap_or_default();
                                     app.cursor_position = app.input.len();
                                 }
                                 6 => {
                                     app.input_mode = InputMode::Editing;
-                                    app.input =
-                                        app.config.unlock_cmd.clone().unwrap_or_default();
+                                    app.input = app.config.unlock_cmd.clone().unwrap_or_default();
                                     app.cursor_position = app.input.len();
                                 }
                                 7 => return Ok(app.config.clone()),

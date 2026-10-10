@@ -16,6 +16,15 @@ pub enum ClientMessage {
     #[serde(rename = "auth_response")]
     AuthResponse { response: String },
 
+    #[serde(rename = "auth_opaque_start")]
+    AuthOpaqueStart { attempt_id: String, request: String },
+
+    #[serde(rename = "auth_opaque_finish")]
+    AuthOpaqueFinish {
+        attempt_id: String,
+        finalization: String,
+    },
+
     #[serde(rename = "dc_msg")]
     ClientGenMsg {
         id: String,
@@ -113,9 +122,16 @@ pub enum HostMessage {
         timestamp: u64,
     },
 
+    #[serde(rename = "auth_opaque_response")]
+    AuthOpaqueResponse {
+        attempt_id: String,
+        response: String,
+        timestamp: u64,
+    },
+
     #[serde(rename = "auth_success")]
     AuthSuccess {
-        token: String,
+        attempt_id: String,
         home_dir: String,
         timestamp: u64,
     },
@@ -330,5 +346,28 @@ mod tests {
         assert_eq!(value["offset"], 1024);
         assert_eq!(value["seq"], 7);
         assert_eq!(value["timestamp"], 99);
+    }
+
+    #[test]
+    fn opaque_auth_wire_contract_omits_bearer_and_correlates_attempts() {
+        let start: ClientMessage = serde_json::from_value(serde_json::json!({
+            "type": "auth_opaque_start",
+            "attempt_id": "attempt-a",
+            "request": "opaque-request"
+        }))
+        .unwrap();
+        assert!(
+            matches!(start, ClientMessage::AuthOpaqueStart { attempt_id, .. } if attempt_id == "attempt-a")
+        );
+
+        let success = HostMessage::AuthSuccess {
+            attempt_id: "attempt-a".to_string(),
+            home_dir: "/home/user".to_string(),
+            timestamp: 123,
+        };
+        let value = serde_json::to_value(success).unwrap();
+        assert_eq!(value["attempt_id"], "attempt-a");
+        assert_eq!(value["type"], "auth_success");
+        assert!(value.get("token").is_none());
     }
 }

@@ -839,7 +839,7 @@ abstract class AppLocalizations {
   /// No description provided for @invalidUrlFormat.
   ///
   /// In en, this message translates to:
-  /// **'Invalid URL format. Must start with ws:// or wss://'**
+  /// **'Invalid URL format. Must start with wss://'**
   String get invalidUrlFormat;
 
   /// No description provided for @defaultLlm.

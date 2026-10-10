@@ -4,12 +4,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 
 /// Transport states for the signaling WebSocket connection.
-enum TransportState {
-  disconnected,
-  connecting,
-  connected,
-  failed,
-}
+enum TransportState { disconnected, connecting, connected, failed }
 
 /// Pure transport layer managing WebSocket socket lifecycle, sink writes, and incoming byte stream.
 class WebSocketTransport {
@@ -38,7 +33,12 @@ class WebSocketTransport {
 
   /// Establishes WebSocket connection to [url].
   Future<void> connect(String url) async {
-    if (_state == TransportState.connecting || _state == TransportState.connected) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'wss' || uri.host.isEmpty) {
+      throw ArgumentError.value(url, 'url', 'Signaling URL must use wss://');
+    }
+    if (_state == TransportState.connecting ||
+        _state == TransportState.connected) {
       return;
     }
 
@@ -54,7 +54,8 @@ class WebSocketTransport {
       _subscription = _channel!.stream.listen(
         (message) {
           _lastRxTime = DateTime.now();
-          if (message is String && (message.contains('"pong"') || message.contains('"ping"'))) {
+          if (message is String &&
+              (message.contains('"pong"') || message.contains('"ping"'))) {
             // Heartbeat frame processed cleanly
             return;
           }
@@ -90,7 +91,9 @@ class WebSocketTransport {
 
       final elapsedSecs = DateTime.now().difference(_lastRxTime).inSeconds;
       if (elapsedSecs > 12) {
-        log('[TRANSPORT] WebSocket heartbeat timeout (no rx in ${elapsedSecs}s). Force-closing stale socket.');
+        log(
+          '[TRANSPORT] WebSocket heartbeat timeout (no rx in ${elapsedSecs}s). Force-closing stale socket.',
+        );
         _handleDisconnect();
         return;
       }

@@ -1,4 +1,5 @@
 import 'package:frankn/services/logging/frankn_log_frame.dart';
+import 'package:frankn/services/logging/redaction_engine.dart';
 
 /// Configurable IPC policies controlling output from background to UI isolate.
 enum IpcPolicy {
@@ -56,9 +57,9 @@ class IpcTransportEngine implements IpcTransportContract {
     this.subscriptionConfig = const IpcSubscriptionConfig(),
     this.maxHighPriorityTokensPerSec = 100,
     this.maxLowPriorityTokensPerSec = 20,
-  })  : _highPriorityTokens = maxHighPriorityTokensPerSec,
-        _lowPriorityTokens = maxLowPriorityTokensPerSec,
-        _lastRefill = DateTime.now();
+  }) : _highPriorityTokens = maxHighPriorityTokensPerSec,
+       _lowPriorityTokens = maxLowPriorityTokensPerSec,
+       _lastRefill = DateTime.now();
 
   @override
   int get suppressedFrameCount => _suppressedFrameCount;
@@ -124,7 +125,8 @@ class IpcTransportEngine implements IpcTransportContract {
   }
 
   Map<String, dynamic> _buildPayload(FranknLogFrame frame) {
-    final payload = frame.toJson();
+    final payload =
+        RedactionEngine().sanitizeValue(frame.toJson()) as Map<String, dynamic>;
     if (_suppressedFrameCount > 0) {
       payload['suppressed_count'] = _suppressedFrameCount;
       _suppressedFrameCount = 0; // Reset after attaching to payload

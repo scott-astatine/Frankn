@@ -374,7 +374,9 @@ class _HostListPanelState extends State<HostListPanel> {
                   ],
                 ),
               ),
-              if (isOnline)
+              // A saved QR pairing may be an authorized bootstrap attempt even when
+              // the private Host hides itself from presence discovery.
+              if (isOnline || isSaved)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: CyberButton(

@@ -11,6 +11,7 @@ WorkingDirectory=/home/ubuntu
 
 # The command to start it
 ExecStart=/home/ubuntu/frankn-signaling-server
+EnvironmentFile=/etc/frankn/signaling.env
 
 # Restart policy: If it crashes, bring it back to life automatically
 Restart=always

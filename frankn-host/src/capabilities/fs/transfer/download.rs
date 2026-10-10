@@ -120,9 +120,19 @@ async fn stream_download(
     let mut buffer = vec![0u8; CHUNK_SIZE];
     let mut seq: u32 = 0;
 
-    let mut hasher = Sha256::new();
-
     let start_offset = file.stream_position().await?;
+    file.seek(SeekFrom::Start(0)).await?;
+    let mut hasher = Sha256::new();
+    let mut hash_buffer = vec![0u8; CHUNK_SIZE];
+    loop {
+        let n = file.read(&mut hash_buffer).await?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&hash_buffer[..n]);
+    }
+    let full_hash = hex::encode(hasher.finalize());
+    file.seek(SeekFrom::Start(start_offset)).await?;
     let mut offset = start_offset;
 
     loop {
@@ -137,7 +147,6 @@ async fn stream_download(
         }
 
         let chunk = &buffer[..n];
-        hasher.update(chunk);
         seq += 1;
 
         let mut frame = Vec::with_capacity(FRAME_HEADER_SIZE + n);
@@ -177,8 +186,6 @@ async fn stream_download(
 
         offset += n as u64;
     }
-
-    let full_hash = hex::encode(hasher.finalize());
 
     let end_msg = HostMessage::DownloadEnd {
         id: ctx.id.clone(),

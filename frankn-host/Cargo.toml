@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 serde_json = "1.0"
-tokio-tungstenite = "0.28"
+tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
 url = "2.5"
 webrtc = "0.14"
 tokio = { version = "1.48", features = ["full"] }
@@ -44,4 +44,5 @@ uinput = "0.1.3"
 notify = "6.1.1"
 walkdir = "2.5.0"
 subtle = "2.5"
+frankn-opaque = { path = "../frankn-opaque" }
 dohee-engine = { path = "/home/scott/Projects/agi/dohee/crates/dohee-engine", features = ["cuda"] }

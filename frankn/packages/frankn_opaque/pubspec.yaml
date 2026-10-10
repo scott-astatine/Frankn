@@ -1,0 +1,21 @@
+name: frankn_opaque
+description: RFC 9807 OPAQUE client binding for Frankn.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ^3.8.1
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.1.4
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.astatine.frankn_opaque
+        pluginClass: FranknOpaquePlugin
+      ios:
+        pluginClass: FranknOpaquePlugin
